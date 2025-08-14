@@ -8,7 +8,7 @@
 import Foundation
 import CoreGraphics
 
-struct RedditPost: Codable, Identifiable {
+struct RedditPost: Codable, Identifiable, Hashable {
     let id: String
     let subreddit: String
     let subredditNamePrefixed: String?
@@ -51,9 +51,20 @@ struct RedditPost: Codable, Identifiable {
     let visited: Bool
     let ups: Int
     let downs: Int
+    let likes: Bool?
+    
+    // Local vote state management
+    var currentVoteState: VoteState = .neutral
+    var displayScore: Int
+    
+    enum VoteState {
+        case upvoted
+        case downvoted
+        case neutral
+    }
     
     enum CodingKeys: String, CodingKey {
-        case id, subreddit, title, author, selftext, url, permalink, domain, score, thumbnail, preview, media, gilded, distinguished, edited, saved, hidden, clicked, visited, ups, downs, locked, archived
+        case id, subreddit, title, author, selftext, url, permalink, domain, score, thumbnail, preview, media, gilded, distinguished, edited, saved, hidden, clicked, visited, ups, downs, likes, locked, archived
         case subredditNamePrefixed = "subreddit_name_prefixed"
         case selftextHtml = "selftext_html"
         case upvoteRatio = "upvote_ratio"
@@ -120,6 +131,15 @@ struct RedditPost: Codable, Identifiable {
         visited = try container.decodeIfPresent(Bool.self, forKey: .visited) ?? false
         ups = try container.decodeIfPresent(Int.self, forKey: .ups) ?? 0
         downs = try container.decodeIfPresent(Int.self, forKey: .downs) ?? 0
+        likes = try container.decodeIfPresent(Bool.self, forKey: .likes)
+        
+        // Initialize local vote state and display score
+        displayScore = score
+        if let likes = likes {
+            currentVoteState = likes ? .upvoted : .downvoted
+        } else {
+            currentVoteState = .neutral
+        }
     }
     
     var displaySubreddit: String {
@@ -166,6 +186,7 @@ struct RedditPost: Codable, Identifiable {
     }
     
     var scoreText: String {
+        let score = max(0, displayScore) // Ensure score doesn't go below 0
         if score >= 1000 {
             let kScore = Double(score) / 1000.0
             return String(format: "%.1fk", kScore)
@@ -390,6 +411,52 @@ struct RedditPost: Codable, Identifiable {
         } else {
             return "https://reddit.com\(permalink)"
         }
+    }
+    
+    var permalinkURL: String {
+        return "https://reddit.com\(permalink)"
+    }
+    
+    var canVote: Bool {
+        return !archived && !locked
+    }
+    
+    mutating func applyVote(_ voteState: VoteState) {
+        let oldState = currentVoteState
+        currentVoteState = voteState
+        
+        // Update display score based on vote change
+        switch (oldState, voteState) {
+        case (.neutral, .upvoted):
+            displayScore += 1
+        case (.neutral, .downvoted):
+            displayScore -= 1
+        case (.upvoted, .neutral):
+            displayScore -= 1
+        case (.upvoted, .downvoted):
+            displayScore -= 2
+        case (.downvoted, .neutral):
+            displayScore += 1
+        case (.downvoted, .upvoted):
+            displayScore += 2
+        case (.neutral, .neutral), (.upvoted, .upvoted), (.downvoted, .downvoted):
+            break // No change
+        }
+    }
+    
+    mutating func revertVote(to originalState: VoteState, originalScore: Int) {
+        currentVoteState = originalState
+        displayScore = originalScore
+    }
+    
+    // MARK: - Hashable
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    static func == (lhs: RedditPost, rhs: RedditPost) -> Bool {
+        return lhs.id == rhs.id
     }
     
     private func isDirectImageURL(_ url: String) -> Bool {

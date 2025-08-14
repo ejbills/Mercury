@@ -31,6 +31,7 @@ struct ContentView: View {
                 )
             }
         }
+        .environment(\.redditAPI, apiService)
         .onAppear {
             if apiService.hasStoredCredentials {
                 Task {

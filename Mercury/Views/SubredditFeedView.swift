@@ -72,8 +72,8 @@ struct SubredditFeedView: View {
             }
             .navigationTitle(subredditDisplayName)
             .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: MediaItem.self) { media in
-                MediaDetailView(media: media, namespace: mediaNamespace)
+            .navigationDestination(for: RedditPost.self) { post in
+                MediaDetailView(post: post, namespace: mediaNamespace)
             }
             .refreshable {
                 await refreshFeed()

@@ -400,6 +400,103 @@ class RedditAPIService: NSObject, ASWebAuthenticationPresentationContextProvidin
         return try await performPostRequest(request: request, endpoint: "popular")
     }
     
+    // MARK: - Voting
+    
+    func voteOnPost(postId: String, voteDirection: VoteDirection) async throws {
+        guard let accessToken = accessToken else {
+            throw APIError.missingAccessToken
+        }
+        
+        guard let url = URL(string: "\(baseURL)/api/vote") else {
+            throw APIError.parseError
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.addValue("Mercury/1.0", forHTTPHeaderField: "User-Agent")
+        
+        let fullPostId = postId.hasPrefix("t3_") ? postId : "t3_\(postId)"
+        let bodyString = "id=\(fullPostId)&dir=\(voteDirection.rawValue)"
+        request.httpBody = bodyString.data(using: .utf8)
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                if httpResponse.statusCode == 401 {
+                    throw APIError.invalidToken
+                } else if httpResponse.statusCode == 403 {
+                    throw APIError.insufficientScope
+                } else {
+                    throw APIError.serverError(httpResponse.statusCode)
+                }
+            }
+        } catch _ as URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
+    
+    // MARK: - Save/Unsave
+    
+    func savePost(postId: String) async throws {
+        try await performSaveAction(postId: postId, save: true)
+    }
+    
+    func unsavePost(postId: String) async throws {
+        try await performSaveAction(postId: postId, save: false)
+    }
+    
+    private func performSaveAction(postId: String, save: Bool) async throws {
+        guard let accessToken = accessToken else {
+            throw APIError.missingAccessToken
+        }
+        
+        let endpoint = save ? "save" : "unsave"
+        guard let url = URL(string: "\(baseURL)/api/\(endpoint)") else {
+            throw APIError.parseError
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.addValue("Mercury/1.0", forHTTPHeaderField: "User-Agent")
+        
+        let fullPostId = postId.hasPrefix("t3_") ? postId : "t3_\(postId)"
+        let bodyString = "id=\(fullPostId)"
+        request.httpBody = bodyString.data(using: .utf8)
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                if httpResponse.statusCode == 401 {
+                    throw APIError.invalidToken
+                } else if httpResponse.statusCode == 403 {
+                    throw APIError.insufficientScope
+                } else {
+                    throw APIError.serverError(httpResponse.statusCode)
+                }
+            }
+        } catch _ as URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
+    
     private func performPostRequest(request: URLRequest, endpoint: String) async throws -> PostResponse {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -437,6 +534,12 @@ class RedditAPIService: NSObject, ASWebAuthenticationPresentationContextProvidin
             throw error
         }
     }
+}
+
+enum VoteDirection: Int {
+    case downvote = -1
+    case neutral = 0
+    case upvote = 1
 }
 
 enum APIError: LocalizedError {

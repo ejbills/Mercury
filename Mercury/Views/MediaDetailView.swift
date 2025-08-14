@@ -11,30 +11,41 @@ import Nuke
 import NukeUI
 
 struct MediaDetailView: View {
-    let media: MediaItem
+    @State var post: RedditPost
     let namespace: Namespace.ID
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.redditAPI) private var redditAPI
     @State private var player: AVPlayer?
     @State private var hasAppeared = false
+
     
     var body: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
             
-            mediaContent
-                .navigationTransition(.zoom(sourceID: media.id, in: namespace))
+                mediaContent
+                    .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .background(.black.opacity(0.5), in: Circle())
+                    }
+                    .accessibilityLabel("Close")
+                }
+                
+                Spacer()
+            }
+            .padding([.horizontal, .top], 20)
         }
         .navigationBarHidden(true)
         .statusBarHidden()
-        .gesture(
-            DragGesture()
-                .onEnded { value in
-                    if abs(value.translation.height) > 100 {
-                        dismiss()
-                    }
-                }
-        )
         .onAppear {
             hasAppeared = true
         }
@@ -48,44 +59,52 @@ struct MediaDetailView: View {
         }
     }
     
+    private var mediaId: String {
+        "\(post.id)-\(post.postType.displayName.lowercased())"
+    }
+    
     @ViewBuilder
     private var mediaContent: some View {
-        switch media.type {
-        case .image(let url):
-            LazyImage(url: URL(string: url)) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .onTapGesture {
-                            dismiss()
+        switch post.postType {
+        case .image:
+            if let imageURL = post.imageURL {
+                LazyImage(url: URL(string: imageURL)) { state in
+                    if let image = state.image {
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .onTapGesture {
+                                dismiss()
+                            }
+                    } else if state.error != nil {
+                        VStack(spacing: 16) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.white)
+                            Text("Failed to load image")
+                                .font(.title3)
+                                .foregroundStyle(.white)
                         }
-                } else if state.error != nil {
-                    VStack(spacing: 16) {
-                        Image(systemName: "photo")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.white)
-                        Text("Failed to load image")
-                            .font(.title3)
-                            .foregroundStyle(.white)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
                     }
-                } else {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.5)
                 }
             }
             
-        case .gif(let url):
-            AnimatedGifView(url: url, contentMode: .scaleAspectFit, cornerRadius: 0)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onTapGesture {
-                    dismiss()
-                }
+        case .gif:
+            if let gifURL = post.gifURL, let url = URL(string: gifURL) {
+                AnimatedGifView(url: url, contentMode: .scaleAspectFit, cornerRadius: 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onTapGesture {
+                        dismiss()
+                    }
+            }
             
-        case .video(let videoURL, _):
-            if let url = URL(string: videoURL) {
+        case .video:
+            if let videoURL = post.videoURL, let url = URL(string: videoURL) {
                 VideoPlayer(player: player ?? AVPlayer(url: url))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear {
@@ -108,8 +127,20 @@ struct MediaDetailView: View {
                         .foregroundStyle(.white)
                 }
             }
+        case .text, .link:
+            // These shouldn't appear in media detail view
+            VStack(spacing: 16) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.white)
+                Text("Content not available in media view")
+                    .font(.title3)
+                    .foregroundStyle(.white)
+            }
         }
     }
+    
+
 }
 
 struct MediaItem: Identifiable, Hashable {
@@ -129,12 +160,9 @@ struct MediaItem: Identifiable, Hashable {
     
     NavigationStack {
         MediaDetailView(
-            media: MediaItem(
-                id: "test",
-                type: .image(url: "https://example.com/image.jpg"),
-                title: "Test Image"
-            ),
+            post: RedditPost.samplePost,
             namespace: namespace
         )
+        .environment(\.redditAPI, RedditAPIService())
     }
 }

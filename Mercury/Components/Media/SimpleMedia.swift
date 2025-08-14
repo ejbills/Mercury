@@ -16,6 +16,7 @@ struct SimpleImageView: View {
     let title: String?
     let namespace: Namespace.ID
     let apiDimensions: CGSize? // API-provided dimensions
+    let post: RedditPost
     
     @State private var isLoaded = false
     
@@ -29,7 +30,7 @@ struct SimpleImageView: View {
     }
     
     var body: some View {
-        NavigationLink(value: MediaItem(id: mediaId, type: .image(url: url), title: title)) {
+        NavigationLink(value: post) {
             // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
             Rectangle()
                 .fill(.clear)
@@ -81,12 +82,13 @@ struct SimpleImageView: View {
                                 }
                         }
                     }
-                    .processors([.resize(size: CGSize(width: 800, height: 600))]) // Resize for consistent caching
-                    .priority(.high) // High priority loading
-                    .transition(.opacity) // Smooth transition only
-                }
-                .background(.quaternary.opacity(0.1))
+                                    .processors([.resize(size: CGSize(width: 800, height: 600))]) // Resize for consistent caching
+                .priority(.high) // High priority loading
+                .transition(.opacity) // Smooth transition only
+            }
+            .background(.quaternary.opacity(0.1))
         }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
     }
@@ -98,11 +100,12 @@ struct SimpleGifView: View {
     let mediaId: String
     let title: String?
     let namespace: Namespace.ID
+    let post: RedditPost
     
     @State private var isLoaded = false
     
     var body: some View {
-        NavigationLink(value: MediaItem(id: mediaId, type: .gif(url: url), title: title)) {
+        NavigationLink(value: post) {
             AnimatedGifCard(url: url, cornerRadius: 0)
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: 600)
@@ -117,6 +120,7 @@ struct SimpleGifView: View {
                     }
                 }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
     }
@@ -130,6 +134,7 @@ struct SimpleVideoView: View {
     let title: String?
     let namespace: Namespace.ID
     let apiDimensions: CGSize? // API-provided dimensions
+    let post: RedditPost
     
     @State private var isLoaded = false
     
@@ -143,7 +148,7 @@ struct SimpleVideoView: View {
     }
     
     var body: some View {
-        NavigationLink(value: MediaItem(id: mediaId, type: .video(url: videoURL, thumbnailURL: thumbnailURL), title: title)) {
+        NavigationLink(value: post) {
             // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
             Rectangle()
                 .fill(.clear)
@@ -189,35 +194,21 @@ struct SimpleVideoView: View {
                         }
                         .background(.quaternary.opacity(0.1))
                         
-                        // Play button overlay
+                        // Apple-style play button overlay
                         Circle()
-                            .fill(.black.opacity(0.7))
-                            .frame(width: 70, height: 70)
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 60, height: 60)
                             .overlay {
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(.white)
-                                    .offset(x: 3)
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(.primary)
+                                    .offset(x: 2)
                             }
-                        
-                        // Video badge
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Text("VIDEO")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
-                            }
-                            .padding(12)
-                            Spacer()
-                        }
+                            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                     }
                 }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
     }
