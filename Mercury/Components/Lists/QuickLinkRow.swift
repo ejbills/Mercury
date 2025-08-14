@@ -42,7 +42,7 @@ struct QuickLinkRow: View {
     VStack(spacing: 0) {
         ForEach(QuickLink.allCases, id: \.self) { link in
             QuickLinkRow(quickLink: link) {
-                print("Tapped \(link.rawValue)")
+                // Handle quick link tap
             }
             
             if link != QuickLink.allCases.last {

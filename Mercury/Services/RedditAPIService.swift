@@ -305,48 +305,135 @@ class RedditAPIService: NSObject, ASWebAuthenticationPresentationContextProvidin
                 } else if httpResponse.statusCode == 403 {
                     throw APIError.insufficientScope
                 } else {
-                    let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-                    print("Reddit API Error \(httpResponse.statusCode): \(errorBody)")
+                    throw APIError.serverError(httpResponse.statusCode)
+                }
+            }
+            
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let subredditResponse = try decoder.decode(SubredditResponse.self, from: data)
+                return subredditResponse.data.children.map { $0.data }
+            } catch {
+                throw APIError.parseError
+            }
+        } catch let urlError as URLError {
+            print(urlError)
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
+    
+    func fetchSubredditPosts(subreddit: String, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        guard let accessToken = accessToken else {
+            throw APIError.missingAccessToken
+        }
+        
+        var components = URLComponents(string: "\(baseURL)/r/\(subreddit).json")!
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        
+        if let after = after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        
+        components.queryItems = queryItems
+        
+        guard let url = components.url else {
+            throw APIError.parseError
+        }
+        
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.addValue("Mercury/1.0", forHTTPHeaderField: "User-Agent")
+        
+        return try await performPostRequest(request: request, endpoint: "r/\(subreddit)")
+    }
+    
+    func fetchHomeFeed(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        guard let accessToken = accessToken else {
+            throw APIError.missingAccessToken
+        }
+        
+        var components = URLComponents(string: "\(baseURL)/.json")!
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        
+        if let after = after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        
+        components.queryItems = queryItems
+        
+        guard let url = components.url else {
+            throw APIError.parseError
+        }
+        
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.addValue("Mercury/1.0", forHTTPHeaderField: "User-Agent")
+        
+        return try await performPostRequest(request: request, endpoint: "home")
+    }
+    
+    func fetchPopularFeed(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        guard let accessToken = accessToken else {
+            throw APIError.missingAccessToken
+        }
+        
+        var components = URLComponents(string: "\(baseURL)/r/popular.json")!
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        
+        if let after = after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        
+        components.queryItems = queryItems
+        
+        guard let url = components.url else {
+            throw APIError.parseError
+        }
+        
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.addValue("Mercury/1.0", forHTTPHeaderField: "User-Agent")
+        
+        return try await performPostRequest(request: request, endpoint: "popular")
+    }
+    
+    private func performPostRequest(request: URLRequest, endpoint: String) async throws -> PostResponse {
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                if httpResponse.statusCode == 401 {
+                    throw APIError.invalidToken
+                } else if httpResponse.statusCode == 403 {
+                    throw APIError.insufficientScope
+                } else if httpResponse.statusCode == 404 && endpoint.contains("r/") {
+                    throw APIError.subredditNotFound
+                } else {
                     throw APIError.serverError(httpResponse.statusCode)
                 }
             }
             
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            
-            // Always log the raw JSON response to debug structure
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("=== Reddit API Response ===")
-                print(jsonString)
-                print("=========================")
-            }
+            // Note: We use explicit CodingKeys mappings instead of .convertFromSnakeCase
+            // to avoid conflicts with field decoding
             
             do {
-                // First, let's try to parse just the basic structure
-                let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
-                if let data = json?["data"] as? [String: Any],
-                   let children = data["children"] as? [[String: Any]] {
-                    print("Found \(children.count) children in response")
-                    for (index, child) in children.enumerated() {
-                        if let kind = child["kind"] as? String,
-                           let childData = child["data"] as? [String: Any] {
-                            print("Child \(index): kind=\(kind)")
-                            print("Child \(index) keys: \(Array(childData.keys).sorted())")
-                        }
-                    }
-                }
-                
-                let subredditResponse = try decoder.decode(SubredditResponse.self, from: data)
-                return subredditResponse.data.children.map { $0.data }
+                let postResponse = try decoder.decode(PostResponse.self, from: data)
+                return postResponse
             } catch {
-                print("JSON Decode Error: \(error)")
                 throw APIError.parseError
             }
         } catch let urlError as URLError {
-            print("Network Error: \(urlError)")
+            print(urlError)
             throw APIError.networkError
         } catch {
-            print("Unexpected Error: \(error)")
             throw error
         }
     }
@@ -359,6 +446,7 @@ enum APIError: LocalizedError {
     case insufficientScope
     case parseError
     case serverError(Int)
+    case subredditNotFound
     
     var errorDescription: String? {
         switch self {
@@ -374,6 +462,8 @@ enum APIError: LocalizedError {
             return "Failed to parse response data"
         case .serverError(let code):
             return "Server error (HTTP \(code))"
+        case .subredditNotFound:
+            return "Subreddit not found or is private"
         }
     }
 }

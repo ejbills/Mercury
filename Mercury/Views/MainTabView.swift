@@ -13,18 +13,7 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             // Home Feed Tab
-            NavigationView {
-                VStack {
-                    Text("Home Feed")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    Text("Coming Soon")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .navigationTitle("Home")
-            }
+            SubredditFeedView(subreddit: "popular", apiService: apiService)
             .tabItem {
                 Image(systemName: "house.fill")
                 Text("Home")

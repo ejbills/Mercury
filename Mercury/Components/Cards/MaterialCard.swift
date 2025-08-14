@@ -15,12 +15,11 @@ struct MaterialCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {
             content()
         }
-        .padding(.vertical, 20)
-        .padding(.horizontal, 20)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 

@@ -11,7 +11,21 @@
 		BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DC12E4E59FC00375C89 /* DefaultsMacros */; };
 		BB157DCB2E4E6C9000375C89 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCA2E4E6C9000375C89 /* Nuke */; };
 		BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCC2E4E6C9000375C89 /* NukeUI */; };
+		BB157DD82E4E74A800375C89 /* SwiftyGif in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DD72E4E74A800375C89 /* SwiftyGif */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BB157DDF2E4E759A00375C89 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		BBD11B3C2E4E48D100827872 /* Mercury.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mercury.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -34,6 +48,7 @@
 				BB157DC02E4E59FC00375C89 /* Defaults in Frameworks */,
 				BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */,
 				BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */,
+				BB157DD82E4E74A800375C89 /* SwiftyGif in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -74,6 +89,7 @@
 				BBD11B382E4E48D100827872 /* Sources */,
 				BBD11B392E4E48D100827872 /* Frameworks */,
 				BBD11B3A2E4E48D100827872 /* Resources */,
+				BB157DDF2E4E759A00375C89 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -88,6 +104,7 @@
 				BB157DC12E4E59FC00375C89 /* DefaultsMacros */,
 				BB157DCA2E4E6C9000375C89 /* Nuke */,
 				BB157DCC2E4E6C9000375C89 /* NukeUI */,
+				BB157DD72E4E74A800375C89 /* SwiftyGif */,
 			);
 			productName = Mercury;
 			productReference = BBD11B3C2E4E48D100827872 /* Mercury.app */;
@@ -120,6 +137,7 @@
 			packageReferences = (
 				BB157DBE2E4E59FC00375C89 /* XCRemoteSwiftPackageReference "Defaults" */,
 				BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */,
+				BB157DD62E4E74A800375C89 /* XCRemoteSwiftPackageReference "SwiftyGif" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBD11B3D2E4E48D100827872 /* Products */;
@@ -381,6 +399,14 @@
 				minimumVersion = 12.8.0;
 			};
 		};
+		BB157DD62E4E74A800375C89 /* XCRemoteSwiftPackageReference "SwiftyGif" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/alexiscreuzot/SwiftyGif.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.4.5;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -403,6 +429,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */;
 			productName = NukeUI;
+		};
+		BB157DD72E4E74A800375C89 /* SwiftyGif */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB157DD62E4E74A800375C89 /* XCRemoteSwiftPackageReference "SwiftyGif" */;
+			productName = SwiftyGif;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -78,9 +78,10 @@ struct SubredditDrawerView: View {
             MaterialCard {
                 VStack(spacing: 0) {
                     ForEach(QuickLink.allCases, id: \.self) { link in
-                        QuickLinkRow(quickLink: link) {
-                            handleQuickLinkTap(link)
+                        NavigationLink(destination: SubredditFeedView(subreddit: link.endpoint.isEmpty ? "popular" : link.endpoint, apiService: apiService)) {
+                            QuickLinkRow(quickLink: link) {}
                         }
+                        .buttonStyle(.plain)
                         
                         if link != QuickLink.allCases.last {
                             Divider()
@@ -178,9 +179,10 @@ struct SubredditDrawerView: View {
     private var subredditList: some View {
         VStack(spacing: 0) {
             ForEach(subreddits.prefix(50)) { subreddit in
-                SubredditRow(subreddit: subreddit) {
-                    handleSubredditTap(subreddit)
+                NavigationLink(destination: SubredditFeedView(subreddit: subreddit.displayName, apiService: apiService)) {
+                    SubredditRow(subreddit: subreddit) {}
                 }
+                .buttonStyle(.plain)
                 
                 if subreddit.id != subreddits.prefix(50).last?.id {
                     Divider()
@@ -190,7 +192,7 @@ struct SubredditDrawerView: View {
             
             if subreddits.count > 50 {
                 Button("Show All (\(subreddits.count))") {
-                    // TODO: Navigate to full subreddit list
+                    // Show full subreddit list
                 }
                 .font(.body)
                 .fontWeight(.medium)
@@ -198,14 +200,6 @@ struct SubredditDrawerView: View {
                 .padding(.vertical, 16)
             }
         }
-    }
-    
-    private func handleQuickLinkTap(_ link: QuickLink) {
-        print("Tapped quick link: \(link.rawValue)")
-    }
-    
-    private func handleSubredditTap(_ subreddit: Subreddit) {
-        print("Tapped subreddit: \(subreddit.displayNamePrefixed)")
     }
     
     private func loadSubreddits() async {

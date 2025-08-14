@@ -148,14 +148,14 @@ struct SubredditIconPlaceholder: View {
     
     return VStack(spacing: 0) {
         SubredditRow(subreddit: sampleSubreddit1) {
-            print("Tapped subreddit")
+            // Handle subreddit tap
         }
         
         Divider()
             .padding(.leading, 60)
         
         SubredditRow(subreddit: sampleSubreddit2) {
-            print("Tapped NSFW subreddit")
+            // Handle NSFW subreddit tap
         }
     }
     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
