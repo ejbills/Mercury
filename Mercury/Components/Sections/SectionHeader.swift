@@ -12,7 +12,7 @@ struct SectionHeader: View {
     let title: String
     let color: Color
     
-    init(icon: String, title: String, color: Color = .orange) {
+    init(icon: String, title: String, color: Color = Color.accentColor) {
         self.icon = icon
         self.title = title
         self.color = color

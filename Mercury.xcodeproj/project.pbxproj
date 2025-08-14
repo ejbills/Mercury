@@ -6,6 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BB157DC02E4E59FC00375C89 /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DBF2E4E59FC00375C89 /* Defaults */; };
+		BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DC12E4E59FC00375C89 /* DefaultsMacros */; };
+		BB157DCB2E4E6C9000375C89 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCA2E4E6C9000375C89 /* Nuke */; };
+		BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCC2E4E6C9000375C89 /* NukeUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		BBD11B3C2E4E48D100827872 /* Mercury.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mercury.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,16 +30,28 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB157DCB2E4E6C9000375C89 /* Nuke in Frameworks */,
+				BB157DC02E4E59FC00375C89 /* Defaults in Frameworks */,
+				BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */,
+				BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BB157DC92E4E6C9000375C89 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		BBD11B332E4E48D100827872 = {
 			isa = PBXGroup;
 			children = (
 				BBD11B3E2E4E48D100827872 /* Mercury */,
+				BB157DC92E4E6C9000375C89 /* Frameworks */,
 				BBD11B3D2E4E48D100827872 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -65,6 +84,10 @@
 			);
 			name = Mercury;
 			packageProductDependencies = (
+				BB157DBF2E4E59FC00375C89 /* Defaults */,
+				BB157DC12E4E59FC00375C89 /* DefaultsMacros */,
+				BB157DCA2E4E6C9000375C89 /* Nuke */,
+				BB157DCC2E4E6C9000375C89 /* NukeUI */,
 			);
 			productName = Mercury;
 			productReference = BBD11B3C2E4E48D100827872 /* Mercury.app */;
@@ -94,6 +117,10 @@
 			);
 			mainGroup = BBD11B332E4E48D100827872;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BB157DBE2E4E59FC00375C89 /* XCRemoteSwiftPackageReference "Defaults" */,
+				BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBD11B3D2E4E48D100827872 /* Products */;
 			projectDirPath = "";
@@ -336,6 +363,48 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BB157DBE2E4E59FC00375C89 /* XCRemoteSwiftPackageReference "Defaults" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/Defaults";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.3;
+			};
+		};
+		BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kean/Nuke.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.8.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BB157DBF2E4E59FC00375C89 /* Defaults */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB157DBE2E4E59FC00375C89 /* XCRemoteSwiftPackageReference "Defaults" */;
+			productName = Defaults;
+		};
+		BB157DC12E4E59FC00375C89 /* DefaultsMacros */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB157DBE2E4E59FC00375C89 /* XCRemoteSwiftPackageReference "Defaults" */;
+			productName = DefaultsMacros;
+		};
+		BB157DCA2E4E6C9000375C89 /* Nuke */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = Nuke;
+		};
+		BB157DCC2E4E6C9000375C89 /* NukeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = NukeUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BBD11B342E4E48D100827872 /* Project object */;
 }

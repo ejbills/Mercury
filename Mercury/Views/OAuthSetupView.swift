@@ -21,7 +21,7 @@ struct OAuthSetupView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "globe")
                             .font(.system(size: 64, weight: .thin))
-                            .foregroundStyle(.orange.gradient)
+                            .foregroundStyle(Color.accentColor.gradient)
                             .padding(.top, 20)
                         
                         Text("Reddit API Tester")
@@ -71,7 +71,7 @@ struct OAuthSetupView: View {
                                 
                                 CopyableField(
                                     label: "Redirect URI",
-                                    value: "apolled://oauth",
+                                    value: "mercury://oauth",
                                     showingCopied: $showingCopiedFeedback
                                 )
                             }

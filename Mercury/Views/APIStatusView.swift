@@ -120,6 +120,7 @@ struct APIStatusView: View {
                 "Change Credentials",
                 icon: "pencil"
             ) {
+                apiService.clearStoredCredentials()
                 isSetupComplete = false
             }
         }

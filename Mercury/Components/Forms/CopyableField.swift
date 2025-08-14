@@ -50,7 +50,7 @@ struct CopyableField: View {
 #Preview {
     CopyableField(
         label: "Redirect URI",
-        value: "apolled://oauth",
+        value: "mercury://oauth",
         showingCopied: .constant(false)
     )
     .padding()

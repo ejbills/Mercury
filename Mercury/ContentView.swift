@@ -6,15 +6,18 @@
 //
 
 import SwiftUI
+import Defaults
 
 struct ContentView: View {
-    @State private var clientId: String = ""
-    @State private var isSetupComplete: Bool = false
+    @Default(.clientId) private var clientId
+    @Default(.isSetupComplete) private var isSetupComplete
     @State private var apiService = RedditAPIService()
     
     var body: some View {
         Group {
-            if isSetupComplete && !clientId.isEmpty {
+            if apiService.hasStoredCredentials && apiService.apiStatus == .valid {
+                MainTabView(apiService: apiService)
+            } else if isSetupComplete && !clientId.isEmpty {
                 APIStatusView(
                     clientId: $clientId,
                     isSetupComplete: $isSetupComplete,
@@ -26,6 +29,13 @@ struct ContentView: View {
                     isSetupComplete: $isSetupComplete,
                     apiService: apiService
                 )
+            }
+        }
+        .onAppear {
+            if apiService.hasStoredCredentials {
+                Task {
+                    await apiService.validateCredentials()
+                }
             }
         }
     }
