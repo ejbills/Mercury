@@ -94,10 +94,13 @@ struct PostRowView: View {
             
             // Right side: User and time in VStack
             VStack(alignment: .trailing, spacing: 2) {
-                Text("u/\(post.author)")
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
+                NavigationLink(destination: UserProfileView(username: post.author)) {
+                    Text("u/\(post.author)")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
                 
                 Text(post.timeAgo)
                     .font(.caption2)

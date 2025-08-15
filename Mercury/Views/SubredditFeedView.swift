@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SubredditFeedView: View {
     let subreddit: String
-    let apiService: RedditAPIService
+    let apiService: RedditAPIManager
     
     @State private var posts: [RedditPost] = []
     @State private var isLoading = false

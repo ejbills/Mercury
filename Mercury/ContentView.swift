@@ -11,7 +11,7 @@ import Defaults
 struct ContentView: View {
     @Default(.clientId) private var clientId
     @Default(.isSetupComplete) private var isSetupComplete
-    @State private var apiService = RedditAPIService()
+    @State private var apiService = RedditAPIManager()
     
     var body: some View {
         Group {

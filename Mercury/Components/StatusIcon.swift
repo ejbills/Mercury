@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct StatusIcon: View {
-    let status: RedditAPIService.APIStatus
+    let status: AuthenticationService.APIStatus
     
     var body: some View {
         ZStack {

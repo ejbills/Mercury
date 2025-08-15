@@ -163,6 +163,6 @@ struct MediaItem: Identifiable, Hashable {
             post: RedditPost.samplePost,
             namespace: namespace
         )
-        .environment(\.redditAPI, RedditAPIService())
+        .environment(\.redditAPI, RedditAPIManager())
     }
 }

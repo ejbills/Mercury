@@ -10,7 +10,7 @@ import SwiftUI
 struct APIStatusView: View {
     @Binding var clientId: String
     @Binding var isSetupComplete: Bool
-    let apiService: RedditAPIService
+    let apiService: RedditAPIManager
     
     var body: some View {
         NavigationView {
@@ -182,6 +182,6 @@ struct InfoRow: View {
     APIStatusView(
         clientId: .constant("sample_client_id"),
         isSetupComplete: .constant(true),
-        apiService: RedditAPIService()
+        apiService: RedditAPIManager()
     )
 }

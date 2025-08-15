@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    let apiService: RedditAPIService
+    let apiService: RedditAPIManager
     
     var body: some View {
         TabView {
@@ -27,18 +27,7 @@ struct MainTabView: View {
                 }
             
             // Search Tab
-            NavigationView {
-                VStack {
-                    Text("Search")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    Text("Coming Soon")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .navigationTitle("Search")
-            }
+            SearchView(apiService: apiService)
             .tabItem {
                 Image(systemName: "magnifyingglass")
                 Text("Search")
@@ -99,8 +88,8 @@ struct MainTabView: View {
 }
 
 #Preview {
-    let apiService = RedditAPIService()
-    apiService.userInfo = RedditUser(
+    let apiService = RedditAPIManager()
+    apiService.authService.userInfo = RedditUser(
         name: "testuser",
         linkKarma: 1250,
         commentKarma: 8750,

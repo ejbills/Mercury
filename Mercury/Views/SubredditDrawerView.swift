@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SubredditDrawerView: View {
-    let apiService: RedditAPIService
+    let apiService: RedditAPIManager
     @State private var subreddits: [Subreddit] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -224,8 +224,8 @@ struct SubredditDrawerView: View {
 }
 
 #Preview {
-    let apiService = RedditAPIService()
-    apiService.userInfo = RedditUser(
+    let apiService = RedditAPIManager()
+    apiService.authService.userInfo = RedditUser(
         name: "testuser",
         linkKarma: 1250,
         commentKarma: 8750,
