@@ -15,6 +15,7 @@ struct MediaDetailView: View {
     let namespace: Namespace.ID
     @Environment(\.dismiss) private var dismiss
     @Environment(\.redditAPI) private var redditAPI
+    @Environment(\.navigationPathManager) private var navigationPath
     @State private var player: AVPlayer?
     @State private var hasAppeared = false
     @State private var isContentVisible = true
@@ -119,16 +120,28 @@ struct MediaDetailView: View {
             // Post context
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(post.displaySubreddit)
-                        .font(.callout)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.blue)
+                    Button(action: {
+                        navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
+                        dismiss()
+                    }) {
+                        Text(post.displaySubreddit)
+                            .font(.callout)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
                     
                     Spacer()
                     
-                    Text("u/\(post.author)")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    Button(action: {
+                        navigationPath.navigate(to: .userProfile(username: post.author))
+                        dismiss()
+                    }) {
+                        Text("u/\(post.author)")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                     
                     Text("•")
                         .font(.callout)

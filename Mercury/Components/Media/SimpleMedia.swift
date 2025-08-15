@@ -45,7 +45,7 @@ struct SimpleImageView: View {
                                 .aspectRatio(contentMode: .fit)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: displayHeight)
-                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .opacity(isLoaded ? 1 : 0)
                                 .onAppear {
                                     // Only animate when image actually loads
@@ -87,9 +87,8 @@ struct SimpleImageView: View {
                 .priority(.high) // High priority loading
                 .transition(.opacity) // Smooth transition only
             }
-            .background(.quaternary.opacity(0.1))
+            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
     }
@@ -108,10 +107,9 @@ struct SimpleGifView: View {
     
     var body: some View {
         Button(action: { selectedPost = post }) {
-            AnimatedGifCard(url: url, cornerRadius: 0)
+            AnimatedGifCard(url: url, cornerRadius: 12)
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: 600)
-                .clipped()
                 .opacity(isLoaded ? 1 : 0)
                 .onAppear {
                     // Only animate when GIF actually loads, not on appear
@@ -122,7 +120,6 @@ struct SimpleGifView: View {
                     }
                 }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
     }
@@ -166,10 +163,10 @@ struct SimpleVideoView: View {
                                     if let image = state.image {
                                         image
                                             .resizable()
-                                            .aspectRatio(contentMode: .fill) // Use fill to maintain container size
+                                            .aspectRatio(contentMode: .fill)
                                             .frame(maxWidth: .infinity)
                                             .frame(height: displayHeight)
-                                            .clipped()
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
                                     } else {
                                         // Placeholder maintains exact same size
                                         Rectangle()
@@ -195,7 +192,7 @@ struct SimpleVideoView: View {
                                     }
                             }
                         }
-                        .background(.quaternary.opacity(0.1))
+                        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
                         
                         // Apple-style play button overlay
                         Circle()

@@ -12,84 +12,102 @@ struct SubredditDrawerView: View {
     @State private var subreddits: [Subreddit] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @Environment(\.navigationPathManager) private var navigationPath
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if let userInfo = apiService.userInfo {
-                        userHeader(userInfo)
-                            .padding(.bottom, 20)
-                    }
-                    
-                    quickLinksSection
-                        .padding(.bottom, 24)
-                    
-                    subscribedSubredditsSection
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                quickLinksSection
+                    .padding(.bottom, 24)
+                
+                subscribedSubredditsSection
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+        }
+        .navigationTitle("Communities")
+        .navigationBarTitleDisplayMode(.large)
+        .refreshable {
+            await loadSubreddits()
+        }
+        .task {
+            await loadSubreddits()
+        }
+    }
+    
+    
+    private var quickLinksSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SectionHeader(icon: "star.fill", title: "Quick Access")
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                ForEach(QuickLink.allCases, id: \.self) { link in
+                    quickLinkCard(for: link)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-            }
-            .navigationTitle("Communities")
-            .navigationBarTitleDisplayMode(.large)
-            .refreshable {
-                await loadSubreddits()
-            }
-            .task {
-                await loadSubreddits()
             }
         }
     }
     
-    private func userHeader(_ user: RedditUser) -> some View {
-        MaterialCard {
-            HStack(spacing: 12) {
+    private func quickLinkCard(for link: QuickLink) -> some View {
+        Button(action: {
+            let subreddit = link.endpoint.isEmpty ? "popular" : link.endpoint
+            navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
+        }) {
+            VStack(spacing: 12) {
+                // Icon with gradient background
                 ZStack {
                     Circle()
-                        .fill(Color.accentColor.gradient)
-                        .frame(width: 44, height: 44)
+                        .fill(iconGradient(for: link))
+                        .frame(width: 50, height: 50)
+                        .shadow(color: shadowColor(for: link), radius: 4, x: 0, y: 2)
                     
-                    Text(String(user.name.prefix(1)).uppercased())
-                        .font(.title2)
-                        .fontWeight(.bold)
+                    Image(systemName: link.iconName)
+                        .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.white)
                 }
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("u/\(user.name)")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                    
-                    Text("\(user.totalKarma.formatted()) karma")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                
-                Spacer()
+                // Title
+                Text(link.rawValue)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
             }
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .padding(.horizontal, 16)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(.quaternary, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+    
+    private func iconGradient(for link: QuickLink) -> LinearGradient {
+        switch link {
+        case .home:
+            return LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .popular:
+            return LinearGradient(colors: [.orange, .red], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .all:
+            return LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .saved:
+            return LinearGradient(colors: [.green, .mint], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
     
-    private var quickLinksSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(icon: "star.fill", title: "Quick Links")
-            
-            MaterialCard {
-                VStack(spacing: 0) {
-                    ForEach(QuickLink.allCases, id: \.self) { link in
-                        NavigationLink(destination: SubredditFeedView(subreddit: link.endpoint.isEmpty ? "popular" : link.endpoint, apiService: apiService)) {
-                            QuickLinkRow(quickLink: link) {}
-                        }
-                        .buttonStyle(.plain)
-                        
-                        if link != QuickLink.allCases.last {
-                            Divider()
-                                .padding(.leading, 52)
-                        }
-                    }
-                }
-            }
+    private func shadowColor(for link: QuickLink) -> Color {
+        switch link {
+        case .home:
+            return .blue.opacity(0.3)
+        case .popular:
+            return .orange.opacity(0.3)
+        case .all:
+            return .purple.opacity(0.3)
+        case .saved:
+            return .green.opacity(0.3)
         }
     }
     
@@ -179,10 +197,9 @@ struct SubredditDrawerView: View {
     private var subredditList: some View {
         VStack(spacing: 0) {
             ForEach(subreddits.prefix(50)) { subreddit in
-                NavigationLink(destination: SubredditFeedView(subreddit: subreddit.displayName, apiService: apiService)) {
-                    SubredditRow(subreddit: subreddit) {}
+                SubredditRow(subreddit: subreddit) {
+                    navigationPath.navigate(to: .subredditFeed(subreddit: subreddit.displayName))
                 }
-                .buttonStyle(.plain)
                 
                 if subreddit.id != subreddits.prefix(50).last?.id {
                     Divider()
@@ -235,4 +252,15 @@ struct SubredditDrawerView: View {
     )
     
     return SubredditDrawerView(apiService: apiService)
+}
+
+// MARK: - Button Styles
+
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
 }

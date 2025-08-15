@@ -125,13 +125,13 @@ class UserService: BaseRedditService {
 // MARK: - User Profile Models
 
 struct UserProfile: Codable, Identifiable {
-    let id: String
-    let name: String
-    let linkKarma: Int
-    let commentKarma: Int
-    let created: Double
-    let verified: Bool
-    let hasVerifiedEmail: Bool
+    let idRaw: String?
+    let name: String?
+    let linkKarma: Int?
+    let commentKarma: Int?
+    let created: Double?
+    let verified: Bool?
+    let hasVerifiedEmail: Bool?
     let iconImg: String?
     let subreddit: ProfileSubreddit?
     let isEmployee: Bool?
@@ -146,7 +146,8 @@ struct UserProfile: Codable, Identifiable {
     let hideFromRobots: Bool?
     
     enum CodingKeys: String, CodingKey {
-        case id, name, verified, subreddit
+        case idRaw = "id"
+        case name, verified, subreddit
         case linkKarma = "link_karma"
         case commentKarma = "comment_karma"
         case created = "created_utc"
@@ -164,11 +165,30 @@ struct UserProfile: Codable, Identifiable {
         case hideFromRobots = "hide_from_robots"
     }
     
+    var id: String {
+        return idRaw ?? name ?? "unknown"
+    }
+    
+    var actualName: String {
+        return name ?? "Unknown User"
+    }
+    
     var totalKarma: Int {
-        linkKarma + commentKarma
+        let link = linkKarma ?? 0
+        let comment = commentKarma ?? 0
+        return link + comment
+    }
+    
+    // Use subreddit icon if main iconImg is not available
+    var effectiveIconImg: String? {
+        if let iconImg = iconImg, !iconImg.isEmpty {
+            return iconImg
+        }
+        return subreddit?.iconImg
     }
     
     var accountAge: String {
+        guard let created = created else { return "Unknown" }
         let createdDate = Date(timeIntervalSince1970: created)
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -176,8 +196,8 @@ struct UserProfile: Codable, Identifiable {
     }
     
     var profileIconURL: URL? {
-        guard let iconImg = iconImg, !iconImg.isEmpty else { return nil }
-        return URL(string: iconImg.replacingOccurrences(of: "&amp;", with: "&"))
+        guard let effectiveIcon = effectiveIconImg, !effectiveIcon.isEmpty else { return nil }
+        return URL(string: effectiveIcon.replacingOccurrences(of: "&amp;", with: "&"))
     }
 }
 

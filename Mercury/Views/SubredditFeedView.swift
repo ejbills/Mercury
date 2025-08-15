@@ -10,7 +10,6 @@ import SwiftUI
 struct SubredditFeedView: View {
     let subreddit: String
     let apiService: RedditAPIManager
-    
     @State private var posts: [RedditPost] = []
     @State private var isLoading = false
     @State private var isLoadingMore = false
@@ -25,60 +24,58 @@ struct SubredditFeedView: View {
     private let pageSize = 25
     
     var body: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        if posts.isEmpty && isLoading {
-                            skeletonLoadingView
-                        } else if posts.isEmpty && errorMessage != nil {
-                            errorView
-                                .padding(.top, 100)
-                        } else if posts.isEmpty {
-                            emptyStateView
-                                .padding(.top, 100)
-                        } else {
-                            ForEach(posts) { post in
-                                PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                                    .id(post.id) // Important for scroll position tracking
-                                    .onAppear {
-                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
-                                            Task {
-                                                await loadMorePosts()
-                                            }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    if posts.isEmpty && isLoading {
+                        skeletonLoadingView
+                    } else if posts.isEmpty && errorMessage != nil {
+                        errorView
+                            .padding(.top, 100)
+                    } else if posts.isEmpty {
+                        emptyStateView
+                            .padding(.top, 100)
+                    } else {
+                        ForEach(posts) { post in
+                            PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                                .id(post.id) // Important for scroll position tracking
+                                .onAppear {
+                                    if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                        Task {
+                                            await loadMorePosts()
                                         }
                                     }
-                            }
-                            
-                            if hasMore {
-                                loadMoreSection
-                            } else {
-                                endOfFeedView
-                            }
+                                }
                         }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 6)
-                }
-                .scrollPosition(id: $scrollPosition)
-                .onAppear {
-                    // Only load initial posts if we haven't appeared before and have no posts
-                    if !hasAppeared && posts.isEmpty && !isLoading {
-                        hasAppeared = true
-                        Task {
-                            await loadInitialPosts()
+                        
+                        if hasMore {
+                            loadMoreSection
+                        } else {
+                            endOfFeedView
                         }
                     }
                 }
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
             }
-            .navigationTitle(subredditDisplayName)
-            .navigationBarTitleDisplayMode(.large)
-            .fullScreenCover(item: $selectedPost) { post in
-                MediaDetailView(post: post, namespace: mediaNamespace)
+            .scrollPosition(id: $scrollPosition)
+            .onAppear {
+                // Only load initial posts if we haven't appeared before and have no posts
+                if !hasAppeared && posts.isEmpty && !isLoading {
+                    hasAppeared = true
+                    Task {
+                        await loadInitialPosts()
+                    }
+                }
             }
-            .refreshable {
-                await refreshFeed()
-            }
+        }
+        .navigationTitle(subredditDisplayName)
+        .navigationBarTitleDisplayMode(.large)
+        .fullScreenCover(item: $selectedPost) { post in
+            MediaDetailView(post: post, namespace: mediaNamespace)
+        }
+        .refreshable {
+            await refreshFeed()
         }
     }
     

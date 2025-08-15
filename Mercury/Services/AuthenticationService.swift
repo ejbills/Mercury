@@ -100,7 +100,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         print("🔑 Starting OAuth flow with client ID: \(clientId)")
         
         let state = UUID().uuidString
-        let scope = "identity,read,mysubreddits,vote,save"
+        // Full Reddit API permissions
+        let scope = "identity,edit,flair,history,modconfig,modflair,modlog,modposts,modwiki,mysubreddits,privatemessages,read,report,save,submit,subscribe,vote,wikiedit,wikiread"
         
         var components = URLComponents(string: "https://www.reddit.com/api/v1/authorize")!
         components.queryItems = [

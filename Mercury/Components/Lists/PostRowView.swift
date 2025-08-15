@@ -19,6 +19,7 @@ struct PostRowView: View {
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @Environment(\.redditAPI) private var redditAPI
+    @Environment(\.navigationPathManager) private var navigationPath
     
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>) {
         self.post = post
@@ -87,16 +88,23 @@ struct PostRowView: View {
     
     private var postHeader: some View {
         HStack(alignment: .top) {
-            Text(post.displaySubreddit)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.blue)
+            Button(action: {
+                navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
+            }) {
+                Text(post.displaySubreddit)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
             
             Spacer()
             
             // Right side: User and time in VStack
             VStack(alignment: .trailing, spacing: 2) {
-                NavigationLink(destination: UserProfileView(username: post.author)) {
+                Button(action: {
+                    navigationPath.navigate(to: .userProfile(username: post.author))
+                }) {
                     Text("u/\(post.author)")
                         .font(.caption2)
                         .fontWeight(.medium)

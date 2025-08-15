@@ -9,32 +9,54 @@ import SwiftUI
 
 struct MainTabView: View {
     let apiService: RedditAPIManager
+    @State private var homeNavigationPath = NavigationPathManager()
+    @State private var communitiesNavigationPath = NavigationPathManager()
+    @State private var searchNavigationPath = NavigationPathManager()
+    @State private var profileNavigationPath = NavigationPathManager()
     
     var body: some View {
         TabView {
             // Home Feed Tab
-            SubredditFeedView(subreddit: "popular", apiService: apiService)
+            NavigationStack(path: $homeNavigationPath.path) {
+                SubredditFeedView(subreddit: "popular", apiService: apiService)
+                    .environment(\.navigationPathManager,homeNavigationPath)
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        navigationDestination(for: destination, navigationPath: homeNavigationPath)
+                    }
+            }
             .tabItem {
                 Image(systemName: "house.fill")
                 Text("Home")
             }
             
             // Communities (Subreddit Drawer)
-            SubredditDrawerView(apiService: apiService)
-                .tabItem {
-                    Image(systemName: "person.2.fill")
-                    Text("Communities")
-                }
+            NavigationStack(path: $communitiesNavigationPath.path) {
+                SubredditDrawerView(apiService: apiService)
+                    .environment(\.navigationPathManager,communitiesNavigationPath)
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        navigationDestination(for: destination, navigationPath: communitiesNavigationPath)
+                    }
+            }
+            .tabItem {
+                Image(systemName: "person.2.fill")
+                Text("Communities")
+            }
             
             // Search Tab
-            SearchView(apiService: apiService)
+            NavigationStack(path: $searchNavigationPath.path) {
+                SearchView(apiService: apiService)
+                    .environment(\.navigationPathManager,searchNavigationPath)
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        navigationDestination(for: destination, navigationPath: searchNavigationPath)
+                    }
+            }
             .tabItem {
                 Image(systemName: "magnifyingglass")
                 Text("Search")
             }
             
             // Profile Tab
-            NavigationView {
+            NavigationStack(path: $profileNavigationPath.path) {
                 VStack(spacing: 24) {
                     if let userInfo = apiService.userInfo {
                         VStack(spacing: 16) {
@@ -77,6 +99,10 @@ struct MainTabView: View {
                     .padding(.bottom, 40)
                 }
                 .navigationTitle("Profile")
+                    .environment(\.navigationPathManager,profileNavigationPath)
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        navigationDestination(for: destination, navigationPath: profileNavigationPath)
+                    }
             }
             .tabItem {
                 Image(systemName: "person.fill")
@@ -84,6 +110,22 @@ struct MainTabView: View {
             }
         }
         .tint(Color.accentColor)
+    }
+    
+    @ViewBuilder
+    private func navigationDestination(for destination: NavigationDestination, navigationPath: NavigationPathManager) -> some View {
+        switch destination {
+        case .subredditFeed(let subreddit):
+            SubredditFeedView(subreddit: subreddit, apiService: apiService)
+                .environment(\.navigationPathManager, navigationPath)
+        case .userProfile(let username):
+            UserProfileView(username: username)
+                .environment(\.redditAPI, apiService)
+                .environment(\.navigationPathManager, navigationPath)
+        case .postDetail(let post):
+            MediaDetailView(post: post, namespace: Namespace().wrappedValue)
+                .environment(\.navigationPathManager, navigationPath)
+        }
     }
 }
 

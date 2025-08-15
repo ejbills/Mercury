@@ -22,6 +22,7 @@ struct SearchView: View {
     @Namespace private var mediaNamespace
     @Namespace private var tabSelectionNamespace
     @State private var selectedPost: RedditPost?
+    @Environment(\.navigationPathManager) private var navigationPath
     
     enum SearchTab: CaseIterable {
         case posts, subreddits
@@ -42,36 +43,34 @@ struct SearchView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Search Bar
-                searchBar
+        VStack(spacing: 0) {
+            // Search Bar
+            searchBar
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            
+            // Tab Picker
+            if hasSearched {
+                tabPicker
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                
-                // Tab Picker
-                if hasSearched {
-                    tabPicker
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                }
-                
-                // Content
-                if isLoading && !hasSearched {
-                    loadingView
-                } else if let errorMessage = errorMessage {
-                    errorView(errorMessage)
-                } else if hasSearched {
-                    searchResultsView
-                } else {
-                    emptyStateView
-                }
+                    .padding(.bottom, 8)
             }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.large)
-            .fullScreenCover(item: $selectedPost) { post in
-                MediaDetailView(post: post, namespace: mediaNamespace)
+            
+            // Content
+            if isLoading && !hasSearched {
+                loadingView
+            } else if let errorMessage = errorMessage {
+                errorView(errorMessage)
+            } else if hasSearched {
+                searchResultsView
+            } else {
+                emptyStateView
             }
+        }
+        .navigationTitle("Search")
+        .navigationBarTitleDisplayMode(.large)
+        .fullScreenCover(item: $selectedPost) { post in
+            MediaDetailView(post: post, namespace: mediaNamespace)
         }
     }
     
@@ -210,10 +209,9 @@ struct SearchView: View {
             MaterialCard {
                 VStack(spacing: 0) {
                     ForEach(subredditResults) { subreddit in
-                        NavigationLink(destination: SubredditFeedView(subreddit: subreddit.displayName, apiService: apiService)) {
-                            SubredditRow(subreddit: subreddit) {}
+                        SubredditRow(subreddit: subreddit) {
+                            navigationPath.navigate(to: .subredditFeed(subreddit: subreddit.displayName))
                         }
-                        .buttonStyle(.plain)
                         
                         if subreddit.id != subredditResults.last?.id {
                             Divider()
