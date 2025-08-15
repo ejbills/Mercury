@@ -21,6 +21,7 @@ struct UserProfileView: View {
     @State private var after: String?
     @State private var hasMore = true
     @Namespace private var mediaNamespace
+    @State private var selectedPost: RedditPost?
     
     var body: some View {
         NavigationStack {
@@ -54,6 +55,9 @@ struct UserProfileView: View {
             }
             .task {
                 await loadUserProfile()
+            }
+            .fullScreenCover(item: $selectedPost) { post in
+                MediaDetailView(post: post, namespace: mediaNamespace)
             }
         }
     }
@@ -257,7 +261,7 @@ struct UserProfileView: View {
             
             LazyVStack(spacing: 12) {
                 ForEach(userPosts) { post in
-                    PostRowView(post: post, namespace: mediaNamespace)
+                    PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                         .onAppear {
                             if post.id == userPosts.last?.id && hasMore && !isLoadingPosts {
                                 Task {

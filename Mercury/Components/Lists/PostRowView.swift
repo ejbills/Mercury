@@ -12,6 +12,7 @@ import NukeUI
 struct PostRowView: View {
     @State var post: RedditPost
     let namespace: Namespace.ID
+    @Binding var selectedPost: RedditPost?
     @State private var showingSafari = false
     @State private var isVoting = false
     @State private var showingCopiedToast = false
@@ -19,9 +20,10 @@ struct PostRowView: View {
     @State private var displayScore: Int
     @Environment(\.redditAPI) private var redditAPI
     
-    init(post: RedditPost, namespace: Namespace.ID) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>) {
         self.post = post
         self.namespace = namespace
+        self._selectedPost = selectedPost
         self.postType = post.postType
         self.shouldShowLinkPreview = post.postType == .link && post.url != nil && (
             post.hasContent || (post.thumbnail != nil && 
@@ -195,7 +197,8 @@ struct PostRowView: View {
                     title: post.title,
                     namespace: namespace,
                     apiDimensions: post.imageDimensions,
-                    post: post
+                    post: post,
+                    selectedPost: $selectedPost
                 )
             }
         case .gif:
@@ -205,7 +208,8 @@ struct PostRowView: View {
                     mediaId: "\(post.id)-gif",
                     title: post.title,
                     namespace: namespace,
-                    post: post
+                    post: post,
+                    selectedPost: $selectedPost
                 )
             }
         case .video:
@@ -217,7 +221,8 @@ struct PostRowView: View {
                     title: post.title,
                     namespace: namespace,
                     apiDimensions: post.videoThumbnailDimensions,
-                    post: post
+                    post: post,
+                    selectedPost: $selectedPost
                 )
             }
         case .link:

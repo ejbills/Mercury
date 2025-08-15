@@ -20,6 +20,7 @@ struct SubredditFeedView: View {
     @Namespace private var mediaNamespace
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
+    @State private var selectedPost: RedditPost?
     
     private let pageSize = 25
     
@@ -38,7 +39,7 @@ struct SubredditFeedView: View {
                                 .padding(.top, 100)
                         } else {
                             ForEach(posts) { post in
-                                PostRowView(post: post, namespace: mediaNamespace)
+                                PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                                     .id(post.id) // Important for scroll position tracking
                                     .onAppear {
                                         if post.id == posts.last?.id && hasMore && !isLoadingMore {
@@ -72,7 +73,7 @@ struct SubredditFeedView: View {
             }
             .navigationTitle(subredditDisplayName)
             .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: RedditPost.self) { post in
+            .fullScreenCover(item: $selectedPost) { post in
                 MediaDetailView(post: post, namespace: mediaNamespace)
             }
             .refreshable {

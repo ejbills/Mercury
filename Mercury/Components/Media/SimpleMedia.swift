@@ -17,6 +17,7 @@ struct SimpleImageView: View {
     let namespace: Namespace.ID
     let apiDimensions: CGSize? // API-provided dimensions
     let post: RedditPost
+    @Binding var selectedPost: RedditPost?
     
     @State private var isLoaded = false
     
@@ -30,7 +31,7 @@ struct SimpleImageView: View {
     }
     
     var body: some View {
-        NavigationLink(value: post) {
+        Button(action: { selectedPost = post }) {
             // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
             Rectangle()
                 .fill(.clear)
@@ -101,11 +102,12 @@ struct SimpleGifView: View {
     let title: String?
     let namespace: Namespace.ID
     let post: RedditPost
+    @Binding var selectedPost: RedditPost?
     
     @State private var isLoaded = false
     
     var body: some View {
-        NavigationLink(value: post) {
+        Button(action: { selectedPost = post }) {
             AnimatedGifCard(url: url, cornerRadius: 0)
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: 600)
@@ -135,6 +137,7 @@ struct SimpleVideoView: View {
     let namespace: Namespace.ID
     let apiDimensions: CGSize? // API-provided dimensions
     let post: RedditPost
+    @Binding var selectedPost: RedditPost?
     
     @State private var isLoaded = false
     
@@ -148,7 +151,7 @@ struct SimpleVideoView: View {
     }
     
     var body: some View {
-        NavigationLink(value: post) {
+        Button(action: { selectedPost = post }) {
             // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
             Rectangle()
                 .fill(.clear)

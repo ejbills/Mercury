@@ -21,6 +21,7 @@ struct SearchView: View {
     @State private var hasMore = true
     @Namespace private var mediaNamespace
     @Namespace private var tabSelectionNamespace
+    @State private var selectedPost: RedditPost?
     
     enum SearchTab: CaseIterable {
         case posts, subreddits
@@ -68,7 +69,7 @@ struct SearchView: View {
             }
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: RedditPost.self) { post in
+            .fullScreenCover(item: $selectedPost) { post in
                 MediaDetailView(post: post, namespace: mediaNamespace)
             }
         }
@@ -172,10 +173,7 @@ struct SearchView: View {
                 .padding(.top, 40)
         } else {
             ForEach(searchResults) { post in
-                NavigationLink(value: post) {
-                    PostRowView(post: post, namespace: mediaNamespace)
-                }
-                .buttonStyle(.plain)
+                PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                 .onAppear {
                     if post.id == searchResults.last?.id && hasMore && !isLoading {
                         Task {
