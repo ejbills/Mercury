@@ -274,15 +274,20 @@ struct CommentResponse: Codable {
     }
     
     var moreComments: [MoreComments] {
-        return data.children.compactMap { child in
+        let moreObjects = data.children.compactMap { child -> MoreComments? in
             switch child.data {
             case .comment:
                 return nil
             case .more(let more):
-                // Filter out dummy entries (t3 posts)
+                print("🔍 MoreComments found: ID=\(more.id), name=\(more.name), children=\(more.children.count) children, count=\(more.count)")
+                
+                // Only filter out completely empty dummy entries (t3 posts)
+                // Let Reddit API handle everything else as designed
                 return more.name.isEmpty ? nil : more
             }
         }
+        print("🔍 Total moreComments extracted: \(moreObjects.count)")
+        return moreObjects
     }
 }
 

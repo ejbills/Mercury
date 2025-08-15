@@ -11,11 +11,13 @@ import SwiftUI
 struct Pill<Content: View>: View {
     let content: () -> Content
     let action: (() -> Void)?
+    let size: PillSize
     
     @State private var isPressed = false
     
-    init(action: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Content) {
+    init(action: (() -> Void)? = nil, size: PillSize = .regular, @ViewBuilder content: @escaping () -> Content) {
         self.action = action
+        self.size = size
         self.content = content
     }
 
@@ -33,11 +35,11 @@ struct Pill<Content: View>: View {
     }
     
     private var pillContent: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: size.contentSpacing) {
             content()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, size.horizontalPadding)
+        .padding(.vertical, size.verticalPadding)
         .background(.regularMaterial, in: Capsule())
         .overlay {
             Capsule()
@@ -53,5 +55,31 @@ struct PillButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.8 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
             .sensoryFeedback(.selection, trigger: configuration.isPressed)
+    }
+}
+
+enum PillSize {
+    case small
+    case regular
+    
+    var horizontalPadding: CGFloat {
+        switch self {
+        case .small: return 6
+        case .regular: return 12
+        }
+    }
+    
+    var verticalPadding: CGFloat {
+        switch self {
+        case .small: return 2
+        case .regular: return 6
+        }
+    }
+    
+    var contentSpacing: CGFloat {
+        switch self {
+        case .small: return 3
+        case .regular: return 6
+        }
     }
 }

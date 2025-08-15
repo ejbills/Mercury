@@ -76,27 +76,30 @@ struct PostCommentsView: View {
     }
     
     private var commentsListView: some View {
-        LazyVStack(spacing: 12) {
-            // Comment thread cards
+        LazyVStack(spacing: 8) {
+            // Display each comment thread (top-level comments with their nested replies)
             ForEach(Array(threadManager.commentThreads.enumerated()), id: \.offset) { index, thread in
-                CommentCard(commentThread: thread, post: post)
+                CommentTreeView(
+                    comment: thread.parentComment,
+                    post: post,
+                    isRootComment: true
+                )
             }
             
             // Load more comments section
             if !threadManager.moreObjects.isEmpty {
-                VStack(spacing: 8) {
-                    ForEach(threadManager.moreObjects, id: \.id) { more in
-                        LoadMoreCommentsView(
-                            moreComments: more,
-                            post: post,
-                            onLoadMore: { newComments in
-                                threadManager.insertMoreComments(newComments, replacingMoreId: more.id)
-                            }
-                        )
-                    }
+                ForEach(threadManager.moreObjects, id: \.id) { more in
+                    LoadMoreCommentsView(
+                        moreComments: more,
+                        post: post,
+                        onLoadMore: { newComments in
+                            threadManager.insertMoreComments(newComments, replacingMoreId: more.id)
+                        }
+                    )
                 }
             }
         }
+        .padding(.horizontal, 12)
     }
     
     private var loadingView: some View {

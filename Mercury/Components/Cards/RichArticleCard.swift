@@ -24,7 +24,7 @@ struct RichArticleCard: View {
             // Compact thumbnail on left - ALWAYS fixed size
             thumbnailView
                 .frame(width: 80, height: 80) // Fixed size prevents layout shift
-                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             
             // Content section - ALWAYS same height
             VStack(alignment: .leading, spacing: 6) {
@@ -70,9 +70,9 @@ struct RichArticleCard: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(.quaternary, lineWidth: 1)
         )
         .contentShape(Rectangle())

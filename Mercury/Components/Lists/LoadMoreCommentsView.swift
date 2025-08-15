@@ -10,46 +10,100 @@ import SwiftUI
 struct LoadMoreCommentsView: View {
     let moreComments: MoreComments
     let post: RedditPost
+    let isLoading: Bool
+    let onStartLoad: (() -> Void)?
     let onLoadMore: ([RedditComment]) -> Void
-    @State private var isLoading = false
+    let onError: (() -> Void)?
     @Environment(\.redditAPI) private var redditAPI
     
+    init(moreComments: MoreComments, post: RedditPost, isLoading: Bool = false, onStartLoad: (() -> Void)? = nil, onLoadMore: @escaping ([RedditComment]) -> Void, onError: (() -> Void)? = nil) {
+        self.moreComments = moreComments
+        self.post = post
+        self.isLoading = isLoading
+        self.onStartLoad = onStartLoad
+        self.onLoadMore = onLoadMore
+        self.onError = onError
+    }
+    
     var body: some View {
-        Button {
-            loadMoreComments()
-        } label: {
+        Card(
+            style: CardStyle(
+                padding: EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16),
+                cornerRadius: 12,
+                backgroundColor: .blue.opacity(0.08),
+                borderColor: .blue.opacity(0.2),
+                borderWidth: 1,
+                accentColor: depthColor,
+                accentWidth: 3,
+                accentPosition: .leading
+            ),
+            interactionMode: .tappable {
+                loadMoreComments()
+            }
+        ) {
             HStack(spacing: 12) {
+                // Fixed width icon area to prevent shifting
                 Group {
                     if isLoading {
                         ProgressView()
                             .controlSize(.small)
+                            .tint(.blue)
                     } else {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "ellipsis")
                             .symbolRenderingMode(.hierarchical)
+                            .font(.callout)
                     }
                 }
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(.blue)
+                .frame(width: 20, height: 20) // Fixed size
                 
-                Text(loadingText)
-                    .font(.callout)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loadingText)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.blue)
+                    
+                    // Always show subtitle to maintain height
+                    Text(isLoading ? "Please wait..." : "Tap to continue thread")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 
                 Spacer()
+                
+                // Fixed width chevron area to prevent shifting
+                Group {
+                    if !isLoading {
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.blue)
+                    } else {
+                        // Invisible spacer to maintain width
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .opacity(0)
+                    }
+                }
+                .frame(width: 12) // Fixed width
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(.separator, lineWidth: 0.5)
-            }
+            .frame(minHeight: 44) // Fixed minimum height
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
-        .padding(.horizontal, 16)
-        .padding(.leading, CGFloat(moreComments.depth * 12))
+        .padding(.leading, CGFloat(moreComments.depth * 16)) // Match comment indentation exactly
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
         .sensoryFeedback(.selection, trigger: isLoading)
+    }
+    
+    private var depthColor: Color {
+        let threadColors: [Color] = [.blue, .orange, .green, .purple, .pink, .cyan, .mint, .yellow]
+        if moreComments.depth == 0 {
+            return .blue
+        }
+        let colorIndex = (moreComments.depth - 1) % threadColors.count
+        return threadColors[colorIndex].opacity(0.8)
     }
     
     private var loadingText: String {
@@ -63,47 +117,40 @@ struct LoadMoreCommentsView: View {
     }
     
     private func loadMoreComments() {
-        guard !isLoading && !moreComments.children.isEmpty else { return }
+        guard !isLoading else { 
+            print("🔄 LoadMoreComments: Already loading, skipping")
+            return 
+        }
         
-        isLoading = true
+        // Haptic feedback on tap
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+        
+        print("🔄 LoadMoreComments: Starting load for more ID: \(moreComments.id), children: \(moreComments.children.count), count: \(moreComments.count)")
+        
+        // Notify parent to start loading state
+        onStartLoad?()
         
         Task {
             do {
+                print("🔄 LoadMoreComments: Calling API for post: \(post.id) with children: \(moreComments.children)")
                 let newComments = try await redditAPI.fetchMoreComments(
                     postId: post.id,
                     commentIds: moreComments.children
                 )
                 
+                print("🔄 LoadMoreComments: API returned \(newComments.count) comments")
+                
                 await MainActor.run {
-                    isLoading = false
                     onLoadMore(newComments)
                 }
             } catch {
                 await MainActor.run {
-                    isLoading = false
+                    print("❌ LoadMoreComments: Failed to load more comments: \(error)")
+                    onError?()
                 }
-                print("Failed to load more comments: \(error)")
             }
         }
     }
 }
 
-#Preview {
-    let sampleMore = MoreComments(
-        count: 5,
-        name: "t1_sample",
-        id: "sample",
-        parentId: "t1_parent",
-        depth: 1,
-        children: ["abc123", "def456", "ghi789"]
-    )
-    
-    let samplePost = RedditPost.samplePost
-    
-    LoadMoreCommentsView(
-        moreComments: sampleMore,
-        post: samplePost,
-        onLoadMore: { _ in }
-    )
-    .padding()
-}

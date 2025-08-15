@@ -18,22 +18,8 @@ struct MaterialCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             content()
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
-}
-
-#Preview {
-    MaterialCard {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Card Title")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            Text("Card content goes here with some description text that explains what this card is about.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-        }
-    }
-    .padding()
 }

@@ -106,6 +106,7 @@ struct CommentThreadLines: View {
 
 extension RedditComment {
     func generateThreadKinds(isLast: Bool, parentKinds: [ThreadLineKind] = []) -> [ThreadLineKind] {
+        // Only root comments (depth 0) should not show lines
         if depth == 0 {
             return []
         }

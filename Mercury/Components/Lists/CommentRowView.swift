@@ -33,21 +33,49 @@ struct CommentRowView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            commentContent
-                .padding(.leading, CGFloat(comment.depth * 12))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background {
-                    if comment.depth > 0 {
-                        HStack {
-                            threadLine
-                            Spacer()
-                        }
-                    }
+        HStack(alignment: .top, spacing: 12) {
+            // Profile picture
+            UserAvatar(username: comment.author, size: 36)
+            
+            // Comment content
+            VStack(alignment: .leading, spacing: 8) {
+                commentHeader
+                
+                if !isCollapsed {
+                    commentBody
+                    commentActions
                 }
-                .contentShape(Rectangle())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(.separator.opacity(0.5), lineWidth: 0.5)
+        }
+        .overlay(alignment: .leading) {
+            // Leading edge color - only for depth > 0
+            if comment.depth > 0 {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(depthColor)
+                    .frame(width: 3)
+            }
+        }
+        .padding(.leading, CGFloat(comment.depth * 20)) // Apple-style indentation
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+    
+    // MARK: - Helper Properties
+    
+    private var depthColor: Color {
+        let threadColors: [Color] = [.blue, .orange, .green, .purple, .pink, .cyan, .mint, .yellow]
+        if comment.depth == 0 {
+            return .clear // Root comments have no leading edge
+        }
+        let colorIndex = (comment.depth - 1) % threadColors.count
+        return threadColors[colorIndex].opacity(0.8)
     }
     
     // MARK: - Modern iOS 18 Components
@@ -63,12 +91,7 @@ struct CommentRowView: View {
         }
     }
     
-    private var threadLine: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(width: 2)
-            .padding(.leading, CGFloat((comment.depth - 1) * 12 + 8))
-    }
+
     
     private var commentHeader: some View {
         HStack(spacing: 8) {
@@ -86,7 +109,7 @@ struct CommentRowView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(.tint, in: Capsule())
+                        .background(.blue, in: Capsule())
                 }
                 
                 if let distinguished = comment.distinguished {
@@ -195,19 +218,19 @@ struct CommentRowView: View {
             }
             
             // Action buttons with modern iOS style
-            Button {
+            Button(action: {
                 // TODO: Implement reply functionality
-            } label: {
+            }) {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")
                     .labelStyle(.iconOnly)
                     .font(.callout)
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
             
-            Button {
-                // TODO: Implement save functionality
-            } label: {
+            Button(action: {
+                handleSave()
+            }) {
                 Label(comment.saved ? "Saved" : "Save", 
                       systemImage: comment.saved ? "bookmark.fill" : "bookmark")
                     .labelStyle(.iconOnly)
@@ -293,6 +316,22 @@ struct CommentRowView: View {
                     isVoting = false
                 }
                 print("Failed to vote on comment: \(error)")
+            }
+        }
+    }
+    
+    private func handleSave() {
+        Task {
+            do {
+                if comment.saved {
+                    try await redditAPI.unsaveComment(commentId: comment.id)
+                } else {
+                    try await redditAPI.saveComment(commentId: comment.id)
+                }
+                // Note: The comment.saved state would typically be updated by refreshing the comment data
+                // For now, we'll handle this silently
+            } catch {
+                print("Failed to save/unsave comment: \(error)")
             }
         }
     }

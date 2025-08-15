@@ -137,13 +137,15 @@ struct SubredditFeedView: View {
     }
     
     private var skeletonLoadingView: some View {
-        LazyVStack(spacing: 8) {
-            ForEach(0..<6, id: \.self) { index in
-                SkeletonPostView()
-                    .opacity(1)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.2)
+            Text("Loading posts...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 100)
     }
     
     private var errorView: some View {

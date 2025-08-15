@@ -7,6 +7,17 @@
 
 import Foundation
 
+/// Represents a comment thread containing a top-level comment
+struct CommentThread {
+    let parentComment: RedditComment
+    
+    // CommentThread now only represents the top-level comment
+    // Replies are handled by the Reddit API's nested structure
+    init(parentComment: RedditComment) {
+        self.parentComment = parentComment
+    }
+}
+
 /// Represents a comment thread item that can be either a comment or a "more" object
 enum CommentThreadItem: Identifiable {
     case comment(RedditComment)
@@ -45,49 +56,30 @@ class CommentThreadManager {
     }
     
     private func buildCommentThreads(from comments: [RedditComment]) -> [CommentThread] {
-        var threads: [CommentThread] = []
-        let allComments = flattenAllComments(comments)
+        // Reddit API already provides proper threading via replies structure
+        // We just need to create CommentThread objects for top-level comments
+        let topLevelComments = comments.filter { $0.depth == 0 }
         
-        // Find top-level comments (depth 0 or those without parents in this set)
-        let topLevelComments = allComments.filter { comment in
-            comment.depth == 0 || 
-            !allComments.contains { $0.id == comment.parentId?.replacingOccurrences(of: "t1_", with: "") }
-        }
-        
-        // Create threads for each top-level comment
-        for topComment in topLevelComments {
-            let thread = CommentThread(parentComment: topComment, allComments: allComments)
-            threads.append(thread)
+        let threads = topLevelComments.map { topComment in
+            CommentThread(parentComment: topComment)
         }
         
         return threads.sorted { $0.parentComment.score > $1.parentComment.score }
     }
     
-    private func flattenAllComments(_ comments: [RedditComment]) -> [RedditComment] {
-        var flattened: [RedditComment] = []
-        
-        for comment in comments {
-            flattened.append(comment)
-            
-            // Add nested replies
-            if let replies = comment.replies {
-                let nestedComments = replies.comments
-                flattened.append(contentsOf: flattenAllComments(nestedComments))
-            }
-        }
-        
-        return flattened
-    }
+    // No longer needed - Reddit API provides proper threading
     
     func insertMoreComments(_ newComments: [RedditComment], replacingMoreId: String) {
         // Find and remove the more object
         moreObjects.removeAll { $0.id == replacingMoreId }
         
-        // Rebuild threads with new comments included
-        let allCurrentComments = commentThreads.flatMap { thread in
-            [thread.parentComment] + thread.replies
-        }
-        let allComments = allCurrentComments + newComments
-        commentThreads = buildCommentThreads(from: allComments)
+        // Add new top-level comments as new threads
+        let newTopLevelComments = newComments.filter { $0.depth == 0 }
+        let newThreads = newTopLevelComments.map { CommentThread(parentComment: $0) }
+        
+        commentThreads.append(contentsOf: newThreads)
+        // Re-sort by score
+        commentThreads.sort { $0.parentComment.score > $1.parentComment.score }
     }
+
 }

@@ -16,7 +16,6 @@ enum NavigationDestination: Hashable {
 }
 
 // MARK: - Navigation Path Manager
-@MainActor
 @Observable
 class NavigationPathManager {
     var path = NavigationPath()

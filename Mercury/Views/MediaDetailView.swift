@@ -30,6 +30,13 @@ struct MediaDetailView: View {
         self._displayScore = State(initialValue: post.displayScore)
     }
     
+    private var currentPost: RedditPost {
+        var updatedPost = post
+        updatedPost.currentVoteState = voteState
+        updatedPost.displayScore = displayScore
+        return updatedPost
+    }
+    
     var body: some View {
         ZStack {
             Color.black
@@ -119,38 +126,7 @@ struct MediaDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Post context
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Button(action: {
-                        navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
-                        dismiss()
-                    }) {
-                        Text(post.displaySubreddit)
-                            .font(.callout)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.blue)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        navigationPath.navigate(to: .userProfile(username: post.author))
-                        dismiss()
-                    }) {
-                        Text("u/\(post.author)")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Text("•")
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                    
-                    Text(post.timeAgo)
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                }
+                PostHeader(post: post, colorScheme: .dark)
                 
                 Text(post.title)
                     .font(.title3)
@@ -194,7 +170,8 @@ struct MediaDetailView: View {
                 
                 // Comments
                 Button(action: {
-                    // TODO: Navigate to comments
+                    navigationPath.navigate(to: .postComments(post: currentPost))
+                    dismiss()
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "bubble.left")

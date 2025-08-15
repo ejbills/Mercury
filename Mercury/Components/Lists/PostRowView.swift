@@ -53,37 +53,30 @@ struct PostRowView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header section with better spacing
-            VStack(alignment: .leading, spacing: 8) {
-                postHeader
-                postTitle
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            
-            // TODO: make only postMediaContent toggle the media overlay, clicking other post elements should navigate to the post body rather than only just the comments button.
-            postMediaContent
-                .padding(.horizontal, 16)
-            
-            postFooter
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-            
-            // Bottom action toolbar
-            if showLargeToolbar {
-                largeActionToolbar
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-            } else {
-                bottomActionToolbar
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+        Card {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header section with better spacing
+                VStack(alignment: .leading, spacing: 8) {
+                    postHeader
+                    postTitle
+                }
+                .padding(.bottom, 12)
+                
+                // TODO: make only postMediaContent toggle the media overlay, clicking other post elements should navigate to the post body rather than only just the comments button.
+                postMediaContent
+                
+                postFooter
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                
+                // Bottom action toolbar
+                if showLargeToolbar {
+                    largeActionToolbar
+                } else {
+                    bottomActionToolbar
+                }
             }
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .containerRelativeFrame(.horizontal) { width, _ in
             width - 32 // 16pt margin on each side
         }
@@ -96,30 +89,7 @@ struct PostRowView: View {
     }
     
     private var postHeader: some View {
-        // TODO: make this header a component shared with the media overlay rather than having a new toolbar for the expanded media we can just decouple the post header and use that!
-        HStack(alignment: .top) {
-            Pill(action: {
-                navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
-            }) {
-                Text(post.displaySubreddit).foregroundStyle(.primary).font(.subheadline)
-            }
-            
-            Spacer()
-            
-            Pill(action: {
-                navigationPath.navigate(to: .userProfile(username: post.author))
-            }) {
-                HStack(alignment: .center, spacing: 4) {
-                    Text(post.timeAgo)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    
-                    Divider()
-                                        
-                    Text(post.author).foregroundStyle(.secondary).font(.subheadline)
-                }
-            }
-        }
+        PostHeader(post: post, colorScheme: .light)
     }
     
     private var postTitle: some View {
@@ -132,51 +102,54 @@ struct PostRowView: View {
                 .multilineTextAlignment(.leading)
             
             
-            // TODO: make the tags use the Pill component (but small)
             HStack(spacing: 6) {
                 // Post flair first if available
                 if let linkFlairText = post.linkFlairText, !linkFlairText.isEmpty {
-                    Text(linkFlairText)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(flairTextColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(flairBackgroundColor, in: RoundedRectangle(cornerRadius: 4))
+                    Pill(size: .small) {
+                        Text(linkFlairText)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(flairTextColor)
+                    }
+                    .background(flairBackgroundColor, in: Capsule())
                 }
                 
                 if post.isPinned || post.isStickied {
-                    Image(systemName: "pin.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.green)
+                    Pill(size: .small) {
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    }
                 }
                 
                 if post.isNsfw {
-                    Text("NSFW")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(.red, in: RoundedRectangle(cornerRadius: 3))
+                    Pill(size: .small) {
+                        Text("NSFW")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                    }
+                    .background(.red, in: Capsule())
                 }
                 
                 if post.isSpoiler {
-                    Text("SPOILER")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(.orange, in: RoundedRectangle(cornerRadius: 3))
+                    Pill(size: .small) {
+                        Text("SPOILER")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                    }
+                    .background(.orange, in: Capsule())
                 }
                 
                 // Domain indicator for links
                 if post.postType == .link && !(post.domain?.isEmpty ?? true) {
-                    Text(shortenedDomain)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    Pill(size: .small) {
+                        Text(shortenedDomain)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
                 
                 Spacer()
@@ -317,69 +290,82 @@ struct PostRowView: View {
     }
     
     private var bottomActionToolbar: some View {
-        // TODO: update with pill component. put the upvote,downvote on the right side and make the buttons bigger. it should be orange for upvote blue for down. the comment count is awkwardly placed and sized and the ellipses button is kind of pointless, that should be moved to the left of the voting cluster and we should add  a contectMenu option for the posts which will also spawn the ellipses menu.
-        HStack(spacing: 0) {
-            // PROMINENT Vote cluster - properly centered
-            HStack(spacing: 8) {
+        HStack(spacing: 12) {
+            // More menu moved to the left
+            Menu {
+                Button(action: handleShare) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                
+                Button(action: handleSave) {
+                    Label(post.saved ? "Unsave" : "Save", systemImage: post.saved ? "bookmark.fill" : "bookmark")
+                }
+                
+                Button(action: handleCopyLink) {
+                    Label("Copy Link", systemImage: "link")
+                }
+                
+                if let urlString = post.url, !urlString.isEmpty {
+                    Button(action: handleOpenOriginal) {
+                        Label("Open Original", systemImage: "safari")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+            }
+            
+            // Comments with better placement and sizing
+            Pill(action: {
+                navigationPath.navigate(to: .postComments(post: currentPost))
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.left")
+                        .font(.callout)
+                    Text(post.commentsText)
+                        .font(.callout)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            // Vote cluster moved to the right with bigger buttons and proper colors
+            HStack(spacing: 12) {
                 Button(action: {
                     handleVote(voteState == .upvoted ? .neutral : .upvoted)
                 }) {
                     Image(systemName: voteState == .upvoted ? "arrow.up.circle.fill" : "arrow.up.circle")
-                        .font(.title3)
-                        .foregroundStyle(voteState == .upvoted ? .blue : .secondary)
+                        .font(.title2)
+                        .foregroundStyle(voteState == .upvoted ? .orange : .secondary)
                 }
                 .buttonStyle(.plain)
                 .sensoryFeedback(.selection, trigger: voteState)
                 .disabled(isVoting)
                 
-                // Centered score with smart animation
+                // Score display
                 Text(scoreText)
-                    .font(.subheadline)
+                    .font(.callout)
                     .fontWeight(.semibold)
                     .foregroundStyle(scoreColor)
                     .monospacedDigit()
                     .contentTransition(shouldAnimateScore ? .numericText() : .identity)
-                    .frame(minWidth: 32) // Ensure consistent width
+                    .frame(minWidth: 35)
                 
                 Button(action: {
                     handleVote(voteState == .downvoted ? .neutral : .downvoted)
                 }) {
                     Image(systemName: voteState == .downvoted ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(.title3)
-                        .foregroundStyle(voteState == .downvoted ? .purple : .secondary)
+                        .font(.title2)
+                        .foregroundStyle(voteState == .downvoted ? .blue : .secondary)
                 }
                 .buttonStyle(.plain)
                 .sensoryFeedback(.selection, trigger: voteState)
                 .disabled(isVoting)
             }
-            
-            Spacer()
-            
-            // Comments
-            Button(action: {
-                navigationPath.navigate(to: .postComments(post: currentPost))
-            }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "bubble.left")
-                        .font(.caption)
-                    Text(post.commentsText)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            
-            Spacer().frame(width: 16)
-            
-            // More menu
-            MoreMenuViewCompact(
-                post: currentPost,
-                onShare: handleShare,
-                onSave: handleSave,
-                onCopyLink: handleCopyLink,
-                onOpenOriginal: handleOpenOriginal
-            )
         }
         .padding(.top, 8)
     }
@@ -488,8 +474,8 @@ struct PostRowView: View {
     
     private var scoreColor: Color {
         switch voteState {
-        case .upvoted: return .blue
-        case .downvoted: return .purple
+        case .upvoted: return .orange
+        case .downvoted: return .blue
         case .neutral: return .primary
         }
     }

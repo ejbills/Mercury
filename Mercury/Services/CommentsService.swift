@@ -12,16 +12,13 @@ class CommentsService: BaseRedditService {
     
     // MARK: - Comment Fetching
     
-    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 200) async throws -> [CommentResponse] {
+    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50) async throws -> [CommentResponse] {
         try validateAccessToken()
         
         var components = URLComponents(string: "\(baseURL)/comments/\(postId).json")!
         components.queryItems = [
             URLQueryItem(name: "sort", value: sort.rawValue),
-            URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "depth", value: "8"), // Reduced for better performance
-            URLQueryItem(name: "showmore", value: "true"),
-            URLQueryItem(name: "threaded", value: "true")
+            URLQueryItem(name: "limit", value: String(limit))
         ]
         
         guard let url = components.url else {
@@ -57,6 +54,12 @@ class CommentsService: BaseRedditService {
     
     func fetchMoreComments(postId: String, commentIds: [String], sort: CommentSort = .best) async throws -> [RedditComment] {
         try validateAccessToken()
+        
+        // Handle empty children arrays - Reddit API doesn't handle this well
+        if commentIds.isEmpty {
+            print("🔄 CommentsService: Empty children array - returning empty comments")
+            return []
+        }
         
         guard let url = URL(string: "\(baseURL)/api/morechildren") else {
             throw APIError.parseError
@@ -96,13 +99,18 @@ class CommentsService: BaseRedditService {
             // Extract comments from the response
             var comments: [RedditComment] = []
             if let things = jsonResponse.json.data.things {
+                print("🔄 CommentsService: API returned \(things.count) things")
                 for thing in things {
+                    print("🔄 CommentsService: Thing kind: \(thing.kind)")
                     if thing.kind == "t1" {
                         comments.append(thing.data)
                     }
                 }
+            } else {
+                print("🔄 CommentsService: No things in API response")
             }
             
+            print("🔄 CommentsService: Extracted \(comments.count) comments from API response")
             return comments
         } catch let urlError as URLError {
             print("More comments fetch URL error: \(urlError)")
