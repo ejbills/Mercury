@@ -13,6 +13,7 @@ struct PostRowView: View {
     @State var post: RedditPost
     let namespace: Namespace.ID
     @Binding var selectedPost: RedditPost?
+    let showLargeToolbar: Bool
     @State private var showingSafari = false
     @State private var isVoting = false
     @State private var showingCopiedToast = false
@@ -21,10 +22,11 @@ struct PostRowView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
+        self.showLargeToolbar = showLargeToolbar
         self.postType = post.postType
         self.shouldShowLinkPreview = post.postType == .link && post.url != nil && (
             post.hasContent || (post.thumbnail != nil && 
@@ -61,6 +63,7 @@ struct PostRowView: View {
             .padding(.top, 16)
             .padding(.bottom, 12)
             
+            // TODO: make only postMediaContent toggle the media overlay, clicking other post elements should navigate to the post body rather than only just the comments button.
             postMediaContent
                 .padding(.horizontal, 16)
             
@@ -70,9 +73,15 @@ struct PostRowView: View {
                 .padding(.bottom, 8)
             
             // Bottom action toolbar
-            bottomActionToolbar
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+            if showLargeToolbar {
+                largeActionToolbar
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            } else {
+                bottomActionToolbar
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
         }
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .containerRelativeFrame(.horizontal) { width, _ in
@@ -87,34 +96,28 @@ struct PostRowView: View {
     }
     
     private var postHeader: some View {
+        // TODO: make this header a component shared with the media overlay rather than having a new toolbar for the expanded media we can just decouple the post header and use that!
         HStack(alignment: .top) {
-            Button(action: {
+            Pill(action: {
                 navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
             }) {
-                Text(post.displaySubreddit)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.blue)
+                Text(post.displaySubreddit).foregroundStyle(.primary).font(.subheadline)
             }
-            .buttonStyle(.plain)
             
             Spacer()
             
-            // Right side: User and time in VStack
-            VStack(alignment: .trailing, spacing: 2) {
-                Button(action: {
-                    navigationPath.navigate(to: .userProfile(username: post.author))
-                }) {
-                    Text("u/\(post.author)")
+            Pill(action: {
+                navigationPath.navigate(to: .userProfile(username: post.author))
+            }) {
+                HStack(alignment: .center, spacing: 4) {
+                    Text(post.timeAgo)
                         .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.tertiary)
+                    
+                    Divider()
+                                        
+                    Text(post.author).foregroundStyle(.secondary).font(.subheadline)
                 }
-                .buttonStyle(.plain)
-                
-                Text(post.timeAgo)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
         }
     }
@@ -123,14 +126,13 @@ struct PostRowView: View {
         VStack(alignment: .leading, spacing: 6) {
             // Title with better typography - ALWAYS show full title
             Text(post.title)
-                .font(.subheadline)
+                .font(.title3)
                 .fontWeight(.medium)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
-                .lineLimit(nil) // Remove line limit to always show full title
-                .fixedSize(horizontal: false, vertical: true)
             
-            // Tags under title for better hierarchy
+            
+            // TODO: make the tags use the Pill component (but small)
             HStack(spacing: 6) {
                 // Post flair first if available
                 if let linkFlairText = post.linkFlairText, !linkFlairText.isEmpty {
@@ -315,6 +317,7 @@ struct PostRowView: View {
     }
     
     private var bottomActionToolbar: some View {
+        // TODO: update with pill component. put the upvote,downvote on the right side and make the buttons bigger. it should be orange for upvote blue for down. the comment count is awkwardly placed and sized and the ellipses button is kind of pointless, that should be moved to the left of the voting cluster and we should add  a contectMenu option for the posts which will also spawn the ellipses menu.
         HStack(spacing: 0) {
             // PROMINENT Vote cluster - properly centered
             HStack(spacing: 8) {
@@ -354,7 +357,7 @@ struct PostRowView: View {
             
             // Comments
             Button(action: {
-                // TODO: Navigate to comments
+                navigationPath.navigate(to: .postComments(post: currentPost))
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.left")
@@ -377,6 +380,108 @@ struct PostRowView: View {
                 onCopyLink: handleCopyLink,
                 onOpenOriginal: handleOpenOriginal
             )
+        }
+        .padding(.top, 8)
+    }
+    
+    private var largeActionToolbar: some View {
+        HStack(spacing: 20) {
+            // Upvote
+            Button {
+                handleVote(voteState == .upvoted ? .neutral : .upvoted)
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: voteState == .upvoted ? "arrow.up.circle.fill" : "arrow.up.circle")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(voteState == .upvoted ? .blue : .secondary)
+                    
+                    Text(scoreText)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(voteState == .upvoted ? .blue : .secondary)
+                        .monospacedDigit()
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isVoting || !post.canVote)
+            .sensoryFeedback(.selection, trigger: voteState)
+            
+            // Downvote
+            Button {
+                handleVote(voteState == .downvoted ? .neutral : .downvoted)
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: voteState == .downvoted ? "arrow.down.circle.fill" : "arrow.down.circle")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(voteState == .downvoted ? .purple : .secondary)
+                    
+                    Text("Vote")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(voteState == .downvoted ? .purple : .secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isVoting || !post.canVote)
+            .sensoryFeedback(.selection, trigger: voteState)
+            
+            Spacer()
+            
+            // Save
+            Button {
+                handleSave()
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: post.saved ? "bookmark.fill" : "bookmark")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(post.saved ? .blue : .secondary)
+                    
+                    Text(post.saved ? "Saved" : "Save")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(post.saved ? .blue : .secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            
+            // Share
+            Button {
+                handleShare()
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Share")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            
+            // More options
+            Button {
+                // Show more menu
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                    
+                    Text("More")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
         }
         .padding(.top, 8)
     }

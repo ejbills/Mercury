@@ -16,6 +16,7 @@ class RedditAPIManager {
     let contentService: ContentService
     let userService: UserService
     let searchService: SearchService
+    let commentsService: CommentsService
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -51,6 +52,7 @@ class RedditAPIManager {
         self.contentService = ContentService(authService: authService)
         self.userService = UserService(authService: authService)
         self.searchService = SearchService(authService: authService)
+        self.commentsService = CommentsService(authService: authService)
     }
     
     // MARK: - Authentication Methods (Delegated)
@@ -119,5 +121,27 @@ class RedditAPIManager {
     
     func searchPosts(query: String, subreddit: String? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try await searchService.searchPosts(query: query, subreddit: subreddit, after: after, limit: limit)
+    }
+    
+    // MARK: - Comments Methods (Delegated)
+    
+    func fetchPostComments(postId: String, sort: CommentSort = .best) async throws -> [CommentResponse] {
+        try await commentsService.fetchPostComments(postId: postId, sort: sort)
+    }
+    
+    func fetchMoreComments(postId: String, commentIds: [String], sort: CommentSort = .best) async throws -> [RedditComment] {
+        try await commentsService.fetchMoreComments(postId: postId, commentIds: commentIds, sort: sort)
+    }
+    
+    func voteOnComment(commentId: String, voteDirection: VoteDirection) async throws {
+        try await commentsService.voteOnComment(commentId: commentId, voteDirection: voteDirection)
+    }
+    
+    func saveComment(commentId: String) async throws {
+        try await commentsService.saveComment(commentId: commentId)
+    }
+    
+    func unsaveComment(commentId: String) async throws {
+        try await commentsService.unsaveComment(commentId: commentId)
     }
 }

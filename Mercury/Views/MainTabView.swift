@@ -125,6 +125,10 @@ struct MainTabView: View {
         case .postDetail(let post):
             MediaDetailView(post: post, namespace: Namespace().wrappedValue)
                 .environment(\.navigationPathManager, navigationPath)
+        case .postComments(let post):
+            PostCommentsView(post: post)
+                .environment(\.redditAPI, apiService)
+                .environment(\.navigationPathManager, navigationPath)
         }
     }
 }

@@ -12,6 +12,7 @@ enum NavigationDestination: Hashable {
     case subredditFeed(subreddit: String)
     case userProfile(username: String)
     case postDetail(post: RedditPost)
+    case postComments(post: RedditPost)
 }
 
 // MARK: - Navigation Path Manager
