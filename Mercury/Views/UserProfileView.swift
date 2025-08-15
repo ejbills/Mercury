@@ -119,14 +119,14 @@ struct UserProfileView: View {
                                 .accessibilityLabel("Verified user")
                         }
                         
-                        if profile.isPremium {
+                        if profile.isPremium == true {
                             Image(systemName: "crown.fill")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
                                 .accessibilityLabel("Premium member")
                         }
                         
-                        if profile.isEmployee {
+                        if profile.isEmployee == true {
                             Image(systemName: "building.2.fill")
                                 .font(.caption)
                                 .foregroundStyle(.red)

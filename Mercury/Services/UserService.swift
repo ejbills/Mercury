@@ -39,13 +39,23 @@ class UserService: BaseRedditService {
                 }
             }
             
+            // Debug logging
+            print("🔍 User profile API response for \(username):")
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print(jsonString.prefix(500))
+            }
+            
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let userResponse = try decoder.decode(UserProfileResponse.self, from: data)
             return userResponse.data
+        } catch let decodingError as DecodingError {
+            print("🚨 User profile decoding error: \(decodingError)")
+            throw APIError.parseError
         } catch _ as URLError {
             throw APIError.networkError
         } catch {
+            print("🚨 User profile error: \(error)")
             throw error
         }
     }
@@ -124,16 +134,16 @@ struct UserProfile: Codable, Identifiable {
     let hasVerifiedEmail: Bool
     let iconImg: String?
     let subreddit: ProfileSubreddit?
-    let isEmployee: Bool
-    let isMod: Bool
-    let isPremium: Bool
-    let isGold: Bool
-    let hasPaypalSubscription: Bool
-    let hasSubscribedToPremium: Bool
-    let isBlocked: Bool
-    let isFriend: Bool
-    let acceptFollowers: Bool
-    let hideFromRobots: Bool
+    let isEmployee: Bool?
+    let isMod: Bool?
+    let isPremium: Bool?
+    let isGold: Bool?
+    let hasPaypalSubscription: Bool?
+    let hasSubscribedToPremium: Bool?
+    let isBlocked: Bool?
+    let isFriend: Bool?
+    let acceptFollowers: Bool?
+    let hideFromRobots: Bool?
     
     enum CodingKeys: String, CodingKey {
         case id, name, verified, subreddit

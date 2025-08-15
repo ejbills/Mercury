@@ -68,6 +68,9 @@ struct SearchView: View {
             }
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(for: RedditPost.self) { post in
+                MediaDetailView(post: post, namespace: mediaNamespace)
+            }
         }
     }
     
@@ -169,14 +172,17 @@ struct SearchView: View {
                 .padding(.top, 40)
         } else {
             ForEach(searchResults) { post in
-                PostRowView(post: post, namespace: mediaNamespace)
-                    .onAppear {
-                        if post.id == searchResults.last?.id && hasMore && !isLoading {
-                            Task {
-                                await loadMorePosts()
-                            }
+                NavigationLink(value: post) {
+                    PostRowView(post: post, namespace: mediaNamespace)
+                }
+                .buttonStyle(.plain)
+                .onAppear {
+                    if post.id == searchResults.last?.id && hasMore && !isLoading {
+                        Task {
+                            await loadMorePosts()
                         }
                     }
+                }
             }
             
             if hasMore && !searchResults.isEmpty {
