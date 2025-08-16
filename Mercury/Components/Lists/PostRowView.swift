@@ -71,13 +71,12 @@ struct PostRowView: View {
     
     var body: some View {
         Card {
-            VStack(alignment: .leading, spacing: 0) {
-                // Header section with better spacing
+            VStack(alignment: .leading, spacing: 12) {
+                // Header section
                 VStack(alignment: .leading, spacing: 8) {
                     postHeader
                     postTitle
                 }
-                .padding(.bottom, hasMediaOrTextContent ? 12 : 0)
                 
                 // TODO: make only postMediaContent toggle the media overlay, clicking other post elements should navigate to the post body rather than only just the comments button.
                 if hasMediaOrTextContent {
@@ -85,14 +84,54 @@ struct PostRowView: View {
                 }
                 
                 postFooter
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
                 
                 // Bottom action toolbar
                 if showLargeToolbar {
-                    largeActionToolbar
+                    HStack(spacing: 20) {
+                        VotingCluster(
+                            post: currentPost,
+                            voteState: $voteState,
+                            displayScore: $displayScore,
+                            isVoting: $isVoting,
+                            onVote: handleVote,
+                            colorScheme: .light,
+                            size: .large
+                        )
+                        
+                        Spacer()
+                        
+                        PostActionToolbar(
+                            post: currentPost,
+                            voteState: $voteState,
+                            displayScore: $displayScore,
+                            isVoting: $isVoting,
+                            onVote: handleVote,
+                            onShare: handleShare,
+                            onSave: handleSave,
+                            onCopyLink: handleCopyLink,
+                            onOpenOriginal: handleOpenOriginal,
+                            onCommentsAction: nil,
+                            colorScheme: .light,
+                            size: .large
+                        )
+                    }
                 } else {
-                    bottomActionToolbar
+                    PostActionToolbar(
+                        post: currentPost,
+                        voteState: $voteState,
+                        displayScore: $displayScore,
+                        isVoting: $isVoting,
+                        onVote: handleVote,
+                        onShare: handleShare,
+                        onSave: handleSave,
+                        onCopyLink: handleCopyLink,
+                        onOpenOriginal: handleOpenOriginal,
+                        onCommentsAction: {
+                            navigationPath.navigate(to: .postComments(post: currentPost))
+                        },
+                        colorScheme: .light,
+                        size: .compact
+                    )
                 }
             }
         }
@@ -276,7 +315,6 @@ struct PostRowView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(showFullText ? nil : 4)
                 .multilineTextAlignment(.leading)
-                .padding(.top, 4)
                 .padding(.horizontal, 16)
         }
     }
@@ -314,225 +352,6 @@ struct PostRowView: View {
         }
     }
     
-    private var bottomActionToolbar: some View {
-        HStack(spacing: 12) {
-            // More menu moved to the left
-            Menu {
-                Button(action: handleShare) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-                
-                Button(action: handleSave) {
-                    Label(post.saved ? "Unsave" : "Save", systemImage: post.saved ? "bookmark.fill" : "bookmark")
-                }
-                
-                Button(action: handleCopyLink) {
-                    Label("Copy Link", systemImage: "link")
-                }
-                
-                if let urlString = post.url, !urlString.isEmpty {
-                    Button(action: handleOpenOriginal) {
-                        Label("Open Original", systemImage: "safari")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32)
-            }
-            
-            // Comments with better placement and sizing
-            Pill(action: {
-                navigationPath.navigate(to: .postComments(post: currentPost))
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "bubble.left")
-                        .font(.callout)
-                    Text(post.commentsText)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                }
-                .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-            
-            // Vote cluster moved to the right with bigger buttons and proper colors
-            HStack(spacing: 12) {
-                Button(action: {
-                    handleVote(voteState == .upvoted ? .neutral : .upvoted)
-                }) {
-                        Image(systemName: "arrow.up")
-                            .font(.callout)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(voteState == .upvoted ? .white : .secondary)
-                            .frame(width: 32, height: 32)
-                            .background(voteState == .upvoted ? .orange : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(voteState == .upvoted ? .orange : .secondary.opacity(0.3), lineWidth: 1)
-                            )
-                        
-                    
-                }
-                .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: voteState)
-                .disabled(isVoting)
-                
-                VStack(spacing: 2) {
-                    Text(scoreText)
-                        .font(.callout)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(scoreColor)
-                        .monospacedDigit()
-                        .contentTransition(shouldAnimateScore ? .numericText() : .identity)
-                    
-                    Text("Score")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(minWidth: 50)
-                
-                Button(action: {
-                    handleVote(voteState == .downvoted ? .neutral : .downvoted)
-                }) {
-                        Image(systemName: "arrow.down")
-                            .font(.callout)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(voteState == .downvoted ? .white : .secondary)
-                            .frame(width: 32, height: 32)
-                            .background(voteState == .downvoted ? .blue : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(voteState == .downvoted ? .blue : .secondary.opacity(0.3), lineWidth: 1)
-                            )
-                        
-                }
-                .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: voteState)
-                .disabled(isVoting)
-            }
-        }
-        .padding(.top, 8)
-    }
-    
-    private var largeActionToolbar: some View {
-        HStack(spacing: 20) {
-            // Voting section - centered score between buttons
-            HStack(spacing: 12) {
-                // Upvote
-                Button {
-                    handleVote(voteState == .upvoted ? .neutral : .upvoted)
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(voteState == .upvoted ? .white : .secondary)
-                        .frame(width: 44, height: 44)
-                        .background(voteState == .upvoted ? .orange : Color.clear, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(voteState == .upvoted ? .orange : .secondary.opacity(0.3), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(isVoting || !post.canVote)
-                .sensoryFeedback(.selection, trigger: voteState)
-                
-                // Centered score
-                VStack(spacing: 2) {
-                    Text(scoreText)
-                        .font(.callout)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(scoreColor)
-                        .monospacedDigit()
-                        .contentTransition(shouldAnimateScore ? .numericText() : .identity)
-                    
-                    Text("Score")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(minWidth: 50)
-                
-                // Downvote
-                Button {
-                    handleVote(voteState == .downvoted ? .neutral : .downvoted)
-                } label: {
-                    Image(systemName: "arrow.down")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(voteState == .downvoted ? .white : .secondary)
-                        .frame(width: 44, height: 44)
-                        .background(voteState == .downvoted ? .blue : Color.clear, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(voteState == .downvoted ? .blue : .secondary.opacity(0.3), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(isVoting || !post.canVote)
-                .sensoryFeedback(.selection, trigger: voteState)
-            }
-            
-            Spacer()
-            
-            // Save
-            Button {
-                handleSave()
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: post.saved ? "bookmark.fill" : "bookmark")
-                        .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(post.saved ? .blue : .secondary)
-                    
-                    Text(post.saved ? "Saved" : "Save")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(post.saved ? .blue : .secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            
-            // Share
-            Button {
-                handleShare()
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
-                    
-                    Text("Share")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            
-            // More options
-            Button {
-                // Show more menu
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
-                    
-                    Text("More")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.top, 8)
-    }
     
     private var scoreColor: Color {
         switch voteState {
@@ -542,20 +361,6 @@ struct PostRowView: View {
         }
     }
     
-    // Only animate score if the change would be visible to users
-    private var shouldAnimateScore: Bool {
-        return displayScore < 1000 // Only animate for scores under 1k where single changes are visible
-    }
-    
-    private var scoreText: String {
-        let score = max(0, displayScore)
-        if score >= 1000 {
-            let kScore = Double(score) / 1000.0
-            return String(format: "%.1fk", kScore)
-        } else {
-            return String(score)
-        }
-    }
     
     private var flairBackgroundColor: Color {
         if let colorHex = post.linkFlairBackgroundColor, !colorHex.isEmpty {

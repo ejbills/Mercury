@@ -47,11 +47,6 @@ struct MediaDetailView: View {
             
             // Overlay container that handles taps
             VStack {
-                if isContentVisible {
-                    topNavigationBar
-                        .transition(.opacity)
-                }
-                
                 Spacer()
                 
                 if isContentVisible {
@@ -85,42 +80,6 @@ struct MediaDetailView: View {
         }
     }
     
-    private var topNavigationBar: some View {
-        HStack {
-            Spacer()
-            
-            HStack(spacing: 16) {
-                Button(action: handleShare) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44) // Proper touch target
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .accessibilityLabel("Share")
-                
-                Button(action: handleSave) {
-                    Image(systemName: post.saved ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44) // Proper touch target
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .accessibilityLabel(post.saved ? "Unsave" : "Save")
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .background(
-            LinearGradient(
-                colors: [.black.opacity(0.4), .clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 100)
-            .clipped()
-        )
-    }
     
     private var bottomContentOverlay: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -136,63 +95,31 @@ struct MediaDetailView: View {
                     .lineLimit(3)
             }
             
-            // Action bar
-            HStack(spacing: 24) {
-                // Vote controls
-                HStack(spacing: 12) {
-                    Button(action: {
-                        handleVote(voteState == .upvoted ? .neutral : .upvoted)
-                    }) {
-                        Image(systemName: voteState == .upvoted ? "arrow.up.circle.fill" : "arrow.up.circle")
-                            .font(.title3)
-                            .foregroundStyle(voteState == .upvoted ? .blue : .white)
-                    }
-                    .disabled(isVoting)
-                    
-                    Text(scoreText)
-                        .font(.callout)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(scoreColor)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                    
-                    Button(action: {
-                        handleVote(voteState == .downvoted ? .neutral : .downvoted)
-                    }) {
-                        Image(systemName: voteState == .downvoted ? "arrow.down.circle.fill" : "arrow.down.circle")
-                            .font(.title3)
-                            .foregroundStyle(voteState == .downvoted ? .purple : .white)
-                    }
-                    .disabled(isVoting)
-                }
-                
-                Spacer()
-                
-                // Comments
-                Button(action: {
-                    navigationPath.navigate(to: .postComments(post: currentPost))
-                    dismiss()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bubble.left")
-                            .font(.callout)
-                        Text(post.commentsText)
-                            .font(.callout)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundStyle(.white)
-                }
-            }
+            // Action bar matching post layout exactly
+            PostActionToolbar(
+                post: currentPost,
+                voteState: $voteState,
+                displayScore: $displayScore,
+                isVoting: $isVoting,
+                onVote: handleVote,
+                onShare: handleShare,
+                onSave: handleSave,
+                onCopyLink: nil,
+                onOpenOriginal: nil,
+                onCommentsAction: nil,
+                colorScheme: .dark,
+                size: .compact
+            )
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
         .background(
             LinearGradient(
-                colors: [.clear, .black.opacity(0.8)],
+                colors: [.clear, .black.opacity(0.6)],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 200)
+            .frame(height: 120)
             .clipped()
         )
     }
@@ -279,24 +206,6 @@ struct MediaDetailView: View {
     }
     
     // MARK: - Computed Properties
-    
-    private var scoreColor: Color {
-        switch voteState {
-        case .upvoted: return .blue
-        case .downvoted: return .purple
-        case .neutral: return .white
-        }
-    }
-    
-    private var scoreText: String {
-        let score = max(0, displayScore)
-        if score >= 1000 {
-            let kScore = Double(score) / 1000.0
-            return String(format: "%.1fk", kScore)
-        } else {
-            return String(score)
-        }
-    }
     
     // MARK: - Action Handlers
     

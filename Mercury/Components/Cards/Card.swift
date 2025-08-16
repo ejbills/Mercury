@@ -36,8 +36,8 @@ struct Card<Content: View>: View {
                         LinearGradient(
                             stops: [
                                 .init(color: style.accentColor!, location: 0.0),
-                                .init(color: style.accentColor!.opacity(0.3), location: 0.25),
-                                .init(color: style.borderColor, location: 0.25),
+                                .init(color: style.accentColor!.opacity(0.3), location: 0.08),
+                                .init(color: style.borderColor, location: 0.08),
                                 .init(color: style.borderColor, location: 1.0)
                             ],
                             startPoint: .leading,

@@ -11,8 +11,9 @@ struct CommentView: View {
     let comment: RedditComment
     let depth: Int
     let post: RedditPost
+    let isCollapsed: Bool
+    let onCollapseToggle: () -> Void
     
-    @State private var isCollapsed = false
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
@@ -20,10 +21,12 @@ struct CommentView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comment: RedditComment, depth: Int, post: RedditPost) {
+    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}) {
         self.comment = comment
         self.depth = depth
         self.post = post
+        self.isCollapsed = isCollapsed
+        self.onCollapseToggle = onCollapseToggle
         self._voteState = State(initialValue: comment.currentVoteState)
         self._displayScore = State(initialValue: comment.displayScore)
     }
@@ -42,7 +45,7 @@ struct CommentView: View {
         }
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
-                isCollapsed.toggle()
+                onCollapseToggle()
             }
         }
     }
@@ -110,7 +113,7 @@ struct CommentView: View {
                 
                 Pill(action: {
                     withAnimation(.snappy(duration: 0.125)) {
-                        isCollapsed.toggle()
+                        onCollapseToggle()
                     }
                 }, size: .small) {
                     Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
