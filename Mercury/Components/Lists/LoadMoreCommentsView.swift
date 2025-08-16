@@ -31,7 +31,7 @@ struct LoadMoreCommentsView: View {
                 padding: EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16),
                 cornerRadius: 12,
                 backgroundColor: .blue.opacity(0.08),
-                borderColor: .blue.opacity(0.2),
+                borderColor: depthColor.opacity(0.2),
                 borderWidth: 1,
                 accentColor: depthColor,
                 accentWidth: 3,
@@ -91,7 +91,7 @@ struct LoadMoreCommentsView: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
-        .padding(.leading, CGFloat(moreComments.depth * 16)) // Match comment indentation exactly
+        .padding(.leading, CGFloat(moreComments.depth * 24)) // Match comment indentation exactly
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .sensoryFeedback(.selection, trigger: isLoading)

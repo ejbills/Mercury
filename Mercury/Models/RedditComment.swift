@@ -34,7 +34,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
     let collapsedReason: String?
     let archived: Bool
     let locked: Bool
-    let replies: CommentReplies?
+    var replies: CommentReplies?
     
     // Local state management
     var currentVoteState: VoteState = .neutral
@@ -262,18 +262,37 @@ struct CommentResponse: Codable {
     let data: CommentListData
     
     var flattenedComments: [RedditComment] {
-        return data.children.compactMap { child in
-            switch child.data {
-            case .comment(let comment):
-                return comment
-            case .more(let more):
-                // Filter out dummy entries (t3 posts)
-                return more.name.isEmpty ? nil : nil
+        var allComments: [RedditComment] = []
+        
+        func collectComments(from children: [CommentChild]) {
+            for child in children {
+                switch child.data {
+                case .comment(let comment):
+                    allComments.append(comment)
+                    // Recursively collect nested comments
+                    if let replies = comment.replies {
+                        switch replies {
+                        case .listing(let commentResponse):
+                            collectComments(from: commentResponse.data.children)
+                        case .empty:
+                            break
+                        }
+                    }
+                case .more(let more):
+                    // Filter out dummy entries (t3 posts)
+                    if !more.name.isEmpty {
+                        // Don't add MoreComments to the flattened list
+                    }
+                }
             }
         }
+        
+        collectComments(from: data.children)
+        return allComments
     }
     
     var moreComments: [MoreComments] {
+        // Only look at direct children for MoreComments - they belong at their specific level
         let moreObjects = data.children.compactMap { child -> MoreComments? in
             switch child.data {
             case .comment:
@@ -339,6 +358,12 @@ struct CommentChild: Codable {
         enum CodingKeys: String, CodingKey {
             case kind, data
         }
+    }
+    
+    // Simple memberwise initializer
+    init(kind: String, data: CommentData) {
+        self.kind = kind
+        self.data = data
     }
     
     init(from decoder: Decoder) throws {

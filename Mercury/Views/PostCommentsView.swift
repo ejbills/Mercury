@@ -26,7 +26,8 @@ struct PostCommentsView: View {
                     post: post, 
                     namespace: mediaNamespace, 
                     selectedPost: .constant(nil),
-                    showLargeToolbar: true
+                    showLargeToolbar: true,
+                    showFullText: true
                 )
                 
                 // Comments section
@@ -76,30 +77,31 @@ struct PostCommentsView: View {
     }
     
     private var commentsListView: some View {
-        LazyVStack(spacing: 8) {
-            // Display each comment thread (top-level comments with their nested replies)
-            ForEach(Array(threadManager.commentThreads.enumerated()), id: \.offset) { index, thread in
-                CommentTreeView(
-                    comment: thread.parentComment,
-                    post: post,
-                    isRootComment: true
-                )
-            }
+        VStack(spacing: 0) {
+            let allComments = threadManager.commentThreads.map { $0.parentComment }
             
-            // Load more comments section
+            // Use unified CommentThreadView for entire thread
+            CommentThreadView(
+                comments: allComments,
+                post: post
+            )
+            
+            // Load more comments section at thread level
             if !threadManager.moreObjects.isEmpty {
-                ForEach(threadManager.moreObjects, id: \.id) { more in
-                    LoadMoreCommentsView(
-                        moreComments: more,
-                        post: post,
-                        onLoadMore: { newComments in
-                            threadManager.insertMoreComments(newComments, replacingMoreId: more.id)
-                        }
-                    )
+                LazyVStack(spacing: 8) {
+                    ForEach(threadManager.moreObjects, id: \.id) { more in
+                        LoadMoreCommentsView(
+                            moreComments: more,
+                            post: post,
+                            onLoadMore: { newComments in
+                                threadManager.insertMoreComments(newComments, replacingMoreId: more.id)
+                            }
+                        )
+                        .padding(.horizontal, 12)
+                    }
                 }
             }
         }
-        .padding(.horizontal, 12)
     }
     
     private var loadingView: some View {

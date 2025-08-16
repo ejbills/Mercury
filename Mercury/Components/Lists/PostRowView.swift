@@ -14,6 +14,7 @@ struct PostRowView: View {
     let namespace: Namespace.ID
     @Binding var selectedPost: RedditPost?
     let showLargeToolbar: Bool
+    let showFullText: Bool
     @State private var showingSafari = false
     @State private var isVoting = false
     @State private var showingCopiedToast = false
@@ -22,11 +23,12 @@ struct PostRowView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
         self.showLargeToolbar = showLargeToolbar
+        self.showFullText = showFullText
         self.postType = post.postType
         self.shouldShowLinkPreview = post.postType == .link && post.url != nil && (
             post.hasContent || (post.thumbnail != nil && 
@@ -45,6 +47,21 @@ struct PostRowView: View {
     private let postType: PostType
     private let shouldShowLinkPreview: Bool
     
+    private var hasMediaOrTextContent: Bool {
+        switch postType {
+        case .text:
+            return post.hasContent
+        case .image:
+            return post.imageURL != nil
+        case .gif:
+            return post.gifURL != nil
+        case .video:
+            return post.videoURL != nil
+        case .link:
+            return shouldShowLinkPreview
+        }
+    }
+    
     private var currentPost: RedditPost {
         var updatedPost = post
         updatedPost.currentVoteState = voteState
@@ -60,10 +77,12 @@ struct PostRowView: View {
                     postHeader
                     postTitle
                 }
-                .padding(.bottom, 12)
+                .padding(.bottom, hasMediaOrTextContent ? 12 : 0)
                 
                 // TODO: make only postMediaContent toggle the media overlay, clicking other post elements should navigate to the post body rather than only just the comments button.
-                postMediaContent
+                if hasMediaOrTextContent {
+                    postMediaContent
+                }
                 
                 postFooter
                     .padding(.top, 12)
@@ -152,6 +171,40 @@ struct PostRowView: View {
                     }
                 }
                 
+                // Post status indicators (moved from footer)
+                if post.gilded > 0 {
+                    Pill(size: .small) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "seal.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.yellow)
+                            
+                            if post.gilded > 1 {
+                                Text("\(post.gilded)")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                
+                if post.locked {
+                    Pill(size: .small) {
+                        Image(systemName: "lock.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                
+                if post.archived {
+                    Pill(size: .small) {
+                        Image(systemName: "archivebox.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
                 Spacer()
             }
         }
@@ -221,7 +274,7 @@ struct PostRowView: View {
             Text(content)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .lineLimit(4)
+                .lineLimit(showFullText ? nil : 4)
                 .multilineTextAlignment(.leading)
                 .padding(.top, 4)
                 .padding(.horizontal, 16)
@@ -257,35 +310,7 @@ struct PostRowView: View {
     private var postFooter: some View {
         HStack(spacing: 8) {
             InlineToast(isShowing: showingCopiedToast)
-            
             Spacer()
-            
-            if post.gilded > 0 {
-                HStack(spacing: 3) {
-                    Image(systemName: "seal.fill")
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                    
-                    if post.gilded > 1 {
-                        Text("\(post.gilded)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            
-            if post.locked {
-                Image(systemName: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-            
-            if post.archived {
-                Image(systemName: "archivebox.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
     
@@ -338,29 +363,51 @@ struct PostRowView: View {
                 Button(action: {
                     handleVote(voteState == .upvoted ? .neutral : .upvoted)
                 }) {
-                    Image(systemName: voteState == .upvoted ? "arrow.up.circle.fill" : "arrow.up.circle")
-                        .font(.title2)
-                        .foregroundStyle(voteState == .upvoted ? .orange : .secondary)
+                        Image(systemName: "arrow.up")
+                            .font(.callout)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(voteState == .upvoted ? .white : .secondary)
+                            .frame(width: 32, height: 32)
+                            .background(voteState == .upvoted ? .orange : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(voteState == .upvoted ? .orange : .secondary.opacity(0.3), lineWidth: 1)
+                            )
+                        
+                    
                 }
                 .buttonStyle(.plain)
                 .sensoryFeedback(.selection, trigger: voteState)
                 .disabled(isVoting)
                 
-                // Score display
-                Text(scoreText)
-                    .font(.callout)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(scoreColor)
-                    .monospacedDigit()
-                    .contentTransition(shouldAnimateScore ? .numericText() : .identity)
-                    .frame(minWidth: 35)
+                VStack(spacing: 2) {
+                    Text(scoreText)
+                        .font(.callout)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(scoreColor)
+                        .monospacedDigit()
+                        .contentTransition(shouldAnimateScore ? .numericText() : .identity)
+                    
+                    Text("Score")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 50)
                 
                 Button(action: {
                     handleVote(voteState == .downvoted ? .neutral : .downvoted)
                 }) {
-                    Image(systemName: voteState == .downvoted ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(.title2)
-                        .foregroundStyle(voteState == .downvoted ? .blue : .secondary)
+                        Image(systemName: "arrow.down")
+                            .font(.callout)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(voteState == .downvoted ? .white : .secondary)
+                            .frame(width: 32, height: 32)
+                            .background(voteState == .downvoted ? .blue : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(voteState == .downvoted ? .blue : .secondary.opacity(0.3), lineWidth: 1)
+                            )
+                        
                 }
                 .buttonStyle(.plain)
                 .sensoryFeedback(.selection, trigger: voteState)
@@ -372,46 +419,61 @@ struct PostRowView: View {
     
     private var largeActionToolbar: some View {
         HStack(spacing: 20) {
-            // Upvote
-            Button {
-                handleVote(voteState == .upvoted ? .neutral : .upvoted)
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: voteState == .upvoted ? "arrow.up.circle.fill" : "arrow.up.circle")
+            // Voting section - centered score between buttons
+            HStack(spacing: 12) {
+                // Upvote
+                Button {
+                    handleVote(voteState == .upvoted ? .neutral : .upvoted)
+                } label: {
+                    Image(systemName: "arrow.up")
                         .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(voteState == .upvoted ? .blue : .secondary)
-                    
+                        .fontWeight(.semibold)
+                        .foregroundStyle(voteState == .upvoted ? .white : .secondary)
+                        .frame(width: 44, height: 44)
+                        .background(voteState == .upvoted ? .orange : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(voteState == .upvoted ? .orange : .secondary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isVoting || !post.canVote)
+                .sensoryFeedback(.selection, trigger: voteState)
+                
+                // Centered score
+                VStack(spacing: 2) {
                     Text(scoreText)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(voteState == .upvoted ? .blue : .secondary)
+                        .font(.callout)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(scoreColor)
                         .monospacedDigit()
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(isVoting || !post.canVote)
-            .sensoryFeedback(.selection, trigger: voteState)
-            
-            // Downvote
-            Button {
-                handleVote(voteState == .downvoted ? .neutral : .downvoted)
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: voteState == .downvoted ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(voteState == .downvoted ? .purple : .secondary)
+                        .contentTransition(shouldAnimateScore ? .numericText() : .identity)
                     
-                    Text("Vote")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(voteState == .downvoted ? .purple : .secondary)
+                    Text("Score")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
+                .frame(minWidth: 50)
+                
+                // Downvote
+                Button {
+                    handleVote(voteState == .downvoted ? .neutral : .downvoted)
+                } label: {
+                    Image(systemName: "arrow.down")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(voteState == .downvoted ? .white : .secondary)
+                        .frame(width: 44, height: 44)
+                        .background(voteState == .downvoted ? .blue : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(voteState == .downvoted ? .blue : .secondary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isVoting || !post.canVote)
+                .sensoryFeedback(.selection, trigger: voteState)
             }
-            .buttonStyle(.plain)
-            .disabled(isVoting || !post.canVote)
-            .sensoryFeedback(.selection, trigger: voteState)
             
             Spacer()
             

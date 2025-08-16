@@ -195,7 +195,7 @@ struct CommentRowView: View {
                 Button {
                     handleVote(.upvoted)
                 } label: {
-                    Image(systemName: voteState == .upvoted ? "arrow.up.circle.fill" : "arrow.up.circle")
+                    Image(systemName: "arrow.up")
                         .font(.title3)
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(voteState == .upvoted ? Color.accentColor : Color.secondary)
@@ -207,7 +207,7 @@ struct CommentRowView: View {
                 Button {
                     handleVote(.downvoted)
                 } label: {
-                    Image(systemName: voteState == .downvoted ? "arrow.down.circle.fill" : "arrow.down.circle")
+                    Image(systemName: "arrow.down")
                         .font(.title3)
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(voteState == .downvoted ? Color.purple : Color.secondary)
