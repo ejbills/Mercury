@@ -96,7 +96,7 @@ struct AnimatedGifCard: View {
         ZStack {
             AnimatedGifView(
                 url: url,
-                contentMode: .scaleAspectFit,
+                contentMode: .scaleAspectFill,
                 cornerRadius: cornerRadius
             ) { loading in
                 isLoading = loading

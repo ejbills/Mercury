@@ -42,7 +42,7 @@ struct SimpleImageView: View {
                         if let image = state.image {
                             image
                                 .resizable()
-                                .aspectRatio(contentMode: .fit)
+                                .aspectRatio(contentMode: .fill)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: displayHeight)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))

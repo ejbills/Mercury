@@ -10,6 +10,7 @@ import AVKit
 import Nuke
 import NukeUI
 import UIKit
+import Zoomable
 
 struct MediaDetailView: View {
     @State var post: RedditPost
@@ -111,7 +112,7 @@ struct MediaDetailView: View {
                 displayScore: $displayScore,
                 isVoting: $isVoting,
                 onVote: handleVote,
-                onShare: { shareItem = URL(string: post.permalinkURL) },
+                onShare: handleShare,
                 onSave: handleSave,
                 onCopyLink: nil,
                 onOpenOriginal: nil,
@@ -133,9 +134,7 @@ struct MediaDetailView: View {
             .clipped()
         )
         .sheet(isPresented: $showShareSheet) {
-            if let item = shareItem {
-                VideoShareSheet(videoURL: item)
-            }
+            MediaShareSheet(post: post, mediaURL: shareItem)
         }
     }
     
@@ -154,9 +153,7 @@ struct MediaDetailView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .onTapGesture {
-                                dismiss()
-                            }
+                            .zoomable()
                     } else if state.error != nil {
                         VStack(spacing: 16) {
                             Image(systemName: "photo")
@@ -178,9 +175,7 @@ struct MediaDetailView: View {
             if let gifURL = post.gifURL, let url = URL(string: gifURL) {
                 AnimatedGifView(url: url, contentMode: .scaleAspectFit, cornerRadius: 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onTapGesture {
-                        dismiss()
-                    }
+                    .zoomable()
             }
             
         case .video:
@@ -206,6 +201,16 @@ struct MediaDetailView: View {
                         .font(.title3)
                         .foregroundStyle(.white)
                 }
+            }
+        case .gallery:
+            // Gallery posts should use GalleryDetailView instead
+            VStack(spacing: 16) {
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.white)
+                Text("Gallery view not available")
+                    .font(.title3)
+                    .foregroundStyle(.white)
             }
         case .text, .link:
             // These shouldn't appear in media detail view
@@ -276,7 +281,9 @@ struct MediaDetailView: View {
     }
     
     private func handleShare() {
-        shareItem = URL(string: post.permalinkURL)
+        // Simple share always shares the post URL, not the media
+        // Media sharing is handled by the download button
+        shareItem = nil  // No media file to share
         showShareSheet = true
     }
     
@@ -295,13 +302,13 @@ struct MediaDetailView: View {
     }
 
     private func handleDownload() {
-        guard post.postType == .video || post.postType == .gif else { return }
+        guard post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery else { return }
         guard !isDownloading else { return }
         isDownloading = true
         Task {
             defer { isDownloading = false }
             do {
-                let service = VideoDownloadService()
+                let service = MediaDownloadService()
                 let fileURL = try await service.download(post: post, options: .init(
                     preferredFilename: post.id,
                     onProgress: { progress in
@@ -336,7 +343,15 @@ struct MediaDetailView: View {
                     .frame(width: 200)
                 
                 VStack(spacing: 4) {
-                    Text("Downloading Video")
+                    let downloadText = switch post.postType {
+                    case .video: "Downloading Video"
+                    case .gif: "Downloading GIF"
+                    case .image: "Downloading Image"
+                    case .gallery: "Downloading Gallery"
+                    default: "Downloading"
+                    }
+                    
+                    Text(downloadText)
                         .font(.headline)
                         .foregroundStyle(.white)
                     

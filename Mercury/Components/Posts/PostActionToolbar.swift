@@ -39,9 +39,16 @@ struct PostActionToolbar: View {
             // More menu (only for compact size)
             if size == .compact {
                 Menu {
-                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif {
+                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
                         Button(action: onDownload) {
-                            Label("Download Video", systemImage: "arrow.down.circle")
+                            let downloadLabel = switch post.postType {
+                            case .video: "Download Video"
+                            case .gif: "Download GIF"
+                            case .image: "Download Image"
+                            case .gallery: "Download Gallery"
+                            default: "Download"
+                            }
+                            Label(downloadLabel, systemImage: "arrow.down.circle")
                         }
                     }
                     Button(action: onShare) {
@@ -120,9 +127,16 @@ struct PostActionToolbar: View {
                 .buttonStyle(.plain)
                 
                 Menu {
-                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif {
+                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
                         Button(action: onDownload) {
-                            Label("Download Video", systemImage: "arrow.down.circle")
+                            let downloadLabel = switch post.postType {
+                            case .video: "Download Video"
+                            case .gif: "Download GIF"
+                            case .image: "Download Image"
+                            case .gallery: "Download Gallery"
+                            default: "Download"
+                            }
+                            Label(downloadLabel, systemImage: "arrow.down.circle")
                         }
                     }
                     if let onCopyLink = onCopyLink {

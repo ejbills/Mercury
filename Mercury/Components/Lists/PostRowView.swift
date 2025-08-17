@@ -64,6 +64,8 @@ struct PostRowView: View {
             return post.gifURL != nil
         case .video:
             return post.videoURL != nil
+        case .gallery:
+            return !post.galleryImages.isEmpty
         case .link:
             return shouldShowLinkPreview
         }
@@ -89,7 +91,7 @@ struct PostRowView: View {
                 if hasMediaOrTextContent {
                     postMediaContent
                         .overlay {
-                            if isDownloading && (post.postType == .video || post.postType == .gif) {
+                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image) {
                                 downloadProgressOverlay
                             }
                         }
@@ -153,22 +155,8 @@ struct PostRowView: View {
             width - 32 // 16pt margin on each side
         }
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
-        .overlay(alignment: .topTrailing) {
-            if shareItem != nil {
-                Button {
-                    showShareSheet = true
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title3)
-//                        .foregroundStyle(.accentColor)
-                        .padding()
-                }
-            }
-        }
         .sheet(isPresented: $showShareSheet) {
-            if let item = shareItem {
-                VideoShareSheet(videoURL: item)
-            }
+            MediaShareSheet(post: post, mediaURL: shareItem)
         }
         .sheet(isPresented: $showingSafari) {
             if let urlString = post.url, let url = URL(string: urlString) {
@@ -339,6 +327,13 @@ struct PostRowView: View {
                     selectedPost: $selectedPost
                 )
             }
+        case .gallery:
+            SimpleGalleryView(
+                post: post,
+                mediaId: "\(post.id)-gallery",
+                namespace: namespace,
+                selectedPost: $selectedPost
+            )
         case .link:
             if shouldShowLinkPreview {
                 linkPostContent
@@ -351,10 +346,9 @@ struct PostRowView: View {
         if let content = post.selftext, !content.isEmpty {
             Text(content)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
                 .lineLimit(showFullText ? nil : 4)
                 .multilineTextAlignment(.leading)
-                .padding(.horizontal, 16)
         }
     }
     
@@ -474,7 +468,8 @@ struct PostRowView: View {
     }
     
     private func handleShare() {
-        shareItem = URL(string: post.permalinkURL)
+        // Simple share always shares the post URL, not the media
+        shareItem = nil  // No media file to share
         showShareSheet = true
     }
     
@@ -525,13 +520,13 @@ struct PostRowView: View {
     }
     
     private func handleDownload() {
-        guard post.postType == .video || post.postType == .gif else { return }
+        guard post.postType == .video || post.postType == .gif || post.postType == .image else { return }
         guard !isDownloading else { return }
         isDownloading = true
         Task {
             defer { isDownloading = false }
             do {
-                let service = VideoDownloadService()
+                let service = MediaDownloadService()
                 let fileURL = try await service.download(post: post, options: .init(
                     preferredFilename: post.id,
                     onProgress: { progress in
@@ -540,21 +535,17 @@ struct PostRowView: View {
                         }
                     }
                 ))
-                let ext = fileURL.pathExtension.lowercased()
-                let isDir = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
                 await MainActor.run {
-                    if ext == "mp4" && !isDir {
-                        shareItem = fileURL
-                        showShareSheet = true
-                    } else {
-                        let asset = AVURLAsset(url: fileURL)
-                        let item = AVPlayerItem(asset: asset)
-                        offlinePlayer = AVPlayer(playerItem: item)
-                        isOfflinePlayerPresented = true
-                    }
+                    shareItem = fileURL
+                    showShareSheet = true
                 }
             } catch {
                 print("Download failed: \(error)")
+                await MainActor.run {
+                    // Fallback to sharing the post URL
+                    shareItem = URL(string: post.permalinkURL)
+                    showShareSheet = true
+                }
             }
         }
     }
@@ -570,7 +561,14 @@ struct PostRowView: View {
                     .frame(width: 200)
                 
                 VStack(spacing: 4) {
-                    Text("Downloading Video")
+                    let downloadText = switch post.postType {
+                    case .video: "Downloading Video"
+                    case .gif: "Downloading GIF"
+                    case .image: "Downloading Image"
+                    default: "Downloading"
+                    }
+                    
+                    Text(downloadText)
                         .font(.headline)
                         .foregroundStyle(.white)
                     

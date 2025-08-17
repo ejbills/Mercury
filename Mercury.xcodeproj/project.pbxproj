@@ -12,6 +12,7 @@
 		BB157DCB2E4E6C9000375C89 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCA2E4E6C9000375C89 /* Nuke */; };
 		BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCC2E4E6C9000375C89 /* NukeUI */; };
 		BB157DD82E4E74A800375C89 /* SwiftyGif in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DD72E4E74A800375C89 /* SwiftyGif */; };
+		BB3917502E517BE800529397 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = BB39174F2E517BE800529397 /* Zoomable */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -49,6 +50,7 @@
 				BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */,
 				BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */,
 				BB157DD82E4E74A800375C89 /* SwiftyGif in Frameworks */,
+				BB3917502E517BE800529397 /* Zoomable in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,6 +107,7 @@
 				BB157DCA2E4E6C9000375C89 /* Nuke */,
 				BB157DCC2E4E6C9000375C89 /* NukeUI */,
 				BB157DD72E4E74A800375C89 /* SwiftyGif */,
+				BB39174F2E517BE800529397 /* Zoomable */,
 			);
 			productName = Mercury;
 			productReference = BBD11B3C2E4E48D100827872 /* Mercury.app */;
@@ -138,6 +141,7 @@
 				BB157DBE2E4E59FC00375C89 /* XCRemoteSwiftPackageReference "Defaults" */,
 				BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */,
 				BB157DD62E4E74A800375C89 /* XCRemoteSwiftPackageReference "SwiftyGif" */,
+				BB39174E2E517BE800529397 /* XCRemoteSwiftPackageReference "Zoomable" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBD11B3D2E4E48D100827872 /* Products */;
@@ -415,6 +419,14 @@
 				minimumVersion = 5.4.5;
 			};
 		};
+		BB39174E2E517BE800529397 /* XCRemoteSwiftPackageReference "Zoomable" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ryohey/Zoomable.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -442,6 +454,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB157DD62E4E74A800375C89 /* XCRemoteSwiftPackageReference "SwiftyGif" */;
 			productName = SwiftyGif;
+		};
+		BB39174F2E517BE800529397 /* Zoomable */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB39174E2E517BE800529397 /* XCRemoteSwiftPackageReference "Zoomable" */;
+			productName = Zoomable;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -28,6 +28,8 @@ struct RedditPost: Codable, Identifiable, Hashable {
     let preview: PreviewData?
     let postHint: String?
     let isVideo: Bool
+    let isGallery: Bool?
+    let mediaMetadata: [String: MediaMetadataItem]?
     let media: MediaData?
     let secureMedia: MediaData?
     let mediaEmbed: MediaEmbed?
@@ -73,6 +75,8 @@ struct RedditPost: Codable, Identifiable, Hashable {
         case createdUtc = "created_utc"
         case postHint = "post_hint"
         case isVideo = "is_video"
+        case isGallery = "is_gallery"
+        case mediaMetadata = "media_metadata"
         case secureMedia = "secure_media"
         case mediaEmbed = "media_embed"
         case secureMediaEmbed = "secure_media_embed"
@@ -108,6 +112,8 @@ struct RedditPost: Codable, Identifiable, Hashable {
         preview = try container.decodeIfPresent(PreviewData.self, forKey: .preview)
         postHint = try container.decodeIfPresent(String.self, forKey: .postHint)
         isVideo = try container.decodeIfPresent(Bool.self, forKey: .isVideo) ?? false
+        isGallery = try container.decodeIfPresent(Bool.self, forKey: .isGallery)
+        mediaMetadata = try container.decodeIfPresent([String: MediaMetadataItem].self, forKey: .mediaMetadata)
         media = try container.decodeIfPresent(MediaData.self, forKey: .media)
         secureMedia = try container.decodeIfPresent(MediaData.self, forKey: .secureMedia)
         mediaEmbed = try container.decodeIfPresent(MediaEmbed.self, forKey: .mediaEmbed)
@@ -205,7 +211,12 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var postType: PostType {
-        // Check for video content first
+        // Check for gallery first (multiple preview images)
+        if isGalleryPost {
+            return .gallery
+        }
+        
+        // Check for video content
         if isVideo || hasVideoURL {
             return .video
         } else if let hint = postHint {
@@ -365,6 +376,90 @@ struct RedditPost: Codable, Identifiable, Hashable {
         return !selftext.isNilOrEmpty
     }
     
+    var isGalleryPost: Bool {
+        // First check if Reddit explicitly marks this as a gallery
+        if let isGallery = isGallery, isGallery {
+            return true
+        }
+        
+        // Check if media_metadata exists (primary indicator for galleries)
+        if let mediaMetadata = mediaMetadata, !mediaMetadata.isEmpty {
+            return true
+        }
+        
+        // Check URL for gallery indicators
+        if let url = url, url.contains("/gallery/") {
+            return true
+        }
+        
+        // Check domain for gallery indicators
+        if let domain = domain, domain.contains("reddit.com") && url?.contains("/gallery/") == true {
+            return true
+        }
+        
+        // Also check for post_hint indicating gallery with multiple images
+        if postHint == "image" && preview?.images.count ?? 0 > 1 {
+            return true
+        }
+        
+        // Fallback: multiple preview images
+        if let preview = preview, preview.images.count > 1 {
+            return true
+        }
+        
+        return false
+    }
+    
+    var galleryImages: [GalleryImage] {
+        // Try to get images from media_metadata first (more reliable for galleries)
+        if let mediaMetadata = mediaMetadata, !mediaMetadata.isEmpty {
+            return Array(mediaMetadata.enumerated()).compactMap { (index, keyValue) in
+                let (key, metadata) = keyValue
+                guard let source = metadata.s,
+                      let urlString = source.u,
+                      let width = source.x,
+                      let height = source.y else {
+                    return nil
+                }
+                
+                let cleanURL = urlString.replacingOccurrences(of: "&amp;", with: "&")
+                
+                return GalleryImage(
+                    id: "\(id)_\(index)",
+                    url: cleanURL,
+                    width: width,
+                    height: height,
+                    index: index
+                )
+            }
+        }
+        
+        // Fallback to preview images
+        guard let preview = preview else { return [] }
+        
+        return preview.images.enumerated().map { index, previewImage in
+            // Get the best quality image for each gallery item
+            let allSources = [previewImage.source] + previewImage.resolutions
+            let optimalSource = allSources.first { $0.width >= 1080 } ?? 
+                              allSources.max { $0.width < $1.width } ?? 
+                              previewImage.source
+            
+            let cleanURL = optimalSource.url.replacingOccurrences(of: "&amp;", with: "&")
+            
+            return GalleryImage(
+                id: "\(id)_\(index)",
+                url: cleanURL,
+                width: optimalSource.width,
+                height: optimalSource.height,
+                index: index
+            )
+        }
+    }
+    
+    var galleryCount: Int {
+        return galleryImages.count
+    }
+    
     var isGifContent: Bool {
         // Check if media indicates it's a GIF
         if let media = media ?? secureMedia,
@@ -479,6 +574,7 @@ enum PostType {
     case image
     case gif
     case video
+    case gallery
     case link
     
     var iconName: String {
@@ -487,6 +583,7 @@ enum PostType {
         case .image: return "photo"
         case .gif: return "play.rectangle.fill"
         case .video: return "play.rectangle"
+        case .gallery: return "photo.stack"
         case .link: return "link"
         }
     }
@@ -497,6 +594,7 @@ enum PostType {
         case .image: return "Image"
         case .gif: return "GIF"
         case .video: return "Video"
+        case .gallery: return "Gallery"
         case .link: return "Link"
         }
     }
@@ -576,6 +674,31 @@ struct MediaEmbed: Codable {
     let width: Int?
     let scrolling: Bool?
     let height: Int?
+}
+
+struct MediaMetadataItem: Codable {
+    let status: String?
+    let e: String?
+    let m: String?
+    let s: MediaSource?
+    
+    struct MediaSource: Codable {
+        let y: Int?
+        let x: Int?
+        let u: String?
+    }
+}
+
+struct GalleryImage: Codable, Identifiable, Hashable {
+    let id: String
+    let url: String
+    let width: Int
+    let height: Int
+    let index: Int
+    
+    var dimensions: CGSize {
+        return CGSize(width: width, height: height)
+    }
 }
 
 enum EditedData: Codable {

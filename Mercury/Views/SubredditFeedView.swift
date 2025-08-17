@@ -72,7 +72,7 @@ struct SubredditFeedView: View {
         .navigationTitle(subredditDisplayName)
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $selectedPost) { post in
-            MediaDetailView(post: post, namespace: mediaNamespace)
+            PostDetailRouter(post: post, namespace: mediaNamespace)
         }
         .refreshable {
             await refreshFeed()
