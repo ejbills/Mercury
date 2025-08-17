@@ -133,11 +133,9 @@ struct CommentView: View {
                     .italic()
                     .foregroundStyle(.tertiary)
             } else {
-                Text(comment.body)
-                    .font(.callout)
+                MarkdownRenderer(content: comment.body, compactMode: false)
                     .foregroundStyle(.primary)
                     .lineSpacing(2)
-                    .textSelection(.enabled)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
