@@ -16,9 +16,21 @@ struct LinkItemView: View {
         url != nil
     }
     
+    private var isRedditSubreddit: Bool {
+        link.hasPrefix("r/") || link.contains("/r/")
+    }
+    
+    private var isRedditUser: Bool {
+        link.hasPrefix("u/") || link.contains("/u/")
+    }
+    
     var body: some View {
         Group {
-            if isValidUrl, let url {
+            if isRedditSubreddit {
+                redditSubredditView
+            } else if isRedditUser {
+                redditUserView
+            } else if isValidUrl, let url {
                 Link(destination: url) {
                     linkCard
                 }
@@ -28,7 +40,9 @@ struct LinkItemView: View {
             }
         }
         .task(id: url) {
-            await fetchMetadata()
+            if !isRedditSubreddit && !isRedditUser {
+                await fetchMetadata()
+            }
         }
     }
     
@@ -115,16 +129,24 @@ struct LinkItemView: View {
     }
     
     private var domainView: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "globe")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-            
-            Text(metadata?.url?.host ?? url?.host ?? "Unknown domain")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .redacted(reason: metadata == nil ? .placeholder : [])
+        Group {
+            if metadata != nil {
+                HStack(spacing: 4) {
+                    Image(systemName: "globe")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    
+                    Text(metadata?.url?.host ?? url?.host ?? "Unknown domain")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } else {
+                Text(url?.host ?? "Unknown domain")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
     }
     
@@ -142,6 +164,76 @@ struct LinkItemView: View {
         .padding(.vertical, 8)
         .background(.orange.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+    
+    private var redditSubredditView: some View {
+        Button(action: {
+            // TODO: Navigate to subreddit
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "r.circle.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.orange)
+                
+                Text(extractRedditName(from: link, prefix: "r/"))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.orange.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var redditUserView: some View {
+        Button(action: {
+            // TODO: Navigate to user profile
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.blue)
+                
+                Text(extractRedditName(from: link, prefix: "u/"))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.blue.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func extractRedditName(from text: String, prefix: String) -> String {
+        if text.hasPrefix(prefix) {
+            return String(text.dropFirst(prefix.count))
+        } else if let range = text.range(of: "/\(prefix)") {
+            let afterPrefix = text[range.upperBound...]
+            if let spaceRange = afterPrefix.range(of: " ") {
+                return String(afterPrefix[..<spaceRange.lowerBound])
+            } else {
+                return String(afterPrefix)
+            }
+        }
+        return text
     }
     
     private var cardBackground: Color {
