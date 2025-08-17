@@ -39,10 +39,30 @@ class CommentsService: BaseRedditService {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
-            // Reddit returns an array where [0] is post, [1] is comments
             let responses = try decoder.decode([CommentResponse].self, from: data)
             
-            return responses
+            let filteredResponses = responses.map { response in
+                let comments = response.data.children
+                let redditComments = comments.compactMap { child -> RedditComment? in
+                    guard child.kind == "t1" else { return nil }
+                    if case .comment(let comment) = child.data {
+                        return comment
+                    }
+                    return nil
+                }
+                let filteredComments = FilterService.shared.filterComments(redditComments)
+                let filteredChildren = filteredComments.map { comment in
+                    CommentChild(kind: "t1", data: .comment(comment))
+                }
+                let updatedData = CommentListData(
+                    children: filteredChildren,
+                    after: response.data.after,
+                    before: response.data.before
+                )
+                return CommentResponse(data: updatedData)
+            }
+            
+            return filteredResponses
         } catch let urlError as URLError {
             print("Comments fetch URL error: \(urlError)")
             throw APIError.networkError
@@ -55,9 +75,7 @@ class CommentsService: BaseRedditService {
     func fetchMoreComments(postId: String, commentIds: [String], sort: CommentSort = .best) async throws -> [RedditComment] {
         try validateAccessToken()
         
-        // Handle empty children arrays - Reddit API doesn't handle this well
         if commentIds.isEmpty {
-            print("🔄 CommentsService: Empty children array - returning empty comments")
             return []
         }
         
@@ -93,25 +111,19 @@ class CommentsService: BaseRedditService {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
-            // The response structure is different for morechildren
             let jsonResponse = try decoder.decode(MoreChildrenAPIResponse.self, from: data)
-            
-            // Extract comments from the response
             var comments: [RedditComment] = []
             if let things = jsonResponse.json.data.things {
-                print("🔄 CommentsService: API returned \(things.count) things")
                 for thing in things {
-                    print("🔄 CommentsService: Thing kind: \(thing.kind)")
                     if thing.kind == "t1" {
                         comments.append(thing.data)
                     }
                 }
-            } else {
-                print("🔄 CommentsService: No things in API response")
             }
             
-            print("🔄 CommentsService: Extracted \(comments.count) comments from API response")
-            return comments
+            let filteredComments = FilterService.shared.filterComments(comments)
+            
+            return filteredComments
         } catch let urlError as URLError {
             print("More comments fetch URL error: \(urlError)")
             throw APIError.networkError

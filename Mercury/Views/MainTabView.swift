@@ -81,6 +81,32 @@ struct MainTabView: View {
                         .padding(.top, 40)
                     }
                     
+                    VStack(spacing: 16) {
+                        NavigationLink(destination: FilterSettingsView()) {
+                            HStack {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.title3)
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 24)
+                                
+                                Text("Content Filters")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 20)
+                    }
+                    
                     Spacer()
                     
                     VStack(spacing: 12) {

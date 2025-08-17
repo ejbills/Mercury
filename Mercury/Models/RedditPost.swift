@@ -754,6 +754,11 @@ struct PostChild: Codable {
     let kind: String
     let data: RedditPost?
     
+    init(kind: String, data: RedditPost?) {
+        self.kind = kind
+        self.data = data
+    }
+    
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
@@ -765,6 +770,12 @@ struct PostChild: Codable {
         } else {
             data = nil
         }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(data, forKey: .data)
     }
     
     enum CodingKeys: String, CodingKey {

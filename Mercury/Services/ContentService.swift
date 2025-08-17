@@ -202,12 +202,27 @@ class ContentService: BaseRedditService {
             }
             
             let decoder = JSONDecoder()
-            // Note: We use explicit CodingKeys mappings instead of .convertFromSnakeCase
-            // to avoid conflicts with field decoding
             
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
-                return postResponse
+                
+                let posts = postResponse.data.children.compactMap { $0.data }
+                let filteredPosts = FilterService.shared.filterPosts(posts)
+                
+                let filteredChildren = filteredPosts.map { post in
+                    PostChild(kind: "t3", data: post)
+                }
+                
+                let filteredData = PostListData(
+                    children: filteredChildren,
+                    after: postResponse.data.after,
+                    before: postResponse.data.before,
+                    dist: postResponse.data.dist,
+                    modhash: postResponse.data.modhash
+                )
+                
+                let filteredResponse = PostResponse(data: filteredData)
+                return filteredResponse
             } catch {
                 throw APIError.parseError
             }
