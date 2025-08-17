@@ -18,6 +18,7 @@ struct PostActionToolbar: View {
     let onCopyLink: (() -> Void)?
     let onOpenOriginal: (() -> Void)?
     let onCommentsAction: (() -> Void)?
+    let onDownload: (() -> Void)?
     let colorScheme: PostActionColorScheme
     let size: PostActionSize
     
@@ -38,6 +39,11 @@ struct PostActionToolbar: View {
             // More menu (only for compact size)
             if size == .compact {
                 Menu {
+                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif {
+                        Button(action: onDownload) {
+                            Label("Download Video", systemImage: "arrow.down.circle")
+                        }
+                    }
                     Button(action: onShare) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
@@ -114,6 +120,11 @@ struct PostActionToolbar: View {
                 .buttonStyle(.plain)
                 
                 Menu {
+                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif {
+                        Button(action: onDownload) {
+                            Label("Download Video", systemImage: "arrow.down.circle")
+                        }
+                    }
                     if let onCopyLink = onCopyLink {
                         Button(action: onCopyLink) {
                             Label("Copy Link", systemImage: "link")
@@ -180,6 +191,7 @@ struct PostActionToolbar: View {
             onCopyLink: {},
             onOpenOriginal: {},
             onCommentsAction: {},
+            onDownload: {},
             colorScheme: .light,
             size: .compact
         )
@@ -195,6 +207,7 @@ struct PostActionToolbar: View {
             onCopyLink: nil,
             onOpenOriginal: nil,
             onCommentsAction: {},
+            onDownload: {},
             colorScheme: .dark,
             size: .large
         )

@@ -9,6 +9,7 @@ import SwiftUI
 import AVKit
 import Nuke
 import NukeUI
+import UIKit
 
 struct MediaDetailView: View {
     @State var post: RedditPost
@@ -22,6 +23,10 @@ struct MediaDetailView: View {
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
+    @State private var shareItem: URL?
+    @State private var isDownloading = false
+    @State private var downloadProgress: Double = 0.0
+    @State private var showShareSheet = false
 
     init(post: RedditPost, namespace: Namespace.ID) {
         self.post = post
@@ -44,6 +49,11 @@ struct MediaDetailView: View {
             
             mediaContent
                 .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+                .overlay {
+                    if isDownloading {
+                        downloadProgressOverlay
+                    }
+                }
             
             // Overlay container that handles taps
             VStack {
@@ -66,12 +76,11 @@ struct MediaDetailView: View {
         .navigationBarHidden(true)
         .statusBarHidden(!isContentVisible)
         .preferredColorScheme(.dark)
+
         .onAppear {
-            print("🎬 MediaDetailView appeared for: \(post.title)")
             hasAppeared = true
         }
         .onDisappear {
-            print("🎬 MediaDetailView disappeared for: \(post.title)")
             if let player = player {
                 player.pause()
                 player.seek(to: .zero)
@@ -102,11 +111,12 @@ struct MediaDetailView: View {
                 displayScore: $displayScore,
                 isVoting: $isVoting,
                 onVote: handleVote,
-                onShare: handleShare,
+                onShare: { shareItem = URL(string: post.permalinkURL) },
                 onSave: handleSave,
                 onCopyLink: nil,
                 onOpenOriginal: nil,
                 onCommentsAction: nil,
+                onDownload: handleDownload,
                 colorScheme: .dark,
                 size: .compact
             )
@@ -122,6 +132,11 @@ struct MediaDetailView: View {
             .frame(height: 120)
             .clipped()
         )
+        .sheet(isPresented: $showShareSheet) {
+            if let item = shareItem {
+                VideoShareSheet(videoURL: item)
+            }
+        }
     }
     
     private var mediaId: String {
@@ -261,15 +276,8 @@ struct MediaDetailView: View {
     }
     
     private func handleShare() {
-        let activityVC = UIActivityViewController(
-            activityItems: [post.permalinkURL],
-            applicationActivities: nil
-        )
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityVC, animated: true)
-        }
+        shareItem = URL(string: post.permalinkURL)
+        showShareSheet = true
     }
     
     private func handleSave() {
@@ -286,6 +294,66 @@ struct MediaDetailView: View {
         }
     }
 
+    private func handleDownload() {
+        guard post.postType == .video || post.postType == .gif else { return }
+        guard !isDownloading else { return }
+        isDownloading = true
+        Task {
+            defer { isDownloading = false }
+            do {
+                let service = VideoDownloadService()
+                let fileURL = try await service.download(post: post, options: .init(
+                    preferredFilename: post.id,
+                    onProgress: { progress in
+                        Task { @MainActor in
+                            downloadProgress = progress
+                        }
+                    }
+                ))
+                await MainActor.run {
+                    shareItem = fileURL
+                    showShareSheet = true
+                }
+            } catch {
+                print("Download failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    // Fallback to sharing the post URL
+                    shareItem = URL(string: post.permalinkURL)
+                    showShareSheet = true
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var downloadProgressOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+            
+            VStack(spacing: 16) {
+                ProgressView(value: downloadProgress)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                    .frame(width: 200)
+                
+                VStack(spacing: 4) {
+                    Text("Downloading Video")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: downloadProgress)
+    }
+
+}
+
+struct MediaDetailShareableItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 struct MediaItem: Identifiable, Hashable {

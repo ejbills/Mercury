@@ -8,6 +8,7 @@
 import SwiftUI
 import Nuke
 import NukeUI
+import AVKit
 
 struct PostRowView: View {
     @State var post: RedditPost
@@ -18,6 +19,12 @@ struct PostRowView: View {
     @State private var showingSafari = false
     @State private var isVoting = false
     @State private var showingCopiedToast = false
+    @State private var shareItem: URL?
+    @State private var isOfflinePlayerPresented = false
+    @State private var offlinePlayer: AVPlayer? = nil
+    @State private var isDownloading = false
+    @State private var downloadProgress: Double = 0.0
+    @State private var showShareSheet = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @Environment(\.redditAPI) private var redditAPI
@@ -81,6 +88,11 @@ struct PostRowView: View {
                 // TODO: make only postMediaContent toggle the media overlay, clicking other post elements should navigate to the post body rather than only just the comments button.
                 if hasMediaOrTextContent {
                     postMediaContent
+                        .overlay {
+                            if isDownloading && (post.postType == .video || post.postType == .gif) {
+                                downloadProgressOverlay
+                            }
+                        }
                 }
                 
                 postFooter
@@ -111,6 +123,7 @@ struct PostRowView: View {
                             onCopyLink: handleCopyLink,
                             onOpenOriginal: handleOpenOriginal,
                             onCommentsAction: nil,
+                            onDownload: handleDownload,
                             colorScheme: .light,
                             size: .large
                         )
@@ -129,6 +142,7 @@ struct PostRowView: View {
                         onCommentsAction: {
                             navigationPath.navigate(to: .postComments(post: currentPost))
                         },
+                        onDownload: handleDownload,
                         colorScheme: .light,
                         size: .compact
                     )
@@ -139,9 +153,34 @@ struct PostRowView: View {
             width - 32 // 16pt margin on each side
         }
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .overlay(alignment: .topTrailing) {
+            if shareItem != nil {
+                Button {
+                    showShareSheet = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+//                        .foregroundStyle(.accentColor)
+                        .padding()
+                }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let item = shareItem {
+                VideoShareSheet(videoURL: item)
+            }
+        }
         .sheet(isPresented: $showingSafari) {
             if let urlString = post.url, let url = URL(string: urlString) {
                 SafariView(url: url)
+            }
+        }
+
+        .sheet(isPresented: $isOfflinePlayerPresented) {
+            if let player = offlinePlayer {
+                VideoPlayer(player: player)
+                    .onAppear { player.play() }
+                    .ignoresSafeArea()
             }
         }
     }
@@ -435,15 +474,8 @@ struct PostRowView: View {
     }
     
     private func handleShare() {
-        let activityVC = UIActivityViewController(
-            activityItems: [post.permalinkURL],
-            applicationActivities: nil
-        )
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityVC, animated: true)
-        }
+        shareItem = URL(string: post.permalinkURL)
+        showShareSheet = true
     }
     
     private func handleSave() {
@@ -491,6 +523,70 @@ struct PostRowView: View {
     private func handleOpenOriginal() {
         showingSafari = true
     }
+    
+    private func handleDownload() {
+        guard post.postType == .video || post.postType == .gif else { return }
+        guard !isDownloading else { return }
+        isDownloading = true
+        Task {
+            defer { isDownloading = false }
+            do {
+                let service = VideoDownloadService()
+                let fileURL = try await service.download(post: post, options: .init(
+                    preferredFilename: post.id,
+                    onProgress: { progress in
+                        Task { @MainActor in
+                            downloadProgress = progress
+                        }
+                    }
+                ))
+                let ext = fileURL.pathExtension.lowercased()
+                let isDir = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                await MainActor.run {
+                    if ext == "mp4" && !isDir {
+                        shareItem = fileURL
+                        showShareSheet = true
+                    } else {
+                        let asset = AVURLAsset(url: fileURL)
+                        let item = AVPlayerItem(asset: asset)
+                        offlinePlayer = AVPlayer(playerItem: item)
+                        isOfflinePlayerPresented = true
+                    }
+                }
+            } catch {
+                print("Download failed: \(error)")
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var downloadProgressOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+            
+            VStack(spacing: 16) {
+                ProgressView(value: downloadProgress)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                    .frame(width: 200)
+                
+                VStack(spacing: 4) {
+                    Text("Downloading Video")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: downloadProgress)
+    }
+}
+
+struct PostRowShareableItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 extension Color {
