@@ -206,11 +206,11 @@ class ContentService: BaseRedditService {
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
                 
-                let posts = postResponse.data.children.compactMap { $0.data }
-                let filteredPosts = FilterService.shared.filterPosts(posts)
+                let filteredPosts = FilterService.shared.filterPosts(postResponse.data.children.compactMap { $0.data })
                 
-                let filteredChildren = filteredPosts.map { post in
-                    PostChild(kind: "t3", data: post)
+                let filteredChildren = postResponse.data.children.filter { child in
+                    guard let post = child.data else { return false }
+                    return !FilterService.shared.shouldFilterPost(post)
                 }
                 
                 let filteredData = PostListData(
@@ -221,8 +221,7 @@ class ContentService: BaseRedditService {
                     modhash: postResponse.data.modhash
                 )
                 
-                let filteredResponse = PostResponse(data: filteredData)
-                return filteredResponse
+                return PostResponse(data: filteredData)
             } catch {
                 throw APIError.parseError
             }

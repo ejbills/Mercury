@@ -10,16 +10,16 @@ import SwiftUI
 struct MainTabView: View {
     let apiService: RedditAPIManager
     @State private var homeNavigationPath = NavigationPathManager()
-    @State private var communitiesNavigationPath = NavigationPathManager()
+    @State private var inboxNavigationPath = NavigationPathManager()
     @State private var searchNavigationPath = NavigationPathManager()
     @State private var profileNavigationPath = NavigationPathManager()
     
     var body: some View {
         TabView {
-            // Home Feed Tab
+            // Home Tab (Communities)
             NavigationStack(path: $homeNavigationPath.path) {
-                SubredditFeedView(subreddit: "popular", apiService: apiService)
-                    .environment(\.navigationPathManager,homeNavigationPath)
+                SubredditDrawerView(apiService: apiService)
+                    .environment(\.navigationPathManager, homeNavigationPath)
                     .navigationDestination(for: NavigationDestination.self) { destination in
                         navigationDestination(for: destination, navigationPath: homeNavigationPath)
                     }
@@ -29,23 +29,23 @@ struct MainTabView: View {
                 Text("Home")
             }
             
-            // Communities (Subreddit Drawer)
-            NavigationStack(path: $communitiesNavigationPath.path) {
-                SubredditDrawerView(apiService: apiService)
-                    .environment(\.navigationPathManager,communitiesNavigationPath)
+            // Inbox Tab
+            NavigationStack(path: $inboxNavigationPath.path) {
+                InboxView(apiService: apiService)
+                    .environment(\.navigationPathManager, inboxNavigationPath)
                     .navigationDestination(for: NavigationDestination.self) { destination in
-                        navigationDestination(for: destination, navigationPath: communitiesNavigationPath)
+                        navigationDestination(for: destination, navigationPath: inboxNavigationPath)
                     }
             }
             .tabItem {
-                Image(systemName: "person.2.fill")
-                Text("Communities")
+                Image(systemName: "envelope.fill")
+                Text("Inbox")
             }
             
             // Search Tab
             NavigationStack(path: $searchNavigationPath.path) {
                 SearchView(apiService: apiService)
-                    .environment(\.navigationPathManager,searchNavigationPath)
+                    .environment(\.navigationPathManager, searchNavigationPath)
                     .navigationDestination(for: NavigationDestination.self) { destination in
                         navigationDestination(for: destination, navigationPath: searchNavigationPath)
                     }
@@ -125,7 +125,7 @@ struct MainTabView: View {
                     .padding(.bottom, 40)
                 }
                 .navigationTitle("Profile")
-                    .environment(\.navigationPathManager,profileNavigationPath)
+                    .environment(\.navigationPathManager, profileNavigationPath)
                     .navigationDestination(for: NavigationDestination.self) { destination in
                         navigationDestination(for: destination, navigationPath: profileNavigationPath)
                     }

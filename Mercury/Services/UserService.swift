@@ -39,23 +39,16 @@ class UserService: BaseRedditService {
                 }
             }
             
-            // Debug logging
-            print("🔍 User profile API response for \(username):")
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print(jsonString.prefix(500))
-            }
             
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let userResponse = try decoder.decode(UserProfileResponse.self, from: data)
             return userResponse.data
         } catch let decodingError as DecodingError {
-            print("🚨 User profile decoding error: \(decodingError)")
             throw APIError.parseError
         } catch _ as URLError {
             throw APIError.networkError
         } catch {
-            print("🚨 User profile error: \(error)")
             throw error
         }
     }

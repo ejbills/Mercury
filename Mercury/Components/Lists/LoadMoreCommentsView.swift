@@ -72,35 +72,26 @@ struct LoadMoreCommentsView: View {
     
     private func loadMoreComments() {
         guard !isLoading else { 
-            print("🔄 LoadMoreComments: Already loading, skipping")
             return 
         }
         
-        // Haptic feedback on tap
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
         
-        print("🔄 LoadMoreComments: Starting load for more ID: \(moreComments.id), children: \(moreComments.children.count), count: \(moreComments.count)")
-        
-        // Notify parent to start loading state
         onStartLoad?()
         
         Task {
             do {
-                print("🔄 LoadMoreComments: Calling API for post: \(post.id) with children: \(moreComments.children)")
                 let newComments = try await redditAPI.fetchMoreComments(
                     postId: post.id,
                     commentIds: moreComments.children
                 )
-                
-                print("🔄 LoadMoreComments: API returned \(newComments.count) comments")
                 
                 await MainActor.run {
                     onLoadMore(newComments)
                 }
             } catch {
                 await MainActor.run {
-                    print("❌ LoadMoreComments: Failed to load more comments: \(error)")
                     onError?()
                 }
             }

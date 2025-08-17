@@ -42,24 +42,21 @@ class CommentsService: BaseRedditService {
             let responses = try decoder.decode([CommentResponse].self, from: data)
             
             let filteredResponses = responses.map { response in
-                let comments = response.data.children
-                let redditComments = comments.compactMap { child -> RedditComment? in
-                    guard child.kind == "t1" else { return nil }
+                let filteredChildren = response.data.children.filter { child in
+                    guard child.kind == "t1" else { return true }
                     if case .comment(let comment) = child.data {
-                        return comment
+                        return !FilterService.shared.shouldFilterComment(comment)
                     }
-                    return nil
+                    return true
                 }
-                let filteredComments = FilterService.shared.filterComments(redditComments)
-                let filteredChildren = filteredComments.map { comment in
-                    CommentChild(kind: "t1", data: .comment(comment))
-                }
-                let updatedData = CommentListData(
+                
+                let filteredData = CommentListData(
                     children: filteredChildren,
                     after: response.data.after,
                     before: response.data.before
                 )
-                return CommentResponse(data: updatedData)
+                
+                return CommentResponse(data: filteredData)
             }
             
             return filteredResponses
@@ -121,9 +118,7 @@ class CommentsService: BaseRedditService {
                 }
             }
             
-            let filteredComments = FilterService.shared.filterComments(comments)
-            
-            return filteredComments
+            return comments.filter { !FilterService.shared.shouldFilterComment($0) }
         } catch let urlError as URLError {
             print("More comments fetch URL error: \(urlError)")
             throw APIError.networkError

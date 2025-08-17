@@ -298,14 +298,9 @@ struct CommentResponse: Codable {
             case .comment:
                 return nil
             case .more(let more):
-                print("🔍 MoreComments found: ID=\(more.id), name=\(more.name), children=\(more.children.count) children, count=\(more.count)")
-                
-                // Only filter out completely empty dummy entries (t3 posts)
-                // Let Reddit API handle everything else as designed
                 return more.name.isEmpty ? nil : more
             }
         }
-        print("🔍 Total moreComments extracted: \(moreObjects.count)")
         return moreObjects
     }
 }
