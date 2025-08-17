@@ -18,6 +18,7 @@ struct MediaDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
+    @Environment(\.colorScheme) private var colorScheme
     @State private var player: AVPlayer?
     @State private var hasAppeared = false
     @State private var isContentVisible = true
@@ -45,7 +46,7 @@ struct MediaDetailView: View {
     
     var body: some View {
         ZStack {
-            Color.black
+            (colorScheme == .dark ? Color.black : Color.white)
                 .ignoresSafeArea()
             
             mediaContent
@@ -76,7 +77,6 @@ struct MediaDetailView: View {
         }
         .navigationBarHidden(true)
         .statusBarHidden(!isContentVisible)
-        .preferredColorScheme(.dark)
 
         .onAppear {
             hasAppeared = true

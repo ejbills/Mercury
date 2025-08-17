@@ -57,7 +57,7 @@ struct SimpleImageView: View {
                                 }
                         } else if state.error != nil {
                             // Error placeholder maintains exact same size
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: 12)
                                 .fill(.quaternary.opacity(0.3))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: displayHeight)
@@ -73,7 +73,7 @@ struct SimpleImageView: View {
                                 }
                         } else {
                             // Loading placeholder maintains exact same size
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: 12)
                                 .fill(.quaternary.opacity(0.3))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: displayHeight)
@@ -88,6 +88,7 @@ struct SimpleImageView: View {
                 .transition(.opacity) // Smooth transition only
             }
             .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
@@ -169,7 +170,7 @@ struct SimpleVideoView: View {
                                             .clipShape(RoundedRectangle(cornerRadius: 12))
                                     } else {
                                         // Placeholder maintains exact same size
-                                        Rectangle()
+                                        RoundedRectangle(cornerRadius: 12)
                                             .fill(.quaternary.opacity(0.3))
                                             .frame(maxWidth: .infinity)
                                             .frame(height: displayHeight)
@@ -183,7 +184,7 @@ struct SimpleVideoView: View {
                                 .transition(.opacity) // Smooth transition only
                             } else {
                                 // No thumbnail - fixed placeholder
-                                Rectangle()
+                                RoundedRectangle(cornerRadius: 12)
                                     .fill(.quaternary.opacity(0.3))
                                     .frame(maxWidth: .infinity)
                                     .frame(height: displayHeight)

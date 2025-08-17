@@ -414,7 +414,7 @@ struct RedditPost: Codable, Identifiable, Hashable {
         // Try to get images from media_metadata first (more reliable for galleries)
         if let mediaMetadata = mediaMetadata, !mediaMetadata.isEmpty {
             return Array(mediaMetadata.enumerated()).compactMap { (index, keyValue) in
-                let (key, metadata) = keyValue
+                let (_, metadata) = keyValue
                 guard let source = metadata.s,
                       let urlString = source.u,
                       let width = source.x,

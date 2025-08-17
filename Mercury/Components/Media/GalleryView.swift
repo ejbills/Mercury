@@ -33,16 +33,16 @@ struct SimpleGalleryView: View {
         let screenWidth = UIScreen.main.bounds.width - 24 // Account for padding
         let aspectRatio = CGFloat(firstImage.width) / CGFloat(firstImage.height)
         let calculatedHeight = screenWidth / aspectRatio
-        return min(calculatedHeight, 500) // Max height cap for galleries
+        return min(calculatedHeight, 600) // Max height cap same as regular images
     }
     
     var body: some View {
         Button(action: { selectedPost = post }) {
-            // FIXED FRAME CONTAINER
+            // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
             Rectangle()
                 .fill(.clear)
                 .frame(maxWidth: .infinity)
-                .frame(height: displayHeight)
+                .frame(height: displayHeight) // FIXED HEIGHT FROM API
                 .overlay {
                     if let firstImage = firstImage {
                         LazyImage(url: URL(string: firstImage.url)) { state in
@@ -55,6 +55,7 @@ struct SimpleGalleryView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                     .opacity(isLoaded ? 1 : 0)
                                     .onAppear {
+                                        // Only animate when image actually loads
                                         if !isLoaded {
                                             withAnimation(.easeOut(duration: 0.3)) {
                                                 isLoaded = true
@@ -62,7 +63,7 @@ struct SimpleGalleryView: View {
                                         }
                                     }
                             } else if state.error != nil {
-                                // Error placeholder
+                                // Error placeholder maintains exact same size
                                 Rectangle()
                                     .fill(.quaternary.opacity(0.3))
                                     .frame(maxWidth: .infinity)
@@ -78,7 +79,7 @@ struct SimpleGalleryView: View {
                                         }
                                     }
                             } else {
-                                // Loading placeholder
+                                // Loading placeholder maintains exact same size
                                 Rectangle()
                                     .fill(.quaternary.opacity(0.3))
                                     .frame(maxWidth: .infinity)
@@ -89,12 +90,13 @@ struct SimpleGalleryView: View {
                                     }
                             }
                         }
-                        .processors([.resize(size: CGSize(width: 800, height: 600))])
-                        .priority(.high)
-                        .transition(.opacity)
+                        .processors([.resize(size: CGSize(width: 800, height: 600))]) // Resize for consistent caching
+                        .priority(.high) // High priority loading
+                        .transition(.opacity) // Smooth transition only
                     }
                 }
                 .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .bottomTrailing) {
                     // Gallery badge with count
                     galleryBadge
@@ -105,19 +107,16 @@ struct SimpleGalleryView: View {
     }
     
     private var galleryBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "photo.stack.fill")
-                .font(.caption2)
-                .foregroundStyle(.white)
-            
-            Text("\(galleryImages.count)")
-                .font(.caption2)
-                .fontWeight(.bold)
-                .foregroundStyle(.white)
+        Pill(size: .small) {
+            HStack(spacing: 4) {
+                Image(systemName: "photo.stack.fill")
+                    .font(.caption2)
+                
+                Text("\(galleryImages.count)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
         .padding(10)
         .opacity(isLoaded ? 1 : 0)
     }
@@ -143,10 +142,6 @@ struct GalleryDetailView: View {
         return post.galleryImages
     }
     
-    private var currentImage: GalleryImage? {
-        guard currentIndex < galleryImages.count else { return nil }
-        return galleryImages[currentIndex]
-    }
     
     private var currentPost: RedditPost {
         var updatedPost = post
@@ -164,76 +159,44 @@ struct GalleryDetailView: View {
     
     var body: some View {
         ZStack {
-            Color.black
+            Color(UIColor.systemBackground)
                 .ignoresSafeArea()
             
-            // Main gallery content
-            if let currentImage = currentImage {
-                LazyImage(url: URL(string: currentImage.url)) { state in
-                    if let image = state.image {
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .zoomable()
-                    } else if state.error != nil {
-                        VStack(spacing: 16) {
-                            Image(systemName: "photo.stack")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.white)
-                            Text("Failed to load image")
-                                .font(.title3)
-                                .foregroundStyle(.white)
-                        }
-                    } else {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(1.5)
-                    }
-                }
-                .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
-                .gesture(
-                    DragGesture()
-                        .onEnded { value in
-                            if abs(value.translation.width) > abs(value.translation.height) {
-                                if value.translation.width > 50 && currentIndex > 0 {
-                                    // Swipe right - previous image
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        currentIndex -= 1
-                                    }
-                                } else if value.translation.width < -50 && currentIndex < galleryImages.count - 1 {
-                                    // Swipe left - next image
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        currentIndex += 1
-                                    }
+            // Main gallery content with TabView
+            TabView(selection: $currentIndex) {
+                ForEach(0..<galleryImages.count, id: \.self) { imageIndex in
+                    LazyImage(url: URL(string: galleryImages[imageIndex].url)) { state in
+                        if let image = state.image {
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .scaleEffect(1.0) // Remove zoomable to allow TabView swiping
+                                .onTapGesture(count: 2) {
+                                    // Double-tap to zoom can be added later if needed
                                 }
+                        } else if state.error != nil {
+                            VStack(spacing: 16) {
+                                Image(systemName: "photo.stack")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.white)
+                                Text("Failed to load image")
+                                    .font(.title3)
+                                    .foregroundStyle(.white)
                             }
+                        } else {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
                         }
-                )
-            }
-            
-            // Progress indicator and UI overlay
-            VStack {
-                // Top status bar with image counter
-                HStack {
-                    Button("Done") {
-                        dismiss()
                     }
-                    .foregroundStyle(.white)
-                    .padding()
-                    
-                    Spacer()
-                    
-                    // Image counter
-                    Text("\(currentIndex + 1) of \(galleryImages.count)")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
-                        .padding()
                 }
-                
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+            
+            // UI overlay
+            VStack {
                 Spacer()
                 
                 // Bottom content overlay
@@ -263,6 +226,18 @@ struct GalleryDetailView: View {
     
     private var bottomContentOverlay: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Image counter overlay with Pill styling
+            HStack {
+                Spacer()
+                Pill(size: .small) {
+                    Text("\(currentIndex + 1) of \(galleryImages.count)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white)
+                }
+                Spacer()
+            }
+            
             // Post context
             VStack(alignment: .leading, spacing: 8) {
                 PostHeader(post: post, colorScheme: .dark)
@@ -274,17 +249,6 @@ struct GalleryDetailView: View {
                     .multilineTextAlignment(.leading)
                     .lineLimit(3)
             }
-            
-            // Pagination dots
-            HStack(spacing: 8) {
-                ForEach(0..<galleryImages.count, id: \.self) { index in
-                    Circle()
-                        .fill(index == currentIndex ? .white : .white.opacity(0.3))
-                        .frame(width: 8, height: 8)
-                        .animation(.easeInOut(duration: 0.2), value: currentIndex)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
             
             // Action toolbar
             PostActionToolbar(
@@ -319,7 +283,7 @@ struct GalleryDetailView: View {
     @ViewBuilder
     private var downloadProgressOverlay: some View {
         ZStack {
-            Color.black.opacity(0.7)
+            Color(UIColor.systemBackground).opacity(0.9)
             
             VStack(spacing: 16) {
                 ProgressView(value: downloadProgress)

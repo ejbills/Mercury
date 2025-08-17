@@ -40,7 +40,8 @@ struct Pill<Content: View>: View {
         }
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
-        .background(.regularMaterial, in: Capsule())
+        .background(.gray.opacity(0.15), in: Capsule())
+        .background(.thinMaterial.opacity(0.75), in: Capsule())
         .overlay {
             Capsule()
                 .stroke(.separator.opacity(0.2), lineWidth: 0.5)

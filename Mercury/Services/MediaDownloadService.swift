@@ -167,7 +167,7 @@ final class MediaDownloadService {
             }
             
             // Collect results in order
-            for try await (index, url) in group {
+            for try await (_, url) in group {
                 downloadedURLs.append(url)
             }
         }
@@ -203,7 +203,7 @@ final class MediaDownloadService {
             let task = URLSession.shared.downloadTask(with: url) { tempURL, response, error in
                 progressObserver?.invalidate()
                 
-                if let error = error {
+                if error != nil {
                     continuation.resume(throwing: Error.network)
                     return
                 }

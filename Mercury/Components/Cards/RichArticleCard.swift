@@ -21,10 +21,11 @@ struct RichArticleCard: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Compact thumbnail on left - ALWAYS fixed size
+            // Compact thumbnail on left - ALWAYS fixed size with proper rounding
             thumbnailView
                 .frame(width: 80, height: 80) // Fixed size prevents layout shift
-                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 12)) // Match regular image posts corner radius
+                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
             
             // Content section - ALWAYS same height
             VStack(alignment: .leading, spacing: 6) {
@@ -95,11 +96,14 @@ struct RichArticleCard: View {
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 80, height: 80)
-                            .clipped()
+                            .clipped() // Ensure it's clipped to the frame
                     } else {
                         compactPlaceholder
                     }
                 }
+                .processors([.resize(size: CGSize(width: 160, height: 160))]) // Smaller resize for thumbnails
+                .priority(.high)
+                .transition(.opacity)
             } else {
                 compactPlaceholder
             }
@@ -125,23 +129,13 @@ struct RichArticleCard: View {
     }
     
     private var compactPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 8)
+        RoundedRectangle(cornerRadius: 12)
             .fill(.quaternary.opacity(0.3))
             .frame(width: 80, height: 80)
             .overlay {
                 Image(systemName: "link")
                     .font(.title3)
                     .foregroundStyle(.secondary)
-            }
-    }
-    
-    private var compactLoadingPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(.quaternary.opacity(0.3))
-            .frame(width: 80, height: 80)
-            .overlay {
-                ProgressView()
-                    .scaleEffect(0.8)
             }
     }
     
