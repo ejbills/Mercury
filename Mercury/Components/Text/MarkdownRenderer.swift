@@ -24,6 +24,7 @@ struct MarkdownRenderer: View {
         VStack(alignment: .leading, spacing: 8) {
             // Markdown text
             Markdown(processedContent)
+                .font(.system(size: 12))
                 .textSelection(.enabled)
             
             // Media and link detection

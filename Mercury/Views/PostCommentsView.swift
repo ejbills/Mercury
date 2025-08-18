@@ -14,6 +14,7 @@ struct PostCommentsView: View {
     @State private var errorMessage: String?
     @State private var commentSort: CommentSort = .best
     @State private var showingSortOptions = false
+    @State private var loadingRootMoreIds: Set<String> = []
     @Namespace private var mediaNamespace
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -80,24 +81,56 @@ struct PostCommentsView: View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
             
-            // Use unified CommentThreadView for entire thread
+            // Use unified CommentThreadView for entire thread (nested load mores inline)
             CommentThreadView(
                 comments: allComments,
-                post: post
+                post: post,
+                sort: commentSort
             )
             
-            // Load more comments section at thread level
+            // Root-level pagination handled by CommentThreadManager
             if !threadManager.moreObjects.isEmpty {
                 LazyVStack(spacing: 8) {
                     ForEach(threadManager.moreObjects, id: \.id) { more in
-                        let _ = print("🔘 PostCommentsView: Rendering LoadMoreCommentsView for more ID=\(more.id), name=\(more.name), children=\(more.children)")
-                        LoadMoreCommentsView(
-                            moreComments: more,
-                            post: post,
-                            onLoadMore: { newComments in
-                                threadManager.insertMoreComments(newComments, replacingMoreId: more.id)
+                        let _ = print("🔘 PostCommentsView: Rendering root-level LoadMore for ID=\(more.id), children=\(more.children)")
+                        // Choose closure based on root pagination style
+                        Group {
+                            if more.name == "root_pagination" {
+                                LoadMoreCommentsView(
+                                    moreComments: more,
+                                    post: post,
+                                    sort: commentSort,
+                                    isLoading: loadingRootMoreIds.contains(more.id),
+                                    onStartLoad: { loadingRootMoreIds.insert(more.id) },
+                                    onLoadMore: { _ in },
+                                    onLoadMoreRootPage: { newComments, nextAfter in
+                                        loadingRootMoreIds.remove(more.id)
+                                        threadManager.appendRootPage(newComments: newComments, nextAfter: nextAfter)
+                                    },
+                                    onError: {
+                                        loadingRootMoreIds.remove(more.id)
+                                    }
+                                )
+                            } else {
+                                LoadMoreCommentsView(
+                                    moreComments: more,
+                                    post: post,
+                                    sort: commentSort,
+                                    isLoading: loadingRootMoreIds.contains(more.id),
+                                    onStartLoad: { loadingRootMoreIds.insert(more.id) },
+                                    onLoadMore: { newComments in
+                                        loadingRootMoreIds.remove(more.id)
+                                        // Consume the number we attempted (batch size equals children count on the visible More)
+                                        let consumed = more.children.count
+                                        threadManager.appendRootChildrenPage(newComments: newComments, consumedCount: consumed)
+                                    },
+                                    onLoadMoreRootPage: nil,
+                                    onError: {
+                                        loadingRootMoreIds.remove(more.id)
+                                    }
+                                )
                             }
-                        )
+                        }
                         .padding(.horizontal, 12)
                     }
                 }
@@ -176,7 +209,6 @@ struct PostCommentsView: View {
                 Image(systemName: "chevron.down")
                     .font(.caption2)
             }
-            .foregroundStyle(.secondary)
         }
     }
     
@@ -195,10 +227,11 @@ struct PostCommentsView: View {
                 let commentsResponse = response[1]
                 let comments = commentsResponse.flattenedComments
                 let moreObjects = commentsResponse.moreComments
+                let rootAfter = commentsResponse.data.after
                 
-                threadManager.loadInitialComments(comments, moreObjects: moreObjects)
+                threadManager.loadInitialComments(comments, moreObjects: moreObjects, rootAfter: rootAfter)
             } else {
-                threadManager.loadInitialComments([], moreObjects: [])
+                threadManager.loadInitialComments([], moreObjects: [], rootAfter: nil)
             }
             
             isLoading = false

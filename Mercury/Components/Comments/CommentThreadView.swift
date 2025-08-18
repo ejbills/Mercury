@@ -10,6 +10,7 @@ import SwiftUI
 struct CommentThreadView: View {
     let comments: [RedditComment]
     let post: RedditPost
+    let sort: CommentSort
     
     // Unified flat state management for entire thread
     @State private var flatItems: [FlatCommentItem] = []
@@ -19,9 +20,10 @@ struct CommentThreadView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comments: [RedditComment], post: RedditPost) {
+    init(comments: [RedditComment], post: RedditPost, sort: CommentSort) {
         self.comments = comments
         self.post = post
+        self.sort = sort
         
         // Initialize flat structure from all comments
         let initialFlatItems = Self.flattenAllComments(comments: comments)
@@ -60,6 +62,7 @@ struct CommentThreadView: View {
                         LoadMoreCommentsView(
                             moreComments: flatMoreComments.moreComments,
                             post: post,
+                            sort: sort,
                             isLoading: loadingMoreIds.contains(flatMoreComments.id),
                             onStartLoad: {
                                 loadingMoreIds.insert(flatMoreComments.id)
@@ -81,51 +84,21 @@ struct CommentThreadView: View {
                 }
             }
         }
+        .onChange(of: comments) { oldComments, newComments in
+            guard oldComments.count != newComments.count else { return }
+            let rebuilt = Self.flattenAllComments(comments: newComments)
+                flatItems = rebuilt
+                    }
     }
     
     // MARK: - Flat Array Management
     
     private static func flattenAllComments(comments: [RedditComment]) -> [FlatCommentItem] {
         var items: [FlatCommentItem] = []
-        var rootLevelMoreComments: [MoreComments] = []
-        
+        // Flatten all comment trees (including nested MoreComments)
         for comment in comments {
-            let commentItems = flattenCommentTree(comment: comment)
-            for item in commentItems {
-                if case .loadMore(let flatMore) = item, flatMore.depth == 0 {
-                    // Collect root-level MoreComments instead of adding immediately
-                    rootLevelMoreComments.append(flatMore.moreComments)
-                } else {
-                    items.append(item)
-                }
-            }
+            items.append(contentsOf: flattenCommentTree(comment: comment))
         }
-        
-        // Consolidate all root-level MoreComments into a single entry
-        if !rootLevelMoreComments.isEmpty {
-            let allChildren = rootLevelMoreComments.flatMap { $0.children }
-            let totalCount = rootLevelMoreComments.reduce(0) { $0 + $1.count }
-            
-            let consolidatedMore = MoreComments(
-                count: min(totalCount, 25), // Limit to 25 as requested
-                name: "root_consolidated",
-                rawId: "root_consolidated",
-                parentId: nil,
-                depth: 0,
-                children: Array(allChildren.prefix(25)) // Limit children array to 25
-            )
-            
-            let flatMore = FlatMoreComments(
-                id: consolidatedMore.id,
-                moreComments: consolidatedMore,
-                depth: 0,
-                parentId: nil
-            )
-            items.append(.loadMore(flatMore))
-            
-            print("🔘 Consolidated \(rootLevelMoreComments.count) root-level MoreComments into 1 with \(consolidatedMore.children.count) children (limited to 25)")
-        }
-        
         return items
     }
     

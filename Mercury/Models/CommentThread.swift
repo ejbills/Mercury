@@ -48,39 +48,121 @@ class CommentThreadManager {
     private(set) var commentThreads: [CommentThread] = []
     private(set) var moreObjects: [MoreComments] = []
     private var allComments: [RedditComment] = []
+    private(set) var rootAfter: String? = nil
+    var hasMoreRootComments: Bool { rootAfter != nil }
+    private var rootRemainingChildren: [String] = []
     
-    func loadInitialComments(_ comments: [RedditComment], moreObjects: [MoreComments]) {
+    func loadInitialComments(_ comments: [RedditComment], moreObjects: [MoreComments], rootAfter: String?) {
         self.allComments = comments
+        self.rootAfter = rootAfter
+        self.rootRemainingChildren = []
         
-        // Use parsed MoreComments from API response, plus generate root-level load more if needed
-        var allMoreObjects = moreObjects
-        
-        // Check if we should add root-level load more
+        // Decide root-level strategy:
+        // 1) If API provided an after token, use pagination.
+        // 2) Else, consolidate any root-level MoreComments into a single button using their children IDs.
         if shouldAddRootLevelLoadMore(comments: comments) {
-            let rootCommentIds = comments.filter { $0.depth == 0 }.map { $0.id }
+            let afterToken = rootAfter ?? ""
             let rootLoadMore = MoreComments(
-                count: rootCommentIds.count,
-                name: "root_load_more", 
-                rawId: "root_load_more",
+                count: 25,
+                name: "root_pagination",
+                rawId: "root_pagination",
                 parentId: nil,
                 depth: 0,
-                children: rootCommentIds // Pass current root comment IDs for pagination
+                children: afterToken.isEmpty ? [] : [afterToken]
             )
-            allMoreObjects.append(rootLoadMore)
-            print("🔍 Added root-level load more with \(rootCommentIds.count) existing comment IDs")
+            self.moreObjects = [rootLoadMore]
+            print("🔍 Added root-level pagination with after=\(afterToken.isEmpty ? "<none>" : afterToken)")
+        } else {
+            // Collect root-level MoreComments from API
+            let rootMores = moreObjects.filter { $0.depth == 0 }
+            if !rootMores.isEmpty {
+                let combinedChildren = rootMores.flatMap { $0.children }
+                self.rootRemainingChildren = combinedChildren
+                let slice = Array(combinedChildren.prefix(25))
+                if !slice.isEmpty {
+                    let consolidated = MoreComments(
+                        count: slice.count,
+                        name: "root_more_children",
+                        rawId: "root_more_children",
+                        parentId: nil,
+                        depth: 0,
+                        children: slice
+                    )
+                    self.moreObjects = [consolidated]
+                    print("🔍 Added root-level morechildren with \(combinedChildren.count) total ids (showing \(slice.count))")
+                } else {
+                    self.moreObjects = []
+                }
+            } else {
+                self.moreObjects = []
+            }
         }
-        
-        self.moreObjects = allMoreObjects
         
         // Build comment threads by organizing into parent-child relationships
         commentThreads = buildCommentThreads(from: comments)
     }
     
+    /// Append another page of root-level comments and update pagination state
+    func appendRootPage(newComments: [RedditComment], nextAfter: String?) {
+        // Update stored comments
+        allComments.append(contentsOf: newComments)
+        rootAfter = nextAfter
+        
+        // Append threads in API order (preserve current sort order from server)
+        let newThreads = newComments.filter { $0.depth == 0 }.map { CommentThread(parentComment: $0) }
+        commentThreads.append(contentsOf: newThreads)
+        
+        // Rebuild root-level More object depending on nextAfter
+        if let after = nextAfter {
+            moreObjects = [
+                MoreComments(
+                    count: 25,
+                    name: "root_pagination",
+                    rawId: "root_pagination",
+                    parentId: nil,
+                    depth: 0,
+                    children: [after]
+                )
+            ]
+            print("🔍 Updated root pagination with next after=\(after)")
+        } else {
+            moreObjects = []
+            print("🔍 Reached end of root pagination (no after)")
+        }
+    }
+
+    /// Append a page of root-level comments loaded via morechildren and update remaining ids
+    func appendRootChildrenPage(newComments: [RedditComment], consumedCount: Int) {
+        // Update stored comments and threads
+        allComments.append(contentsOf: newComments)
+        let newThreads = newComments.filter { $0.depth == 0 }.map { CommentThread(parentComment: $0) }
+        commentThreads.append(contentsOf: newThreads)
+        
+        // Consume from remaining children and refresh the More object
+        if consumedCount > 0 && consumedCount <= rootRemainingChildren.count {
+            rootRemainingChildren.removeFirst(consumedCount)
+        }
+        if rootRemainingChildren.isEmpty {
+            moreObjects = []
+            print("🔍 Root morechildren exhausted; hiding button")
+        } else {
+            let nextSlice = Array(rootRemainingChildren.prefix(25))
+            let consolidated = MoreComments(
+                count: nextSlice.count,
+                name: "root_more_children",
+                rawId: "root_more_children",
+                parentId: nil,
+                depth: 0,
+                children: nextSlice
+            )
+            moreObjects = [consolidated]
+            print("🔍 Root morechildren remaining: \(rootRemainingChildren.count); showing next \(nextSlice.count)")
+        }
+    }
+
     private func shouldAddRootLevelLoadMore(comments: [RedditComment]) -> Bool {
-        // TODO: This should check the "after" field from the Reddit API response
-        // If "after" is not null, there are more comments to load
-        // For now, return false until we implement proper pagination
-        return false
+        // If Reddit API supplies an "after" token, there are more root comments
+        return rootAfter != nil && !comments.filter { $0.depth == 0 }.isEmpty
     }
     
     private func buildCommentThreads(from comments: [RedditComment]) -> [CommentThread] {
@@ -92,7 +174,7 @@ class CommentThreadManager {
             CommentThread(parentComment: topComment)
         }
         
-        return threads.sorted { $0.parentComment.score > $1.parentComment.score }
+        return threads
     }
     
     // No longer needed - Reddit API provides proper threading
@@ -106,8 +188,7 @@ class CommentThreadManager {
         let newThreads = newTopLevelComments.map { CommentThread(parentComment: $0) }
         
         commentThreads.append(contentsOf: newThreads)
-        // Re-sort by score
-        commentThreads.sort { $0.parentComment.score > $1.parentComment.score }
+        // Keep API order
     }
 
 }
