@@ -59,10 +59,12 @@ struct CommentView: View {
                 
                 // Author pill with badges - matches post design pattern
                 Pill(action: {
-                    navigationPath.navigate(to: .userProfile(username: comment.author))
+                    if !isDeletedUser {
+                        navigationPath.navigate(to: .userProfile(username: comment.author))
+                    }
                 }, size: .small) {
                     HStack(spacing: 4) {
-                        Text(comment.author)
+                        Text(isDeletedUser ? "[deleted]" : comment.author)
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundStyle(authorColor)
@@ -208,13 +210,19 @@ struct CommentView: View {
     }
     
     private var authorColor: Color {
-        if comment.isSubmitter {
+        if isDeletedUser {
+            return .secondary
+        } else if comment.isSubmitter {
             return .blue
         } else if comment.distinguished != nil {
             return .green
         } else {
             return .primary
         }
+    }
+    
+    private var isDeletedUser: Bool {
+        return comment.author == "[deleted]" || comment.author == "deleted"
     }
     
     private var scoreText: String {

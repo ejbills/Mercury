@@ -46,6 +46,8 @@ struct MarkdownRenderer: View {
     }
     
     private func extractLinks(from text: String) -> [EmbedContent] {
+        let _ = print("📝 MarkdownRenderer: Extracting links from comment text: \"\(text.prefix(100))...\"")
+        
         var content: [EmbedContent] = []
         var processedText = text
         
@@ -56,10 +58,13 @@ struct MarkdownRenderer: View {
             let range = NSRange(location: 0, length: processedText.utf16.count)
             let giphyMatches = giphyRegex.matches(in: processedText, options: [], range: range)
             
+            let _ = print("🎬 Found \(giphyMatches.count) Giphy matches")
+            
             // Process matches in reverse order to avoid index shifting
             for match in giphyMatches.reversed() {
                 if let range = Range(match.range, in: processedText) {
                     let giphyString = String(processedText[range])
+                    let _ = print("🎬 Extracted Giphy: \(giphyString)")
                     content.append(.giphy(giphyString))
                     
                     // Remove the Giphy string from text so it's not picked up by URL regex
@@ -68,20 +73,52 @@ struct MarkdownRenderer: View {
             }
         }
         
-        // SECOND: Extract regular URLs from remaining text
+        // SECOND: Extract Reddit mentions and subreddits from text (with whitespace boundaries)
+        let redditMentionPattern = #"(?<=^|\s)(u|r)/[a-zA-Z0-9_-]+(?=\s|$)"#
+        if let mentionRegex = try? NSRegularExpression(pattern: redditMentionPattern, options: []) {
+            let range = NSRange(location: 0, length: processedText.utf16.count)
+            let mentionMatches = mentionRegex.matches(in: processedText, options: [], range: range)
+            
+            let _ = print("👥 Found \(mentionMatches.count) Reddit mention matches")
+            
+            for match in mentionMatches {
+                if let range = Range(match.range, in: processedText) {
+                    let mentionString = String(processedText[range])
+                    let _ = print("👥 Extracted Reddit mention: \(mentionString)")
+                    content.append(.link(mentionString))
+                }
+            }
+        }
+        
+        // THIRD: Extract regular URLs from remaining text
         let urlPattern = #"https?://[^\s)\]>]+"#
         if let regex = try? NSRegularExpression(pattern: urlPattern, options: []) {
             let range = NSRange(location: 0, length: processedText.utf16.count)
             let matches = regex.matches(in: processedText, options: [], range: range)
             
-            let regularLinks = matches.compactMap { match in
+            let _ = print("🔗 Found \(matches.count) URL matches")
+            
+            var seenURLs = Set<String>()
+            let regularLinks: [EmbedContent] = matches.compactMap { match in
                 if let range = Range(match.range, in: processedText) {
-                    return EmbedContent.link(String(processedText[range]))
+                    let linkURL = String(processedText[range])
+                    
+                    // Skip duplicates
+                    guard !seenURLs.contains(linkURL) else {
+                        let _ = print("🔗 Skipping duplicate URL: \(linkURL)")
+                        return nil
+                    }
+                    seenURLs.insert(linkURL)
+                    
+                    let _ = print("🔗 Extracted URL: \(linkURL)")
+                    return EmbedContent.link(linkURL)
                 }
                 return nil
             }
             content.append(contentsOf: regularLinks)
         }
+        
+        let _ = print("📋 Total extracted content: \(content.count) items")
         
         return content
     }
@@ -164,7 +201,9 @@ struct MarkdownRenderer: View {
                // Reddit images often don't have extensions but are on image domains
                (lowercaseURL.contains("redd.it") && !lowercaseURL.contains("/r/")) ||
                // Imgur images without extensions
-               lowercaseURL.matches(#"https?://imgur\.com/[a-zA-Z0-9]+"#)
+               lowercaseURL.matches(#"https?://imgur\.com/[a-zA-Z0-9]+"#) ||
+               // Imgur galleries/albums
+               lowercaseURL.matches(#"https?://imgur\.com/(a|gallery)/[a-zA-Z0-9]+"#)
     }
     
     private func isGifURL(_ url: String) -> Bool {
@@ -282,6 +321,19 @@ struct EmbeddedMediaView: View {
                 var components = urlComponents
                 components.query = nil
                 processedURL = components.string ?? processedURL
+            }
+        }
+        
+        // Convert Imgur gallery/album URLs to direct image URLs
+        if processedURL.matches(#"https?://imgur\.com/(a|gallery)/[a-zA-Z0-9]+"#) {
+            // Extract the ID and convert to direct image URL
+            if let range = processedURL.range(of: #"/(a|gallery)/"#, options: .regularExpression) {
+                let afterSlash = processedURL[range.upperBound...]
+                let imageId = String(afterSlash).components(separatedBy: "/").first ?? ""
+                if !imageId.isEmpty {
+                    // Try the most common image format first
+                    processedURL = "https://i.imgur.com/\(imageId).jpg"
+                }
             }
         }
         

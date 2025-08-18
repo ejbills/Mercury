@@ -17,11 +17,33 @@ struct LinkItemView: View {
     }
     
     private var isRedditSubreddit: Bool {
-        link.hasPrefix("r/") || link.contains("/r/")
+        // Match pure subreddit links like "r/SwiftUI" or "/r/SwiftUI"
+        let purePattern = #"^/?r/[a-zA-Z0-9_]+$"#
+        if link.matches(purePattern) {
+            return true
+        }
+        
+        // Match full Reddit subreddit URLs like "https://www.reddit.com/r/SwiftUI/" with optional query params
+        let fullPattern = #"https?://(www\.)?reddit\.com/r/[a-zA-Z0-9_]+(/?\?.*)?/?$"#
+        return link.matches(fullPattern)
     }
     
     private var isRedditUser: Bool {
-        link.hasPrefix("u/") || link.contains("/u/")
+        // Match pure user links like "u/username" or "/u/username" 
+        let purePattern = #"^/?u/[a-zA-Z0-9_-]+$"#
+        if link.matches(purePattern) {
+            return true
+        }
+        
+        // Match full Reddit user URLs like "https://www.reddit.com/u/username/" with optional query params
+        let fullPattern = #"https?://(www\.)?reddit\.com/u(ser)?/[a-zA-Z0-9_-]+(/?\?.*)?/?$"#
+        return link.matches(fullPattern)
+    }
+    
+    private var isRedditPost: Bool {
+        // Match Reddit post URLs like reddit.com/r/subreddit/comments/id/title or redd.it/shortcode or reddit.com/r/subreddit/s/sharecode
+        let redditPostPattern = #"(reddit\.com/r/[^/]+/(comments/[^/]+|s/[a-zA-Z0-9]+)|redd\.it/[a-zA-Z0-9]+)"#
+        return link.matches(redditPostPattern)
     }
     
     private var isImageDomain: Bool {
@@ -31,7 +53,7 @@ struct LinkItemView: View {
                lowercaseLink.contains("external-preview.redd.it") ||
                lowercaseLink.contains("i.imgur.com") ||
                lowercaseLink.contains("media.giphy.com") ||
-               (lowercaseLink.contains("redd.it") && !lowercaseLink.contains("/r/"))
+               (lowercaseLink.contains("redd.it") && !lowercaseLink.contains("/r/") && !isRedditPost)
     }
     
     var body: some View {
@@ -40,6 +62,8 @@ struct LinkItemView: View {
                 redditSubredditView
             } else if isRedditUser {
                 redditUserView
+            } else if isRedditPost {
+                redditPostView
             } else if isValidUrl, let url {
                 Link(destination: url) {
                     linkCard
@@ -50,7 +74,7 @@ struct LinkItemView: View {
             }
         }
         .task(id: url) {
-            if !isRedditSubreddit && !isRedditUser && !isImageDomain {
+            if !isRedditSubreddit && !isRedditUser && !isRedditPost && !isImageDomain {
                 await fetchMetadata()
             }
         }
@@ -75,18 +99,11 @@ struct LinkItemView: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
-        .padding(14)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(12)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(cardBorder, lineWidth: 0.33)
-        )
-        .shadow(
-            color: .black.opacity(colorScheme == .dark ? 0.3 : 0.05),
-            radius: 8,
-            x: 0,
-            y: 2
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.separator.opacity(0.3), lineWidth: 0.5)
         )
     }
     
@@ -94,7 +111,7 @@ struct LinkItemView: View {
         Group {
             switch imageStatus {
             case .loading:
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.quaternary)
                     .overlay {
                         ProgressView()
@@ -107,11 +124,11 @@ struct LinkItemView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .clipped()
                 
             case .failed:
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.quaternary)
                     .overlay {
                         Image(systemName: "link")
@@ -121,11 +138,6 @@ struct LinkItemView: View {
             }
         }
         .frame(width: 60, height: 60)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.regularMaterial)
-                .opacity(0.5)
-        )
     }
     
     private var titleView: some View {
@@ -178,61 +190,131 @@ struct LinkItemView: View {
     
     private var redditSubredditView: some View {
         Button(action: {
-            // TODO: Navigate to subreddit
+            let subredditName = extractRedditName(from: link, prefix: "r/")
+            navigationPath.navigate(to: .subredditFeed(subreddit: subredditName))
         }) {
-            HStack(spacing: 8) {
-                Image(systemName: "r.circle.fill")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.orange)
+            HStack(spacing: 12) {
+                // Clean icon with system styling
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.fill.secondary)
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: "person.2")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
                 
-                Text(extractRedditName(from: link, prefix: "r/"))
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.primary)
+                // Content with clean typography
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("r/\(extractRedditName(from: link, prefix: "r/"))")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    
+                    Text("Reddit Community")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 
                 Spacer()
                 
+                // System-standard disclosure indicator
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+                    .imageScale(.small)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.orange.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(12)
+            .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(.separator.opacity(0.3), lineWidth: 0.5)
+            }
         }
         .buttonStyle(.plain)
+        .scaleEffect(1.0)
+        .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.8), value: false)
     }
     
     private var redditUserView: some View {
         Button(action: {
-            // TODO: Navigate to user profile
+            let username = extractRedditName(from: link, prefix: "u/")
+            navigationPath.navigate(to: .userProfile(username: username))
         }) {
-            HStack(spacing: 8) {
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.blue)
+            HStack(spacing: 12) {
+                // Clean avatar with system styling
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.fill.secondary)
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
                 
-                Text(extractRedditName(from: link, prefix: "u/"))
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.primary)
+                // Content with clean typography
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("u/\(extractRedditName(from: link, prefix: "u/"))")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    
+                    Text("Reddit User")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 
                 Spacer()
                 
+                // System-standard disclosure indicator
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+                    .imageScale(.small)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.blue.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(12)
+            .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(.separator.opacity(0.3), lineWidth: 0.5)
+            }
         }
         .buttonStyle(.plain)
+        .scaleEffect(1.0)
+        .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.8), value: false)
+    }
+    
+    private var redditPostView: some View {
+        RedditPostCard(url: link) {
+            Task {
+                if let post = await RedditPostFetchService.shared.fetchPost(from: link) {
+                    await MainActor.run {
+                        navigationPath.navigate(to: .postComments(post: post))
+                    }
+                }
+            }
+        }
+    }
+    
+    private func extractPostIdFromURL(_ url: String) -> String? {
+        // Extract post ID from Reddit URLs
+        if url.contains("/comments/") {
+            let components = url.components(separatedBy: "/comments/")
+            if components.count > 1 {
+                let afterComments = components[1]
+                let idComponents = afterComments.components(separatedBy: "/")
+                return idComponents.first
+            }
+        } else if url.contains("redd.it/") {
+            return url.components(separatedBy: "redd.it/").last
+        }
+        return nil
     }
     
     private func extractRedditName(from text: String, prefix: String) -> String {
+        // Handle pure format like "r/SwiftUI" or "/r/SwiftUI"
         if text.hasPrefix(prefix) {
             return String(text.dropFirst(prefix.count))
         } else if let range = text.range(of: "/\(prefix)") {
@@ -243,6 +325,17 @@ struct LinkItemView: View {
                 return String(afterPrefix)
             }
         }
+        
+        // Handle full Reddit URLs like "https://www.reddit.com/r/SwiftUI/" with query params
+        if text.contains("reddit.com/\(prefix)") {
+            if let range = text.range(of: "reddit.com/\(prefix)") {
+                let afterPrefix = text[range.upperBound...]
+                // Find the end of the name - either "/", "?" or end of string
+                let nameEnd = afterPrefix.firstIndex(where: { $0 == "/" || $0 == "?" }) ?? afterPrefix.endIndex
+                return String(afterPrefix[..<nameEnd])
+            }
+        }
+        
         return text
     }
     
@@ -259,13 +352,23 @@ struct LinkItemView: View {
     }
 }
 
-// MARK: - Button Style
+// MARK: - Button Styles
 struct LinkCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.85 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+struct AppleLinkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .brightness(configuration.isPressed ? -0.05 : 0.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
