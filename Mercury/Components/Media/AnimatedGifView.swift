@@ -83,23 +83,19 @@ struct AnimatedGifCard: View {
     let cornerRadius: CGFloat
     let apiDimensions: CGSize?
     let maxHeight: CGFloat
+    let fixedHeight: CGFloat?
     
-    init(url: URL, cornerRadius: CGFloat = 12, apiDimensions: CGSize? = nil, maxHeight: CGFloat = 600) {
+    init(url: URL, cornerRadius: CGFloat = 12, apiDimensions: CGSize? = nil, maxHeight: CGFloat = 600, fixedHeight: CGFloat? = nil) {
         self.url = url
         self.cornerRadius = cornerRadius
         self.apiDimensions = apiDimensions
         self.maxHeight = maxHeight
+        self.fixedHeight = fixedHeight
     }
     
     private var displayHeight: CGFloat {
-        guard let apiDimensions = apiDimensions else { 
-            return min(maxHeight, 300) // Fallback height
-        }
-        
-        let screenWidth = UIScreen.main.bounds.width - 24 // Account for padding
-        let aspectRatio = apiDimensions.width / apiDimensions.height
-        let calculatedHeight = screenWidth / aspectRatio
-        return min(calculatedHeight, maxHeight) // Respect max height cap
+        if let fixedHeight = fixedHeight { return fixedHeight }
+        return MediaLayout.height(for: apiDimensions, maxHeight: maxHeight, fallback: 300)
     }
     
     var body: some View {

@@ -29,11 +29,8 @@ struct SimpleGalleryView: View {
     
     private var displayHeight: CGFloat {
         guard let firstImage = firstImage else { return 300 }
-        
-        let screenWidth = UIScreen.main.bounds.width - 24 // Account for padding
-        let aspectRatio = CGFloat(firstImage.width) / CGFloat(firstImage.height)
-        let calculatedHeight = screenWidth / aspectRatio
-        return min(calculatedHeight, 600) // Max height cap same as regular images
+        let dims = CGSize(width: CGFloat(firstImage.width), height: CGFloat(firstImage.height))
+        return MediaLayout.height(for: dims, maxHeight: 600, fallback: 300)
     }
     
     var body: some View {

@@ -179,32 +179,37 @@ struct GiphyEmbedView: View {
     @State private var giphyMedia: GiphyMedia?
     @State private var isLoading = true
     @State private var hasError = false
+    @State private var targetHeight: CGFloat? = nil
+    private let defaultHeight: CGFloat = 300
     
     var body: some View {
-        Group {
-            if let giphyMedia = giphyMedia, let url = URL(string: giphyMedia.url) {
-                VStack(spacing: 0) {
+        VStack(spacing: 0) {
+            // Stable container height derived from API dimensions when available
+            Group {
+                if let giphyMedia = giphyMedia, let url = URL(string: giphyMedia.url) {
                     AnimatedGifCard(
-                        url: url, 
-                        cornerRadius: 12, 
-                        apiDimensions: giphyMedia.dimensions,
-                        maxHeight: 400
+                        url: url,
+                        cornerRadius: 12,
+                        apiDimensions: nil,
+                        maxHeight: targetHeight ?? defaultHeight,
+                        fixedHeight: targetHeight ?? defaultHeight
                     )
                     .frame(maxWidth: .infinity)
-                    
-                    // Giphy Attribution
-                    HStack {
-                        Spacer()
-                        Text("Powered by GIPHY")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 4)
-                    }
+                } else if hasError {
+                    errorView
+                } else {
+                    loadingView
                 }
-            } else if hasError {
-                errorView
-            } else {
-                loadingView
+            }
+            .frame(height: targetHeight ?? defaultHeight)
+            .frame(maxWidth: .infinity)
+
+            HStack {
+                Spacer()
+                Text("Powered by GIPHY")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
             }
         }
         .task {
@@ -215,8 +220,6 @@ struct GiphyEmbedView: View {
     private var loadingView: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(.quaternary.opacity(0.3))
-            .frame(maxWidth: .infinity)
-            .frame(height: 200)
             .overlay {
                 VStack(spacing: 8) {
                     ProgressView()
@@ -231,8 +234,6 @@ struct GiphyEmbedView: View {
     private var errorView: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(.quaternary.opacity(0.3))
-            .frame(maxWidth: .infinity)
-            .frame(height: 200)
             .overlay {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
@@ -255,6 +256,7 @@ struct GiphyEmbedView: View {
         await MainActor.run {
             self.giphyMedia = media
             self.isLoading = false
+            self.targetHeight = MediaLayout.height(for: media.dimensions, maxHeight: 400, fallback: 300, minHeight: 120)
         }
     }
 }
