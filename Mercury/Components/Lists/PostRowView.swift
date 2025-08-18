@@ -363,8 +363,12 @@ struct PostRowView: View {
             // Use RedditPostCard for reddit links (crossposts/embedded posts),
             // otherwise fall back to rich article preview.
             if isRedditPostURL(urlString) {
-                RedditPostCard(url: urlString) {
-                    navigationPath.navigate(to: .postComments(post: currentPost))
+                RedditPostCard(url: urlString) { linkedPost in
+                    if let linkedPost = linkedPost {
+                        navigationPath.navigate(to: .postComments(post: linkedPost))
+                    } else {
+                        showingSafari = true
+                    }
                 }
             } else {
                 RichArticleCard(

@@ -11,7 +11,7 @@ import NukeUI
 
 struct RedditPostCard: View {
     let url: String
-    let onTap: () -> Void
+    let onTap: (RedditPost?) -> Void
     
     @State private var redditPost: RedditPost?
     @State private var isLoading = true
@@ -24,7 +24,7 @@ struct RedditPostCard: View {
             labelTint: .secondary,
             title: displayTitle,
             subtitle: displaySubreddit,
-            onTap: onTap
+            onTap: { onTap(redditPost) }
         )
         .task { await loadRedditPost() }
     }
@@ -132,19 +132,4 @@ struct RedditPostCard: View {
         
         return nil
     }
-}
-
-#Preview {
-    VStack(spacing: 16) {
-        RedditPostCard(
-            url: "https://reddit.com/r/SwiftUI/comments/123456/sample_post_title",
-            onTap: {}
-        )
-        
-        RedditPostCard(
-            url: "https://redd.it/abc123",
-            onTap: {}
-        )
-    }
-    .padding()
 }

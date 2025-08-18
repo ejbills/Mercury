@@ -274,11 +274,20 @@ struct LinkItemView: View {
     }
     
     private var redditPostView: some View {
-        RedditPostCard(url: link) {
-            Task {
-                if let post = await RedditPostFetchService.shared.fetchPost(from: link) {
-                    await MainActor.run {
-                        navigationPath.navigate(to: .postComments(post: post))
+        RedditPostCard(url: link) { post in
+            if let post = post {
+                navigationPath.navigate(to: .postComments(post: post))
+            } else {
+                // Fallback: try to resolve, else open in browser
+                Task {
+                    if let fetched = await RedditPostFetchService.shared.fetchPost(from: link) {
+                        await MainActor.run {
+                            navigationPath.navigate(to: .postComments(post: fetched))
+                        }
+                    } else if let url = URL(string: link) {
+                        await MainActor.run {
+                            UIApplication.shared.open(url)
+                        }
                     }
                 }
             }
