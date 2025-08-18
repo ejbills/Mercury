@@ -276,12 +276,10 @@ struct CommentView: View {
                 }
             } catch {
                 await MainActor.run {
-                    // Revert on failure
                     voteState = originalState
                     displayScore = originalScore
                     isVoting = false
                 }
-                print("Failed to vote on comment: \(error)")
             }
         }
     }

@@ -269,21 +269,11 @@ struct CommentResponse: Codable {
                 switch child.data {
                 case .comment(let comment):
                     allComments.append(comment)
-                    // Debug comment replies
                     if let replies = comment.replies {
                         switch replies {
                         case .empty:
-                            print("🔍 Comment \(comment.id) has empty replies")
+                            break
                         case .listing(let commentResponse):
-                            print("🔍 Comment \(comment.id) has replies listing with \(commentResponse.data.children.count) children")
-                            for (index, replyChild) in commentResponse.data.children.enumerated() {
-                                switch replyChild.data {
-                                case .comment(let replyComment):
-                                    print("🔍   Reply \(index): Comment \(replyComment.id) at depth \(replyComment.depth)")
-                                case .more(let more):
-                                    print("🔍   Reply \(index): MoreComments with \(more.children.count) children: \(more.children)")
-                                }
-                            }
                             collectComments(from: commentResponse.data.children)
                         }
                     }
@@ -301,18 +291,6 @@ struct CommentResponse: Codable {
     }
     
     var moreComments: [MoreComments] {
-        // Debug: Print the entire children structure to see what we're getting
-        print("🔍 CommentResponse has \(data.children.count) children")
-        for (index, child) in data.children.enumerated() {
-            print("🔍 Child \(index): kind=\(child.kind)")
-            switch child.data {
-            case .comment(let comment):
-                print("🔍   Comment ID: \(comment.id), depth: \(comment.depth)")
-            case .more(let more):
-                print("🔍   MoreComments: rawID=\(more.rawId), name=\(more.name), count=\(more.count), children=\(more.children)")
-            }
-        }
-        
         // Recursively collect MoreComments from the entire comment tree
         var allMoreComments: [MoreComments] = []
         
@@ -330,12 +308,8 @@ struct CommentResponse: Codable {
                         }
                     }
                 case .more(let more):
-                    print("🔍 MoreComments found: rawID=\(more.rawId), computed ID=\(more.id), name=\(more.name), children=\(more.children.count) children, count=\(more.count)")
-                    print("🔍 MoreComments children array: \(more.children)")
-                    
                     // Only filter out completely empty entries (t3 posts)
                     if more.name.isEmpty && more.children.isEmpty && more.count == 0 {
-                        print("🔍 Filtering out empty MoreComments (likely t3 post)")
                     } else {
                         allMoreComments.append(more)
                     }
@@ -344,7 +318,6 @@ struct CommentResponse: Codable {
         }
         
         collectMoreComments(from: data.children)
-        print("🔍 Total moreComments extracted: \(allMoreComments.count)")
         return allMoreComments
     }
 }
@@ -450,4 +423,3 @@ struct MoreComments: Codable {
         case parentId = "parent_id"
     }
 }
-

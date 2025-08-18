@@ -22,7 +22,6 @@ struct PostCommentsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                // Post header with large toolbar
                 PostRowView(
                     post: post, 
                     namespace: mediaNamespace, 
@@ -30,8 +29,6 @@ struct PostCommentsView: View {
                     showLargeToolbar: true,
                     showFullText: true
                 )
-                
-                // Comments section
                 commentsSection
             }
             .padding(.top, 8)
@@ -81,19 +78,15 @@ struct PostCommentsView: View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
             
-            // Use unified CommentThreadView for entire thread (nested load mores inline)
             CommentThreadView(
                 comments: allComments,
                 post: post,
                 sort: commentSort
             )
             
-            // Root-level pagination handled by CommentThreadManager
             if !threadManager.moreObjects.isEmpty {
                 LazyVStack(spacing: 8) {
                     ForEach(threadManager.moreObjects, id: \.id) { more in
-                        let _ = print("🔘 PostCommentsView: Rendering root-level LoadMore for ID=\(more.id), children=\(more.children)")
-                        // Choose closure based on root pagination style
                         Group {
                             if more.name == "root_pagination" {
                                 LoadMoreCommentsView(
@@ -120,7 +113,6 @@ struct PostCommentsView: View {
                                     onStartLoad: { loadingRootMoreIds.insert(more.id) },
                                     onLoadMore: { newComments in
                                         loadingRootMoreIds.remove(more.id)
-                                        // Consume the number we attempted (batch size equals children count on the visible More)
                                         let consumed = more.children.count
                                         threadManager.appendRootChildrenPage(newComments: newComments, consumedCount: consumed)
                                     },
@@ -222,7 +214,6 @@ struct PostCommentsView: View {
         do {
             let response = try await redditAPI.fetchPostComments(postId: post.id, sort: commentSort)
             
-            // Reddit returns array where [0] is post, [1] is comments
             if response.count > 1 {
                 let commentsResponse = response[1]
                 let comments = commentsResponse.flattenedComments
@@ -238,7 +229,6 @@ struct PostCommentsView: View {
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
-            print("Failed to load comments: \(error)")
         }
     }
 }

@@ -98,10 +98,7 @@ struct UserAvatar: View {
                 self.profileIconURL = profile.profileIconURL
             }
         } catch {
-            // Only log for non-deleted users to reduce noise
-            if !isDeletedUser {
                 print("Failed to load avatar for \(cleanUsername): \(error)")
-            }
         }
     }
     

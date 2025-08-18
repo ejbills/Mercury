@@ -322,7 +322,6 @@ struct MediaDetailView: View {
                     showShareSheet = true
                 }
             } catch {
-                print("Download failed: \(error.localizedDescription)")
                 await MainActor.run {
                     // Fallback to sharing the post URL
                     shareItem = URL(string: post.permalinkURL)

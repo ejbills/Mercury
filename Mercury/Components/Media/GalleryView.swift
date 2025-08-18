@@ -374,6 +374,7 @@ struct GalleryDetailView: View {
                 }
             } catch {
                 print("Save/Unsave error: \(error)")
+                
             }
         }
     }
@@ -402,7 +403,7 @@ struct GalleryDetailView: View {
                     showShareSheet = true
                 }
             } catch {
-                print("Download failed: \(error.localizedDescription)")
+                
                 await MainActor.run {
                     shareItem = URL(string: post.permalinkURL)
                     showShareSheet = true

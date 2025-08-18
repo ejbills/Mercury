@@ -82,10 +82,7 @@ struct LinkItemView: View {
     
     private var linkCard: some View {
         HStack(spacing: 12) {
-            // Thumbnail with modern styling
             thumbnailView
-            
-            // Content with proper hierarchy
             VStack(alignment: .leading, spacing: 4) {
                 titleView
                 domainView
@@ -93,8 +90,6 @@ struct LinkItemView: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            
-            // Subtle chevron indicator
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
@@ -194,7 +189,6 @@ struct LinkItemView: View {
             navigationPath.navigate(to: .subredditFeed(subreddit: subredditName))
         }) {
             HStack(spacing: 12) {
-                // Clean icon with system styling
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(.fill.secondary)
@@ -205,7 +199,6 @@ struct LinkItemView: View {
                         .foregroundStyle(.secondary)
                 }
                 
-                // Content with clean typography
                 VStack(alignment: .leading, spacing: 2) {
                     Text("r/\(extractRedditName(from: link, prefix: "r/"))")
                         .font(.system(.subheadline, weight: .medium))
@@ -218,8 +211,6 @@ struct LinkItemView: View {
                 }
                 
                 Spacer()
-                
-                // System-standard disclosure indicator
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -243,7 +234,6 @@ struct LinkItemView: View {
             navigationPath.navigate(to: .userProfile(username: username))
         }) {
             HStack(spacing: 12) {
-                // Clean avatar with system styling
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(.fill.secondary)
@@ -254,7 +244,6 @@ struct LinkItemView: View {
                         .foregroundStyle(.secondary)
                 }
                 
-                // Content with clean typography
                 VStack(alignment: .leading, spacing: 2) {
                     Text("u/\(extractRedditName(from: link, prefix: "u/"))")
                         .font(.system(.subheadline, weight: .medium))
@@ -267,8 +256,6 @@ struct LinkItemView: View {
                 }
                 
                 Spacer()
-                
-                // System-standard disclosure indicator
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundStyle(.tertiary)

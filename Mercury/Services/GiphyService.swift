@@ -22,7 +22,6 @@ struct GiphyService {
     
     static func resolveGiphyMedia(from redditFormat: String) async -> GiphyMedia? {
         guard let apiKey = apiKey else {
-            print("Giphy API key not found")
             return nil
         }
         
@@ -47,7 +46,6 @@ struct GiphyService {
                 dimensions: CGSize(width: width, height: height)
             )
         } catch {
-            print("Failed to fetch Giphy data: \(error)")
             return nil
         }
     }

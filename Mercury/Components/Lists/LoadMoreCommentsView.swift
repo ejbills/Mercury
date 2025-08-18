@@ -44,10 +44,8 @@ struct LoadMoreCommentsView: View {
     
     var body: some View {
         let isRootButton = (moreComments.depth == 0) && (moreComments.parentId == nil) && (moreComments.name == "root_pagination" || moreComments.name == "root_more_children")
-        
         Group {
             if isRootButton {
-                // Root-level: centered, prominent pill
                 HStack {
                     Spacer(minLength: 0)
                     Pill(action: loadMoreComments) {
@@ -68,11 +66,9 @@ struct LoadMoreCommentsView: View {
                     Spacer(minLength: 0)
                 }
                 .foregroundStyle(.secondary)
-
                 .padding(.horizontal, 12)
                 .padding(.vertical, 24)
             } else {
-                // Nested: left-aligned pill
                 HStack {
                     Pill(action: loadMoreComments, size: .regular) {
                         HStack(spacing: 8) {
@@ -94,7 +90,6 @@ struct LoadMoreCommentsView: View {
                     Spacer()
                 }
                 .foregroundStyle(.secondary)
-
             }
         }
     }
@@ -102,41 +97,22 @@ struct LoadMoreCommentsView: View {
     
     
     private func loadMoreComments() {
-        guard !isLoading else { 
-            print("🔄 LoadMoreComments: Already loading, skipping")
-            return 
-        }
-        
-        // Haptic feedback on tap
+        guard !isLoading else { return }
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
-        
-        print("🔄 LoadMoreComments: Starting load for more ID: \(moreComments.id), children: \(moreComments.children.count), count: \(moreComments.count)")
-        
-        // Notify parent to start loading state
         onStartLoad?()
-        
         Task {
             do {
-                // Check if this is root-level; disambiguate pagination token vs children ids
                 let isRootLevel = (moreComments.depth == 0 && moreComments.parentId == nil)
                 let isRootPagination = isRootLevel && moreComments.name == "root_pagination"
-                
                 if isRootPagination {
-                    print("🔄 LoadMoreComments: Root-level pagination request for post: \(post.id)")
-                    
-                    // For root-level, we need to paginate comments, not fetch specific comment children
-                    // Use the first child as the "after" parameter for pagination
                     let afterParam = moreComments.children.first
-                    
                     let commentResponses = try await redditAPI.fetchPostComments(
-                        postId: post.id, 
+                        postId: post.id,
                         sort: sort,
                         limit: 25,
                         after: afterParam
                     )
-                    
-                    // Extract comments from the response
                     var newComments: [RedditComment] = []
                     var nextAfter: String? = nil
                     if commentResponses.count > 1 {
@@ -144,9 +120,6 @@ struct LoadMoreCommentsView: View {
                         newComments = listing.flattenedComments
                         nextAfter = listing.data.after
                     }
-                    
-                    print("🔄 LoadMoreComments: Root-level pagination returned \(newComments.count) comments")
-                    
                     await MainActor.run {
                         if let onLoadMoreRootPage = onLoadMoreRootPage {
                             onLoadMoreRootPage(newComments, nextAfter)
@@ -155,26 +128,16 @@ struct LoadMoreCommentsView: View {
                         }
                     }
                 } else {
-                    print("🔄 LoadMoreComments: \(isRootLevel ? "Root" : "Nested") MoreComments request for children: \(moreComments.children.prefix(5))\(moreComments.children.count > 5 ? "..." : "") (total=\(moreComments.children.count))")
-                    
-                    // If children array is empty but we have a name (comment ID), use that instead
-                    var commentIds = moreComments.children.isEmpty && !moreComments.name.isEmpty ? 
-                        [moreComments.name] : moreComments.children
-                    // Limit batch size to avoid oversized requests
+                    var commentIds = moreComments.children.isEmpty && !moreComments.name.isEmpty ? [moreComments.name] : moreComments.children
                     if commentIds.count > 25 { commentIds = Array(commentIds.prefix(25)) }
-                    
-                    print("🔄 LoadMoreComments: Using comment IDs (\(commentIds.count)): \(commentIds.prefix(5))\(commentIds.count > 5 ? "..." : "")")
                     let newComments = try await redditAPI.fetchMoreComments(
                         postId: post.id,
                         commentIds: commentIds,
                         sort: sort
                     )
-                    
-                    print("🔄 LoadMoreComments: API returned \(newComments.count) comments for \(isRootLevel ? "root" : "nested") more")
-                    
                     await MainActor.run {
                         if isRootLevel, let onLoadMoreRootPage = onLoadMoreRootPage {
-                            onLoadMoreRootPage(newComments, nil) // nil after (morechildren path)
+                            onLoadMoreRootPage(newComments, nil)
                         } else {
                             onLoadMore(newComments)
                         }
@@ -182,7 +145,6 @@ struct LoadMoreCommentsView: View {
                 }
             } catch {
                 await MainActor.run {
-                    print("❌ LoadMoreComments: Failed to load more comments: \(error)")
                     onError?()
                 }
             }

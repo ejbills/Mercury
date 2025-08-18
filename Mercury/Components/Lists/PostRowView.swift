@@ -344,9 +344,8 @@ struct PostRowView: View {
     @ViewBuilder
     private var textPostContent: some View {
         if let content = post.selftext, !content.isEmpty {
-            MarkdownRenderer(content: content, compactMode: true)
+            MarkdownRenderer(content: content, compactMode: !showFullText)
                 .foregroundStyle(.primary)
-                .lineLimit(showFullText ? nil : 3)
                 .multilineTextAlignment(.leading)
         }
     }
@@ -491,6 +490,7 @@ struct PostRowView: View {
             } catch {
                 // Handle error silently for now
                 print("Save/Unsave error: \(error)")
+                
             }
         }
     }
@@ -539,7 +539,7 @@ struct PostRowView: View {
                     showShareSheet = true
                 }
             } catch {
-                print("Download failed: \(error)")
+                
                 await MainActor.run {
                     // Fallback to sharing the post URL
                     shareItem = URL(string: post.permalinkURL)
@@ -612,4 +612,3 @@ extension Color {
         )
     }
 }
-

@@ -61,20 +61,17 @@ struct AnimatedGifView: UIViewRepresentable {
                 await MainActor.run {
                     do {
                         let gif = try UIImage(gifData: data)
-                        gifImageView.setGifImage(gif, loopCount: -1) // Loop indefinitely
+                        gifImageView.setGifImage(gif, loopCount: -1)
                         onLoadingChange?(false)
                     } catch {
-                        // Fallback to static image if GIF loading fails
                         gifImageView.image = UIImage(data: data)
                         onLoadingChange?(false)
-                        // Failed to load GIF, showing static image instead
                     }
                 }
             } catch {
                 await MainActor.run {
                     gifImageView.image = UIImage(systemName: "photo")?.withTintColor(.systemGray3, renderingMode: .alwaysOriginal)
                     onLoadingChange?(false)
-                    // Failed to load GIF data
                 }
             }
         }
@@ -106,11 +103,10 @@ struct AnimatedGifCard: View {
     }
     
     var body: some View {
-        // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
         Rectangle()
             .fill(.clear)
             .frame(maxWidth: .infinity)
-            .frame(height: displayHeight) // Use calculated height from API dimensions
+            .frame(height: displayHeight)
             .overlay {
                 ZStack {
                     AnimatedGifView(
@@ -121,8 +117,6 @@ struct AnimatedGifCard: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: displayHeight)
                     .clipped()
-                    
-                    // GIF badge overlay
                     VStack {
                         HStack {
                             Spacer()

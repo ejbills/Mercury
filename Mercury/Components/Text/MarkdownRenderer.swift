@@ -13,21 +13,20 @@ extension String {
 
 struct MarkdownRenderer: View {
     let content: String
+    let compactMode: Bool
     let showEmbeddedContent: Bool
     
-    init(content: String, compactMode: Bool, showEmbeddedContent: Bool = true) {
+    init(content: String, compactMode: Bool = false, showEmbeddedContent: Bool = true) {
         self.content = content
+        self.compactMode = compactMode
         self.showEmbeddedContent = showEmbeddedContent
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Markdown text
-            Markdown(processedContent)
+            Markdown(compactMode ? String("\(processedContent.prefix(150))...") : processedContent)
                 .font(.system(size: 12))
                 .textSelection(.enabled)
-            
-            // Media and link detection
             if showEmbeddedContent {
                 let embedContent = extractLinks(from: content)
                 ForEach(Array(embedContent.enumerated()), id: \.offset) { index, embed in
@@ -47,113 +46,70 @@ struct MarkdownRenderer: View {
     }
     
     private func extractLinks(from text: String) -> [EmbedContent] {
-        let _ = print("📝 MarkdownRenderer: Extracting links from comment text: \"\(text.prefix(100))...\"")
-        
         var content: [EmbedContent] = []
         var processedText = text
-        
-        // FIRST: Extract Giphy embeds with Reddit format (prioritize these)
         let giphyPattern = #"giphy(%7C|[|])[0-9A-Za-z]+(?:(%7C|[|])[a-zA-Z0-9_]+)?"#
-        
         if let giphyRegex = try? NSRegularExpression(pattern: giphyPattern, options: []) {
             let range = NSRange(location: 0, length: processedText.utf16.count)
             let giphyMatches = giphyRegex.matches(in: processedText, options: [], range: range)
-            
-            let _ = print("🎬 Found \(giphyMatches.count) Giphy matches")
-            
-            // Process matches in reverse order to avoid index shifting
             for match in giphyMatches.reversed() {
                 if let range = Range(match.range, in: processedText) {
                     let giphyString = String(processedText[range])
-                    let _ = print("🎬 Extracted Giphy: \(giphyString)")
                     content.append(.giphy(giphyString))
-                    
-                    // Remove the Giphy string from text so it's not picked up by URL regex
                     processedText.removeSubrange(range)
                 }
             }
         }
-        
-        // SECOND: Extract Reddit mentions and subreddits from text (with whitespace boundaries)
         let redditMentionPattern = #"(?<=^|\s)(u|r)/[a-zA-Z0-9_-]+(?=\s|$)"#
         if let mentionRegex = try? NSRegularExpression(pattern: redditMentionPattern, options: []) {
             let range = NSRange(location: 0, length: processedText.utf16.count)
             let mentionMatches = mentionRegex.matches(in: processedText, options: [], range: range)
-            
-            let _ = print("👥 Found \(mentionMatches.count) Reddit mention matches")
-            
             for match in mentionMatches {
                 if let range = Range(match.range, in: processedText) {
                     let mentionString = String(processedText[range])
-                    let _ = print("👥 Extracted Reddit mention: \(mentionString)")
                     content.append(.link(mentionString))
                 }
             }
         }
-        
-        // THIRD: Extract regular URLs from remaining text
         let urlPattern = #"https?://[^\s)\]>]+"#
         if let regex = try? NSRegularExpression(pattern: urlPattern, options: []) {
             let range = NSRange(location: 0, length: processedText.utf16.count)
             let matches = regex.matches(in: processedText, options: [], range: range)
-            
-            let _ = print("🔗 Found \(matches.count) URL matches")
-            
             var seenURLs = Set<String>()
             let regularLinks: [EmbedContent] = matches.compactMap { match in
                 if let range = Range(match.range, in: processedText) {
                     let linkURL = String(processedText[range])
-                    
-                    // Skip duplicates
-                    guard !seenURLs.contains(linkURL) else {
-                        let _ = print("🔗 Skipping duplicate URL: \(linkURL)")
-                        return nil
-                    }
+                    guard !seenURLs.contains(linkURL) else { return nil }
                     seenURLs.insert(linkURL)
-                    
-                    let _ = print("🔗 Extracted URL: \(linkURL)")
                     return EmbedContent.link(linkURL)
                 }
                 return nil
             }
             content.append(contentsOf: regularLinks)
         }
-        
-        let _ = print("📋 Total extracted content: \(content.count) items")
-        
         return content
     }
     
     private var processedContent: String {
         var processed = content
         
-        // FIRST: Remove Giphy embeds from markdown text so they don't get processed as links
         let giphyPattern = #"!\[gif\]\(giphy[|%][0-9A-Za-z]+(?:[|%][a-zA-Z0-9_]+)?\)"#
         processed = processed.replacingOccurrences(
             of: giphyPattern,
             with: "",
             options: .regularExpression
         )
-        
-        // Also remove standalone giphy formats
         let standaloneGiphyPattern = #"giphy[|%][0-9A-Za-z]+(?:[|%][a-zA-Z0-9_]+)?"#
         processed = processed.replacingOccurrences(
             of: standaloneGiphyPattern,
             with: "",
             options: .regularExpression
         )
-        
-        // Handle Reddit-specific markdown quirks
-        // Convert Reddit's &#x200B; (zero-width space) markers
         processed = processed.replacingOccurrences(of: "&#x200B;", with: "")
-        
-        // Convert Reddit's &amp; entities
         processed = processed.replacingOccurrences(of: "&amp;", with: "&")
         processed = processed.replacingOccurrences(of: "&lt;", with: "<")
         processed = processed.replacingOccurrences(of: "&gt;", with: ">")
         processed = processed.replacingOccurrences(of: "&quot;", with: "\"")
-        
-        // Handle Reddit's superscript format using NSRegularExpression
         do {
             let superscriptRegex = try NSRegularExpression(pattern: "\\^(\\w+)", options: [])
             let range = NSRange(location: 0, length: processed.utf16.count)
@@ -164,10 +120,8 @@ struct MarkdownRenderer: View {
                 withTemplate: "<sup>$1</sup>"
             )
         } catch {
-            // If regex fails, continue without superscript conversion
+            
         }
-        
-        // Convert Reddit spoilers >!text!< to a visible format for now
         do {
             let spoilerRegex = try NSRegularExpression(pattern: ">!([^!]+)!<", options: [])
             let range = NSRange(location: 0, length: processed.utf16.count)
@@ -178,7 +132,7 @@ struct MarkdownRenderer: View {
                 withTemplate: "[SPOILER: $1]"
             )
         } catch {
-            // If regex fails, continue without spoiler conversion
+            
         }
         
         return processed

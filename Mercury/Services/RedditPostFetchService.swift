@@ -72,16 +72,13 @@ class RedditPostFetchService {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
-            // Handle different response formats
             if apiURL.contains("/api/info.json") {
-                // API info response format - reuse existing PostResponse structure
                 let infoResponse = try decoder.decode(PostResponse.self, from: data)
                 if let post = infoResponse.data.children.first?.data {
                     cachePost(post, for: originalURL)
                     return post
                 }
             } else {
-                // Comments page response format
                 let commentsResponse = try decoder.decode([PostResponse].self, from: data)
                 if let postListing = commentsResponse.first,
                    let post = postListing.data.children.first?.data {
@@ -93,7 +90,6 @@ class RedditPostFetchService {
             return nil
             
         } catch {
-            print("Failed to fetch Reddit post: \(error)")
             return nil
         }
     }
@@ -156,9 +152,3 @@ private class CachedRedditPost {
 }
 
 // MARK: - API Response Models
-// Removed custom response structures since we can reuse existing PostResponse from RedditPost.swift
-
-// We'll use the existing RedditPost model directly since it already has proper Codable implementation
-// and handles all the Reddit API fields we need
-
-// Removed RedditEdited enum since it already exists in RedditPost.swift as EditedData

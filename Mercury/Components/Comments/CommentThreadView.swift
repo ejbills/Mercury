@@ -58,7 +58,6 @@ struct CommentThreadView: View {
                     
                 case .loadMore(let flatMoreComments):
                     if shouldShowLoadMore(flatMoreComments) {
-                        let _ = print("🔘 CommentThreadView: Rendering LoadMoreCommentsView for flatMore ID=\(flatMoreComments.id), moreComments ID=\(flatMoreComments.moreComments.id), name=\(flatMoreComments.moreComments.name), children=\(flatMoreComments.moreComments.children)")
                         LoadMoreCommentsView(
                             moreComments: flatMoreComments.moreComments,
                             post: post,
@@ -155,8 +154,6 @@ struct CommentThreadView: View {
         let moreItem = flatItems[moreIndex]
         let isRootLevel = moreItem.depth == 0
         
-        print("🔄 Injecting \(newComments.count) comments at \(isRootLevel ? "root" : "nested") level")
-        
         // Convert new comments to flat items using the complete tree structure
         var newFlatItems: [FlatCommentItem] = []
         
@@ -165,7 +162,6 @@ struct CommentThreadView: View {
             for comment in newComments {
                 newFlatItems.append(contentsOf: Self.flattenCommentTree(comment: comment))
             }
-            print("🔄 Root-level injection: converted \(newComments.count) comments to \(newFlatItems.count) flat items")
         } else {
             // For nested comments, just add as flat comments
             for comment in newComments {
@@ -177,7 +173,6 @@ struct CommentThreadView: View {
                 )
                 newFlatItems.append(.comment(flatComment))
             }
-            print("🔄 Nested injection: converted \(newComments.count) comments to \(newFlatItems.count) flat items")
         }
         
         // Replace Load More with new comments
@@ -185,8 +180,6 @@ struct CommentThreadView: View {
             flatItems.remove(at: moreIndex)
             flatItems.insert(contentsOf: newFlatItems, at: moreIndex)
         }
-        
-        print("🔄 Injection complete: flatItems now has \(flatItems.count) total items")
     }
     
     // MARK: - Collapse Logic
@@ -204,21 +197,12 @@ struct CommentThreadView: View {
     private func shouldShowLoadMore(_ flatMoreComments: FlatMoreComments) -> Bool {
         let more = flatMoreComments.moreComments
         
-        // Don't show load more for invalid/empty entries
         if more.children.isEmpty && more.count == 0 {
-            print("🔍 Hiding LoadMore: name='\(more.name)', count=\(more.count), children=\(more.children.count) - no content to load")
             return false
         }
-        
-        // Don't show load more for placeholder entries like "t1__"
         if more.name == "t1__" || more.rawId == "_" {
-            print("🔍 Hiding LoadMore: name='\(more.name)', rawId='\(more.rawId)' - placeholder entry")
             return false
         }
-        
-        print("🔍 Showing LoadMore: name='\(more.name)', count=\(more.count), children=\(more.children.count)")
-        
-        // Same logic as comments - check if parent is collapsed
         if flatMoreComments.depth == 0 {
             return true
         }
@@ -338,8 +322,8 @@ struct RootCommentWidthModifier: ViewModifier {
         if isRootComment {
             content
                 .containerRelativeFrame(.horizontal) { width, _ in
-                    width - 32 // 16pt margin on each side, same as PostRowView
-                }
+                    width - 32
+                    }
         } else {
             content
         }
