@@ -84,71 +84,63 @@ struct AnimatedGifView: UIViewRepresentable {
 struct AnimatedGifCard: View {
     let url: URL
     let cornerRadius: CGFloat
-    @State private var isLoading = true
-    @State private var isVisible = false
+    let apiDimensions: CGSize?
+    let maxHeight: CGFloat
     
-    init(url: URL, cornerRadius: CGFloat = 12) {
+    init(url: URL, cornerRadius: CGFloat = 12, apiDimensions: CGSize? = nil, maxHeight: CGFloat = 600) {
         self.url = url
         self.cornerRadius = cornerRadius
+        self.apiDimensions = apiDimensions
+        self.maxHeight = maxHeight
+    }
+    
+    private var displayHeight: CGFloat {
+        guard let apiDimensions = apiDimensions else { 
+            return min(maxHeight, 300) // Fallback height
+        }
+        
+        let screenWidth = UIScreen.main.bounds.width - 24 // Account for padding
+        let aspectRatio = apiDimensions.width / apiDimensions.height
+        let calculatedHeight = screenWidth / aspectRatio
+        return min(calculatedHeight, maxHeight) // Respect max height cap
     }
     
     var body: some View {
-        ZStack {
-            AnimatedGifView(
-                url: url,
-                contentMode: .scaleAspectFill,
-                cornerRadius: cornerRadius
-            ) { loading in
-                isLoading = loading
-                if !loading && !isVisible {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        isVisible = true
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity) // Prevent horizontal overflow
-            .frame(maxHeight: 600) // Allow natural sizing with reasonable max
-            .background(.quaternary.opacity(0.1)) // Subtle background
-            .clipped() // Prevent overflow
-            .opacity(isVisible ? 1 : 0)
-            
-            // Loading indicator overlay
-            if isLoading {
-                Rectangle()
-                    .fill(.quaternary.opacity(0.3))
+        // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
+        Rectangle()
+            .fill(.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: displayHeight) // Use calculated height from API dimensions
+            .overlay {
+                ZStack {
+                    AnimatedGifView(
+                        url: url,
+                        contentMode: .scaleAspectFill,
+                        cornerRadius: cornerRadius
+                    )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 300) // Default height during loading
-                    .overlay {
-                        ProgressView()
-                            .scaleEffect(1.2)
+                    .frame(height: displayHeight)
+                    .clipped()
+                    
+                    // GIF badge overlay
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text("GIF")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .padding(10)
+                        Spacer()
                     }
-            }
-            
-            // GIF badge
-            VStack {
-                HStack {
-                    Spacer()
-                    Text("GIF")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
-                        .opacity(isVisible ? 1 : 0)
-                }
-                .padding(10)
-                Spacer()
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-        .onAppear {
-            if !isLoading && !isVisible {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    isVisible = true
                 }
             }
-        }
+            .background(.quaternary.opacity(0.1), in: RoundedRectangle(cornerRadius: cornerRadius))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }
 

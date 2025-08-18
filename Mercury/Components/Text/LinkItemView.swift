@@ -1,12 +1,12 @@
 import SwiftUI
-import LinkPresentation
 
 struct LinkItemView: View {
     let link: String
     
-    @State private var metadata: LPLinkMetadata?
+    @State private var metadata: ArticleMetadata?
     @State private var imageStatus: ImageStatus = .loading
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.navigationPathManager) private var navigationPath
     
     private var url: URL? {
         URL(string: link)
@@ -22,6 +22,16 @@ struct LinkItemView: View {
     
     private var isRedditUser: Bool {
         link.hasPrefix("u/") || link.contains("/u/")
+    }
+    
+    private var isImageDomain: Bool {
+        let lowercaseLink = link.lowercased()
+        return lowercaseLink.contains("i.redd.it") ||
+               lowercaseLink.contains("preview.redd.it") ||
+               lowercaseLink.contains("external-preview.redd.it") ||
+               lowercaseLink.contains("i.imgur.com") ||
+               lowercaseLink.contains("media.giphy.com") ||
+               (lowercaseLink.contains("redd.it") && !lowercaseLink.contains("/r/"))
     }
     
     var body: some View {
@@ -40,7 +50,7 @@ struct LinkItemView: View {
             }
         }
         .task(id: url) {
-            if !isRedditSubreddit && !isRedditUser {
+            if !isRedditSubreddit && !isRedditUser && !isImageDomain {
                 await fetchMetadata()
             }
         }
@@ -136,7 +146,7 @@ struct LinkItemView: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                     
-                    Text(metadata?.url?.host ?? url?.host ?? "Unknown domain")
+                    Text(url?.host ?? "Unknown domain")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -264,39 +274,42 @@ extension LinkItemView {
     private func fetchMetadata() async {
         guard let url = url else { return }
         
-        let provider = LPMetadataProvider()
-        do {
-            let fetchedMetadata = try await provider.startFetchingMetadata(for: url)
-            await MainActor.run {
-                self.metadata = fetchedMetadata
-            }
-            await loadImage(from: fetchedMetadata.imageProvider)
-        } catch {
+        let fetchedMetadata = await MetadataService.shared.fetchMetadata(for: url.absoluteString)
+        
+        await MainActor.run {
+            self.metadata = fetchedMetadata
+        }
+        
+        // Load image if available
+        if let imageURL = fetchedMetadata?.imageURL {
+            await loadImage(from: imageURL)
+        } else {
             await MainActor.run {
                 self.imageStatus = .failed
             }
         }
     }
     
-    private func loadImage(from provider: NSItemProvider?) async {
-        guard let provider = provider else {
+    private func loadImage(from imageURL: String) async {
+        guard let url = URL(string: imageURL) else {
             await MainActor.run {
                 self.imageStatus = .failed
             }
             return
         }
         
-        if provider.canLoadObject(ofClass: UIImage.self) {
-            provider.loadObject(ofClass: UIImage.self) { (image, error) in
-                DispatchQueue.main.async {
-                    if let image = image as? UIImage {
-                        self.imageStatus = .finished(Image(uiImage: image))
-                    } else {
-                        self.imageStatus = .failed
-                    }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let uiImage = UIImage(data: data) {
+                await MainActor.run {
+                    self.imageStatus = .finished(Image(uiImage: uiImage))
+                }
+            } else {
+                await MainActor.run {
+                    self.imageStatus = .failed
                 }
             }
-        } else {
+        } catch {
             await MainActor.run {
                 self.imageStatus = .failed
             }
