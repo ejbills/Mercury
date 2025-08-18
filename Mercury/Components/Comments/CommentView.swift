@@ -55,7 +55,7 @@ struct CommentView: View {
             // Author section with profile picture and pill
             HStack(spacing: 6) {
                 // Small profile picture
-                UserAvatar(username: comment.author, size: 20)
+                UserAvatar(username: comment.author, size: 20, disableAPIFetch: true)
                 
                 // Author pill with badges - matches post design pattern
                 Pill(action: {

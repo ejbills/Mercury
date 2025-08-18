@@ -44,6 +44,7 @@ class UserService: BaseRedditService {
             let userResponse = try decoder.decode(UserProfileResponse.self, from: data)
             return userResponse.data
         } catch let decodingError as DecodingError {
+            print("Decoding error: \(decodingError)")
             throw APIError.parseError
         } catch _ as URLError {
             throw APIError.networkError

@@ -39,8 +39,18 @@ class CommentsService: BaseRedditService {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
+            // Debug: Print raw API response
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("🔍 Raw API Response (first 2000 chars): \(String(jsonString.prefix(2000)))")
+            }
+            
             // Reddit returns an array where [0] is post, [1] is comments
             let responses = try decoder.decode([CommentResponse].self, from: data)
+            
+            print("🔍 API returned \(responses.count) comment responses")
+            for (index, response) in responses.enumerated() {
+                print("🔍 Response \(index): has \(response.data.children.count) children")
+            }
             
             return responses
         } catch let urlError as URLError {

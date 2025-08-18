@@ -269,13 +269,22 @@ struct CommentResponse: Codable {
                 switch child.data {
                 case .comment(let comment):
                     allComments.append(comment)
-                    // Recursively collect nested comments
+                    // Debug comment replies
                     if let replies = comment.replies {
                         switch replies {
-                        case .listing(let commentResponse):
-                            collectComments(from: commentResponse.data.children)
                         case .empty:
-                            break
+                            print("🔍 Comment \(comment.id) has empty replies")
+                        case .listing(let commentResponse):
+                            print("🔍 Comment \(comment.id) has replies listing with \(commentResponse.data.children.count) children")
+                            for (index, replyChild) in commentResponse.data.children.enumerated() {
+                                switch replyChild.data {
+                                case .comment(let replyComment):
+                                    print("🔍   Reply \(index): Comment \(replyComment.id) at depth \(replyComment.depth)")
+                                case .more(let more):
+                                    print("🔍   Reply \(index): MoreComments with \(more.children.count) children: \(more.children)")
+                                }
+                            }
+                            collectComments(from: commentResponse.data.children)
                         }
                     }
                 case .more(let more):
@@ -292,21 +301,51 @@ struct CommentResponse: Codable {
     }
     
     var moreComments: [MoreComments] {
-        // Only look at direct children for MoreComments - they belong at their specific level
-        let moreObjects = data.children.compactMap { child -> MoreComments? in
+        // Debug: Print the entire children structure to see what we're getting
+        print("🔍 CommentResponse has \(data.children.count) children")
+        for (index, child) in data.children.enumerated() {
+            print("🔍 Child \(index): kind=\(child.kind)")
             switch child.data {
-            case .comment:
-                return nil
+            case .comment(let comment):
+                print("🔍   Comment ID: \(comment.id), depth: \(comment.depth)")
             case .more(let more):
-                print("🔍 MoreComments found: ID=\(more.id), name=\(more.name), children=\(more.children.count) children, count=\(more.count)")
-                
-                // Only filter out completely empty dummy entries (t3 posts)
-                // Let Reddit API handle everything else as designed
-                return more.name.isEmpty ? nil : more
+                print("🔍   MoreComments: rawID=\(more.rawId), name=\(more.name), count=\(more.count), children=\(more.children)")
             }
         }
-        print("🔍 Total moreComments extracted: \(moreObjects.count)")
-        return moreObjects
+        
+        // Recursively collect MoreComments from the entire comment tree
+        var allMoreComments: [MoreComments] = []
+        
+        func collectMoreComments(from children: [CommentChild]) {
+            for child in children {
+                switch child.data {
+                case .comment(let comment):
+                    // Recursively check this comment's replies
+                    if let replies = comment.replies {
+                        switch replies {
+                        case .empty:
+                            break
+                        case .listing(let response):
+                            collectMoreComments(from: response.data.children)
+                        }
+                    }
+                case .more(let more):
+                    print("🔍 MoreComments found: rawID=\(more.rawId), computed ID=\(more.id), name=\(more.name), children=\(more.children.count) children, count=\(more.count)")
+                    print("🔍 MoreComments children array: \(more.children)")
+                    
+                    // Only filter out completely empty entries (t3 posts)
+                    if more.name.isEmpty && more.children.isEmpty && more.count == 0 {
+                        print("🔍 Filtering out empty MoreComments (likely t3 post)")
+                    } else {
+                        allMoreComments.append(more)
+                    }
+                }
+            }
+        }
+        
+        collectMoreComments(from: data.children)
+        print("🔍 Total moreComments extracted: \(allMoreComments.count)")
+        return allMoreComments
     }
 }
 
@@ -336,7 +375,7 @@ struct CommentChild: Codable {
                 let more = try container.decode(MoreComments.self, forKey: .data)
                 self = .more(more)
             case "t3": // Post - skip this by creating a dummy more object
-                self = .more(MoreComments(count: 0, name: "", id: "", parentId: nil, depth: 0, children: []))
+                self = .more(MoreComments(count: 0, name: "", rawId: "", parentId: nil, depth: 0, children: []))
             default:
                 throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown comment kind: \(kind)")
             }
@@ -378,7 +417,7 @@ struct CommentChild: Codable {
             let more = try container.decode(MoreComments.self, forKey: .data)
             data = .more(more)
         case "t3": // Post - skip this by creating a dummy more object
-            data = .more(MoreComments(count: 0, name: "", id: "", parentId: nil, depth: 0, children: []))
+            data = .more(MoreComments(count: 0, name: "", rawId: "", parentId: nil, depth: 0, children: []))
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown comment kind: \(kind)")
         }
@@ -392,13 +431,22 @@ struct CommentChild: Codable {
 struct MoreComments: Codable {
     let count: Int
     let name: String
-    let id: String
+    let rawId: String
     let parentId: String?
     let depth: Int
     let children: [String]
     
+    // Computed property to get the actual ID - use name if id is empty/underscore
+    var id: String {
+        if rawId.isEmpty || rawId == "_" {
+            return name.isEmpty ? "_" : name
+        }
+        return rawId
+    }
+    
     enum CodingKeys: String, CodingKey {
-        case count, name, id, depth, children
+        case count, name, depth, children
+        case rawId = "id"
         case parentId = "parent_id"
     }
 }

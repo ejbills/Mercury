@@ -47,12 +47,40 @@ enum CommentThreadItem: Identifiable {
 class CommentThreadManager {
     private(set) var commentThreads: [CommentThread] = []
     private(set) var moreObjects: [MoreComments] = []
+    private var allComments: [RedditComment] = []
     
     func loadInitialComments(_ comments: [RedditComment], moreObjects: [MoreComments]) {
-        self.moreObjects = moreObjects
+        self.allComments = comments
+        
+        // Use parsed MoreComments from API response, plus generate root-level load more if needed
+        var allMoreObjects = moreObjects
+        
+        // Check if we should add root-level load more
+        if shouldAddRootLevelLoadMore(comments: comments) {
+            let rootCommentIds = comments.filter { $0.depth == 0 }.map { $0.id }
+            let rootLoadMore = MoreComments(
+                count: rootCommentIds.count,
+                name: "root_load_more", 
+                rawId: "root_load_more",
+                parentId: nil,
+                depth: 0,
+                children: rootCommentIds // Pass current root comment IDs for pagination
+            )
+            allMoreObjects.append(rootLoadMore)
+            print("🔍 Added root-level load more with \(rootCommentIds.count) existing comment IDs")
+        }
+        
+        self.moreObjects = allMoreObjects
         
         // Build comment threads by organizing into parent-child relationships
         commentThreads = buildCommentThreads(from: comments)
+    }
+    
+    private func shouldAddRootLevelLoadMore(comments: [RedditComment]) -> Bool {
+        // TODO: This should check the "after" field from the Reddit API response
+        // If "after" is not null, there are more comments to load
+        // For now, return false until we implement proper pagination
+        return false
     }
     
     private func buildCommentThreads(from comments: [RedditComment]) -> [CommentThread] {

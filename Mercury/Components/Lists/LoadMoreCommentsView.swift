@@ -88,9 +88,15 @@ struct LoadMoreCommentsView: View {
         Task {
             do {
                 print("🔄 LoadMoreComments: Calling API for post: \(post.id) with children: \(moreComments.children)")
+                
+                // If children array is empty but we have a name (comment ID), use that instead
+                let commentIds = moreComments.children.isEmpty && !moreComments.name.isEmpty ? 
+                    [moreComments.name] : moreComments.children
+                
+                print("🔄 LoadMoreComments: Using comment IDs: \(commentIds)")
                 let newComments = try await redditAPI.fetchMoreComments(
                     postId: post.id,
-                    commentIds: moreComments.children
+                    commentIds: commentIds
                 )
                 
                 print("🔄 LoadMoreComments: API returned \(newComments.count) comments")

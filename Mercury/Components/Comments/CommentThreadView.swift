@@ -56,6 +56,7 @@ struct CommentThreadView: View {
                     
                 case .loadMore(let flatMoreComments):
                     if shouldShowLoadMore(flatMoreComments) {
+                        let _ = print("🔘 CommentThreadView: Rendering LoadMoreCommentsView for flatMore ID=\(flatMoreComments.id), moreComments ID=\(flatMoreComments.moreComments.id), name=\(flatMoreComments.moreComments.name), children=\(flatMoreComments.moreComments.children)")
                         LoadMoreCommentsView(
                             moreComments: flatMoreComments.moreComments,
                             post: post,
@@ -86,10 +87,45 @@ struct CommentThreadView: View {
     
     private static func flattenAllComments(comments: [RedditComment]) -> [FlatCommentItem] {
         var items: [FlatCommentItem] = []
+        var rootLevelMoreComments: [MoreComments] = []
         
         for comment in comments {
-            items.append(contentsOf: flattenCommentTree(comment: comment))
+            let commentItems = flattenCommentTree(comment: comment)
+            for item in commentItems {
+                if case .loadMore(let flatMore) = item, flatMore.depth == 0 {
+                    // Collect root-level MoreComments instead of adding immediately
+                    rootLevelMoreComments.append(flatMore.moreComments)
+                } else {
+                    items.append(item)
+                }
+            }
         }
+        
+        // Consolidate all root-level MoreComments into a single entry
+        if !rootLevelMoreComments.isEmpty {
+            let allChildren = rootLevelMoreComments.flatMap { $0.children }
+            let totalCount = rootLevelMoreComments.reduce(0) { $0 + $1.count }
+            
+            let consolidatedMore = MoreComments(
+                count: min(totalCount, 25), // Limit to 25 as requested
+                name: "root_consolidated",
+                rawId: "root_consolidated",
+                parentId: nil,
+                depth: 0,
+                children: Array(allChildren.prefix(25)) // Limit children array to 25
+            )
+            
+            let flatMore = FlatMoreComments(
+                id: consolidatedMore.id,
+                moreComments: consolidatedMore,
+                depth: 0,
+                parentId: nil
+            )
+            items.append(.loadMore(flatMore))
+            
+            print("🔘 Consolidated \(rootLevelMoreComments.count) root-level MoreComments into 1 with \(consolidatedMore.children.count) children (limited to 25)")
+        }
+        
         return items
     }
     
@@ -142,28 +178,33 @@ struct CommentThreadView: View {
             return
         }
         
-        // Get parent info
+        // Get the MoreComments item being replaced
         let moreItem = flatItems[moreIndex]
-        let parentDepth = moreItem.depth - 1
+        let isRootLevel = moreItem.depth == 0
         
-        // Convert new comments to flat items
+        print("🔄 Injecting \(newComments.count) comments at \(isRootLevel ? "root" : "nested") level")
+        
+        // Convert new comments to flat items using the complete tree structure
         var newFlatItems: [FlatCommentItem] = []
-        for comment in newComments {
-            var processedComment = comment
-            if processedComment.parentId == nil || processedComment.parentId?.isEmpty == true {
-                if comment.depth == parentDepth + 1 {
-                    // Set proper parent ID (simplified for now)
-                    processedComment = comment // Keep original for now
-                }
+        
+        if isRootLevel {
+            // For root-level, flatten each comment tree completely
+            for comment in newComments {
+                newFlatItems.append(contentsOf: Self.flattenCommentTree(comment: comment))
             }
-            
-            let flatComment = FlatComment(
-                id: processedComment.id,
-                comment: processedComment,
-                depth: processedComment.depth,
-                parentId: processedComment.parentId
-            )
-            newFlatItems.append(.comment(flatComment))
+            print("🔄 Root-level injection: converted \(newComments.count) comments to \(newFlatItems.count) flat items")
+        } else {
+            // For nested comments, just add as flat comments
+            for comment in newComments {
+                let flatComment = FlatComment(
+                    id: comment.id,
+                    comment: comment,
+                    depth: comment.depth,
+                    parentId: comment.parentId
+                )
+                newFlatItems.append(.comment(flatComment))
+            }
+            print("🔄 Nested injection: converted \(newComments.count) comments to \(newFlatItems.count) flat items")
         }
         
         // Replace Load More with new comments
@@ -171,6 +212,8 @@ struct CommentThreadView: View {
             flatItems.remove(at: moreIndex)
             flatItems.insert(contentsOf: newFlatItems, at: moreIndex)
         }
+        
+        print("🔄 Injection complete: flatItems now has \(flatItems.count) total items")
     }
     
     // MARK: - Collapse Logic
@@ -186,6 +229,22 @@ struct CommentThreadView: View {
     }
     
     private func shouldShowLoadMore(_ flatMoreComments: FlatMoreComments) -> Bool {
+        let more = flatMoreComments.moreComments
+        
+        // Don't show load more for invalid/empty entries
+        if more.children.isEmpty && more.count == 0 {
+            print("🔍 Hiding LoadMore: name='\(more.name)', count=\(more.count), children=\(more.children.count) - no content to load")
+            return false
+        }
+        
+        // Don't show load more for placeholder entries like "t1__"
+        if more.name == "t1__" || more.rawId == "_" {
+            print("🔍 Hiding LoadMore: name='\(more.name)', rawId='\(more.rawId)' - placeholder entry")
+            return false
+        }
+        
+        print("🔍 Showing LoadMore: name='\(more.name)', count=\(more.count), children=\(more.children.count)")
+        
         // Same logic as comments - check if parent is collapsed
         if flatMoreComments.depth == 0 {
             return true

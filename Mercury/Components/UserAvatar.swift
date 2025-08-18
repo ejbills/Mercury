@@ -11,14 +11,16 @@ struct UserAvatar: View {
     let username: String
     let size: CGFloat
     let iconURL: URL?
+    let disableAPIFetch: Bool
     
     @Environment(\.redditAPI) private var redditAPI
     @State private var profileIconURL: URL?
     
-    init(username: String, size: CGFloat = 32, iconURL: URL? = nil) {
+    init(username: String, size: CGFloat = 32, iconURL: URL? = nil, disableAPIFetch: Bool = false) {
         self.username = username
         self.size = size
         self.iconURL = iconURL
+        self.disableAPIFetch = disableAPIFetch
     }
     
     var body: some View {
@@ -43,7 +45,7 @@ struct UserAvatar: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .task {
-            if iconURL == nil && profileIconURL == nil && !isDeletedUser {
+            if iconURL == nil && profileIconURL == nil && !isDeletedUser && !disableAPIFetch {
                 await loadUserIcon()
             }
         }

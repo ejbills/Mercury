@@ -90,6 +90,7 @@ struct PostCommentsView: View {
             if !threadManager.moreObjects.isEmpty {
                 LazyVStack(spacing: 8) {
                     ForEach(threadManager.moreObjects, id: \.id) { more in
+                        let _ = print("🔘 PostCommentsView: Rendering LoadMoreCommentsView for more ID=\(more.id), name=\(more.name), children=\(more.children)")
                         LoadMoreCommentsView(
                             moreComments: more,
                             post: post,
