@@ -17,69 +17,16 @@ struct RedditPostCard: View {
     @State private var isLoading = true
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Reddit icon/thumbnail on left
-            thumbnailView
-                .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
-            
-            // Content section
-            VStack(alignment: .leading, spacing: 4) {
-                // Reddit post indicator
-                HStack(spacing: 6) {
-                    Image(systemName: "r.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    
-                    Text("REDDIT POST")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.orange)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(height: 14)
-                
-                // Post title
-                Text(displayTitle)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(redditPost?.title != nil ? .primary : .secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: 32)
-                
-                // Subreddit info
-                Text(displaySubreddit)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: 14)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 60)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.quaternary, lineWidth: 1)
+        EmbedCard(
+            thumbnail: thumbnailView,
+            labelIcon: "r.circle.fill",
+            labelText: "Reddit Post",
+            labelTint: .secondary,
+            title: displayTitle,
+            subtitle: displaySubreddit,
+            onTap: onTap
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
-        .task {
-            await loadRedditPost()
-        }
+        .task { await loadRedditPost() }
     }
     
     // MARK: - Computed Properties
@@ -135,12 +82,12 @@ struct RedditPostCard: View {
     
     private var redditPlaceholder: some View {
         RoundedRectangle(cornerRadius: 10)
-            .fill(.orange.opacity(0.1))
-            .frame(width: 60, height: 60)
+            .fill(.fill.secondary)
+            .frame(width: EmbedCardMetrics.thumbnailSize, height: EmbedCardMetrics.thumbnailSize)
             .overlay {
                 Image(systemName: "r.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.secondary)
             }
     }
     

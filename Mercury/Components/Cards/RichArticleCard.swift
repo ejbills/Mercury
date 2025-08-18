@@ -20,69 +20,16 @@ struct RichArticleCard: View {
     @State private var isLoading = true
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Compact thumbnail on left - ALWAYS fixed size with proper rounding
-            thumbnailView
-                .frame(width: 80, height: 80) // Fixed size prevents layout shift
-                .clipShape(RoundedRectangle(cornerRadius: 12)) // Match regular image posts corner radius
-                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
-            
-            // Content section - ALWAYS same height
-            VStack(alignment: .leading, spacing: 6) {
-                // Site name and external link indicator
-                HStack(spacing: 6) {
-                    Image(systemName: "globe")
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                    
-                    Text(displayDomain.uppercased())
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.blue)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(height: 16) // Fixed height
-                
-                // Article title - ALWAYS 2 lines reserved
-                Text(displayTitle)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(metadata?.title != nil ? .primary : .secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: 40) // Reserve space for 2 lines
-                
-                // Article description - ALWAYS 1 line reserved
-                Text(displayDescription)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: 16) // Fixed single line height
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 80) // Match thumbnail height for consistency
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.quaternary, lineWidth: 1)
+        EmbedCard(
+            thumbnail: thumbnailView,
+            labelIcon: "globe",
+            labelText: displayDomain,
+            labelTint: .blue,
+            title: displayTitle,
+            subtitle: displayDescription,
+            onTap: onTap
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
-        .task {
-            await loadMetadata()
-        }
+        .task { await loadMetadata() }
     }
     
     // MARK: - Computed Properties for Stable Layout
@@ -95,8 +42,8 @@ struct RichArticleCard: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 80, height: 80)
-                            .clipped() // Ensure it's clipped to the frame
+                            .frame(width: EmbedCardMetrics.thumbnailSize, height: EmbedCardMetrics.thumbnailSize)
+                            .clipped()
                     } else {
                         compactPlaceholder
                     }
@@ -130,12 +77,12 @@ struct RichArticleCard: View {
     
     private var compactPlaceholder: some View {
         RoundedRectangle(cornerRadius: 12)
-            .fill(.quaternary.opacity(0.3))
-            .frame(width: 80, height: 80)
+            .fill(.fill.secondary)
+            .frame(width: EmbedCardMetrics.thumbnailSize, height: EmbedCardMetrics.thumbnailSize)
             .overlay {
                 Image(systemName: "link")
                     .font(.title3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
             }
     }
     

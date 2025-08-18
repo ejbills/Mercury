@@ -37,14 +37,21 @@ struct PostRowView: View {
         self.showLargeToolbar = showLargeToolbar
         self.showFullText = showFullText
         self.postType = post.postType
-        self.shouldShowLinkPreview = post.postType == .link && post.url != nil && (
-            post.hasContent || (post.thumbnail != nil && 
-                               post.thumbnail != "self" && 
-                               post.thumbnail != "default" && 
-                               post.thumbnail != "nsfw" && 
-                               post.thumbnail != "spoiler" &&
-                               post.thumbnail != "")
-        )
+        // Detect reddit post links (crossposts/embedded posts) regardless of thumbnail
+        let isRedditPostLink: Bool = {
+            if let u = post.url?.lowercased() {
+                return (u.contains("reddit.com/r/") && (u.contains("/comments/") || u.contains("/s/"))) || u.contains("redd.it/")
+            }
+            return false
+        }()
+        self.shouldShowLinkPreview = (post.postType == .link && post.url != nil && (
+            post.hasContent || (post.thumbnail != nil &&
+                                post.thumbnail != "self" &&
+                                post.thumbnail != "default" &&
+                                post.thumbnail != "nsfw" &&
+                                post.thumbnail != "spoiler" &&
+                                post.thumbnail != "")
+        )) || isRedditPostLink
         // Initialize state properties
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
@@ -353,15 +360,28 @@ struct PostRowView: View {
     @ViewBuilder
     private var linkPostContent: some View {
         if let urlString = post.url {
-            RichArticleCard(
-                url: urlString,
-                fallbackThumbnail: validThumbnailURL,
-                fallbackDomain: post.domain,
-                fallbackTitle: post.title
-            ) {
-                showingSafari = true
+            // Use RedditPostCard for reddit links (crossposts/embedded posts),
+            // otherwise fall back to rich article preview.
+            if isRedditPostURL(urlString) {
+                RedditPostCard(url: urlString) {
+                    navigationPath.navigate(to: .postComments(post: currentPost))
+                }
+            } else {
+                RichArticleCard(
+                    url: urlString,
+                    fallbackThumbnail: validThumbnailURL,
+                    fallbackDomain: post.domain,
+                    fallbackTitle: post.title
+                ) {
+                    showingSafari = true
+                }
             }
         }
+    }
+
+    private func isRedditPostURL(_ url: String) -> Bool {
+        let u = url.lowercased()
+        return (u.contains("reddit.com/r/") && (u.contains("/comments/") || u.contains("/s/"))) || u.contains("redd.it/")
     }
     
     private var validThumbnailURL: String? {

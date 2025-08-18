@@ -33,9 +33,22 @@
 		BBD11B3C2E4E48D100827872 /* Mercury.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mercury.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BBCD99CD2E53AFA1007BB62F /* Exceptions for "Mercury" folder in "Mercury" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BBD11B3B2E4E48D100827872 /* Mercury */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BBD11B3E2E4E48D100827872 /* Mercury */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BBCD99CD2E53AFA1007BB62F /* Exceptions for "Mercury" folder in "Mercury" target */,
+			);
 			path = Mercury;
 			sourceTree = "<group>";
 		};
@@ -333,6 +346,7 @@
 				DEVELOPMENT_TEAM = 2Q775S63Q3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Mercury/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mercury Client";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -371,6 +385,7 @@
 				DEVELOPMENT_TEAM = 2Q775S63Q3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Mercury/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mercury Client";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
