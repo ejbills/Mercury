@@ -12,14 +12,20 @@ class CommentsService: BaseRedditService {
     
     // MARK: - Comment Fetching
     
-    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50) async throws -> [CommentResponse] {
+    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil) async throws -> [CommentResponse] {
         try validateAccessToken()
         
         var components = URLComponents(string: "\(baseURL)/comments/\(postId).json")!
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "sort", value: sort.rawValue),
             URLQueryItem(name: "limit", value: String(limit))
         ]
+        
+        if let after = after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        
+        components.queryItems = queryItems
         
         guard let url = components.url else {
             throw APIError.parseError
@@ -35,19 +41,14 @@ class CommentsService: BaseRedditService {
             }
             
             try validateResponse(httpResponse)
-            
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
-            // Reddit returns an array where [0] is post, [1] is comments
             let responses = try decoder.decode([CommentResponse].self, from: data)
-            
             return responses
-        } catch let urlError as URLError {
-            print("Comments fetch URL error: \(urlError)")
+        } catch is URLError {
             throw APIError.networkError
         } catch {
-            print("Comments fetch error: \(error)")
             throw error
         }
     }
@@ -55,9 +56,7 @@ class CommentsService: BaseRedditService {
     func fetchMoreComments(postId: String, commentIds: [String], sort: CommentSort = .best) async throws -> [RedditComment] {
         try validateAccessToken()
         
-        // Handle empty children arrays - Reddit API doesn't handle this well
         if commentIds.isEmpty {
-            print("🔄 CommentsService: Empty children array - returning empty comments")
             return []
         }
         
@@ -93,30 +92,18 @@ class CommentsService: BaseRedditService {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
-            // The response structure is different for morechildren
             let jsonResponse = try decoder.decode(MoreChildrenAPIResponse.self, from: data)
             
-            // Extract comments from the response
             var comments: [RedditComment] = []
             if let things = jsonResponse.json.data.things {
-                print("🔄 CommentsService: API returned \(things.count) things")
-                for thing in things {
-                    print("🔄 CommentsService: Thing kind: \(thing.kind)")
-                    if thing.kind == "t1" {
-                        comments.append(thing.data)
-                    }
+                for thing in things where thing.kind == "t1" {
+                    comments.append(thing.data)
                 }
-            } else {
-                print("🔄 CommentsService: No things in API response")
             }
-            
-            print("🔄 CommentsService: Extracted \(comments.count) comments from API response")
             return comments
-        } catch let urlError as URLError {
-            print("More comments fetch URL error: \(urlError)")
+        } catch is URLError {
             throw APIError.networkError
         } catch {
-            print("More comments fetch error: \(error)")
             throw error
         }
     }
@@ -151,11 +138,9 @@ class CommentsService: BaseRedditService {
             }
             
             try validateResponse(httpResponse)
-        } catch let urlError as URLError {
-            print("Comment vote URL error: \(urlError)")
+        } catch is URLError {
             throw APIError.networkError
         } catch {
-            print("Comment vote error: \(error)")
             throw error
         }
     }
@@ -187,11 +172,9 @@ class CommentsService: BaseRedditService {
             }
             
             try validateResponse(httpResponse)
-        } catch let urlError as URLError {
-            print("Comment save URL error: \(urlError)")
+        } catch is URLError {
             throw APIError.networkError
         } catch {
-            print("Comment save error: \(error)")
             throw error
         }
     }
@@ -223,11 +206,9 @@ class CommentsService: BaseRedditService {
             }
             
             try validateResponse(httpResponse)
-        } catch let urlError as URLError {
-            print("Comment unsave URL error: \(urlError)")
+        } catch is URLError {
             throw APIError.networkError
         } catch {
-            print("Comment unsave error: \(error)")
             throw error
         }
     }

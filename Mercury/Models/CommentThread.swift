@@ -7,12 +7,8 @@
 
 import Foundation
 
-/// Represents a comment thread containing a top-level comment
 struct CommentThread {
     let parentComment: RedditComment
-    
-    // CommentThread now only represents the top-level comment
-    // Replies are handled by the Reddit API's nested structure
     init(parentComment: RedditComment) {
         self.parentComment = parentComment
     }
@@ -42,44 +38,118 @@ enum CommentThreadItem: Identifiable {
     }
 }
 
-/// Helper class to manage comment threading and card organization
 @Observable
 class CommentThreadManager {
     private(set) var commentThreads: [CommentThread] = []
     private(set) var moreObjects: [MoreComments] = []
+    private var allComments: [RedditComment] = []
+    private(set) var rootAfter: String? = nil
+    var hasMoreRootComments: Bool { rootAfter != nil }
+    private var rootRemainingChildren: [String] = []
     
-    func loadInitialComments(_ comments: [RedditComment], moreObjects: [MoreComments]) {
-        self.moreObjects = moreObjects
+    func loadInitialComments(_ comments: [RedditComment], moreObjects: [MoreComments], rootAfter: String?) {
+        self.allComments = comments
+        self.rootAfter = rootAfter
+        self.rootRemainingChildren = []
         
-        // Build comment threads by organizing into parent-child relationships
+        if shouldAddRootLevelLoadMore(comments: comments) {
+            let afterToken = rootAfter ?? ""
+            let rootLoadMore = MoreComments(
+                count: 25,
+                name: "root_pagination",
+                rawId: "root_pagination",
+                parentId: nil,
+                depth: 0,
+                children: afterToken.isEmpty ? [] : [afterToken]
+            )
+            self.moreObjects = [rootLoadMore]
+        } else {
+            let rootMores = moreObjects.filter { $0.depth == 0 }
+            if !rootMores.isEmpty {
+                let combinedChildren = rootMores.flatMap { $0.children }
+                self.rootRemainingChildren = combinedChildren
+                let slice = Array(combinedChildren.prefix(25))
+                if !slice.isEmpty {
+                    let consolidated = MoreComments(
+                        count: slice.count,
+                        name: "root_more_children",
+                        rawId: "root_more_children",
+                        parentId: nil,
+                        depth: 0,
+                        children: slice
+                    )
+                    self.moreObjects = [consolidated]
+                } else {
+                    self.moreObjects = []
+                }
+            } else {
+                self.moreObjects = []
+            }
+        }
         commentThreads = buildCommentThreads(from: comments)
     }
     
+    func appendRootPage(newComments: [RedditComment], nextAfter: String?) {
+        allComments.append(contentsOf: newComments)
+        rootAfter = nextAfter
+        let newThreads = newComments.filter { $0.depth == 0 }.map { CommentThread(parentComment: $0) }
+        commentThreads.append(contentsOf: newThreads)
+        if let after = nextAfter {
+            moreObjects = [
+                MoreComments(
+                    count: 25,
+                    name: "root_pagination",
+                    rawId: "root_pagination",
+                    parentId: nil,
+                    depth: 0,
+                    children: [after]
+                )
+            ]
+        } else {
+            moreObjects = []
+        }
+    }
+
+    func appendRootChildrenPage(newComments: [RedditComment], consumedCount: Int) {
+        allComments.append(contentsOf: newComments)
+        let newThreads = newComments.filter { $0.depth == 0 }.map { CommentThread(parentComment: $0) }
+        commentThreads.append(contentsOf: newThreads)
+        if consumedCount > 0 && consumedCount <= rootRemainingChildren.count {
+            rootRemainingChildren.removeFirst(consumedCount)
+        }
+        if rootRemainingChildren.isEmpty {
+            moreObjects = []
+        } else {
+            let nextSlice = Array(rootRemainingChildren.prefix(25))
+            let consolidated = MoreComments(
+                count: nextSlice.count,
+                name: "root_more_children",
+                rawId: "root_more_children",
+                parentId: nil,
+                depth: 0,
+                children: nextSlice
+            )
+            moreObjects = [consolidated]
+        }
+    }
+
+    private func shouldAddRootLevelLoadMore(comments: [RedditComment]) -> Bool {
+        return rootAfter != nil && !comments.filter { $0.depth == 0 }.isEmpty
+    }
+    
     private func buildCommentThreads(from comments: [RedditComment]) -> [CommentThread] {
-        // Reddit API already provides proper threading via replies structure
-        // We just need to create CommentThread objects for top-level comments
         let topLevelComments = comments.filter { $0.depth == 0 }
-        
         let threads = topLevelComments.map { topComment in
             CommentThread(parentComment: topComment)
         }
-        
-        return threads.sorted { $0.parentComment.score > $1.parentComment.score }
+        return threads
     }
     
-    // No longer needed - Reddit API provides proper threading
-    
     func insertMoreComments(_ newComments: [RedditComment], replacingMoreId: String) {
-        // Find and remove the more object
         moreObjects.removeAll { $0.id == replacingMoreId }
-        
-        // Add new top-level comments as new threads
         let newTopLevelComments = newComments.filter { $0.depth == 0 }
         let newThreads = newTopLevelComments.map { CommentThread(parentComment: $0) }
-        
         commentThreads.append(contentsOf: newThreads)
-        // Re-sort by score
-        commentThreads.sort { $0.parentComment.score > $1.parentComment.score }
     }
 
 }

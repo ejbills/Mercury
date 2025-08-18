@@ -116,7 +116,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
         
-        print("🔑 Starting OAuth flow with client ID: \(clientId)")
+        
         
         let state = UUID().uuidString
         // Full Reddit API permissions
@@ -138,7 +138,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
         
-        print("🌐 OAuth URL: \(authURL.absoluteString)")
+        
         
         self.apiStatus = .validating
         self.errorMessage = nil

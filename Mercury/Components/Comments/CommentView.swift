@@ -55,14 +55,16 @@ struct CommentView: View {
             // Author section with profile picture and pill
             HStack(spacing: 6) {
                 // Small profile picture
-                UserAvatar(username: comment.author, size: 20)
+                UserAvatar(username: comment.author, size: 20, disableAPIFetch: true)
                 
                 // Author pill with badges - matches post design pattern
                 Pill(action: {
-                    navigationPath.navigate(to: .userProfile(username: comment.author))
+                    if !isDeletedUser {
+                        navigationPath.navigate(to: .userProfile(username: comment.author))
+                    }
                 }, size: .small) {
                     HStack(spacing: 4) {
-                        Text(comment.author)
+                        Text(isDeletedUser ? "[deleted]" : comment.author)
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundStyle(authorColor)
@@ -133,11 +135,9 @@ struct CommentView: View {
                     .italic()
                     .foregroundStyle(.tertiary)
             } else {
-                Text(comment.body)
-                    .font(.callout)
+                MarkdownRenderer(content: comment.body, compactMode: false)
                     .foregroundStyle(.primary)
                     .lineSpacing(2)
-                    .textSelection(.enabled)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -210,13 +210,19 @@ struct CommentView: View {
     }
     
     private var authorColor: Color {
-        if comment.isSubmitter {
+        if isDeletedUser {
+            return .secondary
+        } else if comment.isSubmitter {
             return .blue
         } else if comment.distinguished != nil {
             return .green
         } else {
             return .primary
         }
+    }
+    
+    private var isDeletedUser: Bool {
+        return comment.author == "[deleted]" || comment.author == "deleted"
     }
     
     private var scoreText: String {
@@ -270,12 +276,10 @@ struct CommentView: View {
                 }
             } catch {
                 await MainActor.run {
-                    // Revert on failure
                     voteState = originalState
                     displayScore = originalScore
                     isVoting = false
                 }
-                print("Failed to vote on comment: \(error)")
             }
         }
     }

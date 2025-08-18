@@ -14,6 +14,7 @@ struct PostCommentsView: View {
     @State private var errorMessage: String?
     @State private var commentSort: CommentSort = .best
     @State private var showingSortOptions = false
+    @State private var loadingRootMoreIds: Set<String> = []
     @Namespace private var mediaNamespace
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -21,7 +22,6 @@ struct PostCommentsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                // Post header with large toolbar
                 PostRowView(
                     post: post, 
                     namespace: mediaNamespace, 
@@ -29,8 +29,6 @@ struct PostCommentsView: View {
                     showLargeToolbar: true,
                     showFullText: true
                 )
-                
-                // Comments section
                 commentsSection
             }
             .padding(.top, 8)
@@ -80,23 +78,51 @@ struct PostCommentsView: View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
             
-            // Use unified CommentThreadView for entire thread
             CommentThreadView(
                 comments: allComments,
-                post: post
+                post: post,
+                sort: commentSort
             )
             
-            // Load more comments section at thread level
             if !threadManager.moreObjects.isEmpty {
                 LazyVStack(spacing: 8) {
                     ForEach(threadManager.moreObjects, id: \.id) { more in
-                        LoadMoreCommentsView(
-                            moreComments: more,
-                            post: post,
-                            onLoadMore: { newComments in
-                                threadManager.insertMoreComments(newComments, replacingMoreId: more.id)
+                        Group {
+                            if more.name == "root_pagination" {
+                                LoadMoreCommentsView(
+                                    moreComments: more,
+                                    post: post,
+                                    sort: commentSort,
+                                    isLoading: loadingRootMoreIds.contains(more.id),
+                                    onStartLoad: { loadingRootMoreIds.insert(more.id) },
+                                    onLoadMore: { _ in },
+                                    onLoadMoreRootPage: { newComments, nextAfter in
+                                        loadingRootMoreIds.remove(more.id)
+                                        threadManager.appendRootPage(newComments: newComments, nextAfter: nextAfter)
+                                    },
+                                    onError: {
+                                        loadingRootMoreIds.remove(more.id)
+                                    }
+                                )
+                            } else {
+                                LoadMoreCommentsView(
+                                    moreComments: more,
+                                    post: post,
+                                    sort: commentSort,
+                                    isLoading: loadingRootMoreIds.contains(more.id),
+                                    onStartLoad: { loadingRootMoreIds.insert(more.id) },
+                                    onLoadMore: { newComments in
+                                        loadingRootMoreIds.remove(more.id)
+                                        let consumed = more.children.count
+                                        threadManager.appendRootChildrenPage(newComments: newComments, consumedCount: consumed)
+                                    },
+                                    onLoadMoreRootPage: nil,
+                                    onError: {
+                                        loadingRootMoreIds.remove(more.id)
+                                    }
+                                )
                             }
-                        )
+                        }
                         .padding(.horizontal, 12)
                     }
                 }
@@ -175,7 +201,6 @@ struct PostCommentsView: View {
                 Image(systemName: "chevron.down")
                     .font(.caption2)
             }
-            .foregroundStyle(.secondary)
         }
     }
     
@@ -189,22 +214,21 @@ struct PostCommentsView: View {
         do {
             let response = try await redditAPI.fetchPostComments(postId: post.id, sort: commentSort)
             
-            // Reddit returns array where [0] is post, [1] is comments
             if response.count > 1 {
                 let commentsResponse = response[1]
                 let comments = commentsResponse.flattenedComments
                 let moreObjects = commentsResponse.moreComments
+                let rootAfter = commentsResponse.data.after
                 
-                threadManager.loadInitialComments(comments, moreObjects: moreObjects)
+                threadManager.loadInitialComments(comments, moreObjects: moreObjects, rootAfter: rootAfter)
             } else {
-                threadManager.loadInitialComments([], moreObjects: [])
+                threadManager.loadInitialComments([], moreObjects: [], rootAfter: nil)
             }
             
             isLoading = false
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
-            print("Failed to load comments: \(error)")
         }
     }
 }

@@ -11,33 +11,41 @@ struct UserAvatar: View {
     let username: String
     let size: CGFloat
     let iconURL: URL?
+    let disableAPIFetch: Bool
     
     @Environment(\.redditAPI) private var redditAPI
     @State private var profileIconURL: URL?
     
-    init(username: String, size: CGFloat = 32, iconURL: URL? = nil) {
+    init(username: String, size: CGFloat = 32, iconURL: URL? = nil, disableAPIFetch: Bool = false) {
         self.username = username
         self.size = size
         self.iconURL = iconURL
+        self.disableAPIFetch = disableAPIFetch
     }
     
     var body: some View {
-        AsyncImage(url: displayURL) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            case .failure(_), .empty:
-                fallbackAvatar
-            @unknown default:
-                fallbackAvatar
+        Group {
+            if isDeletedUser {
+                deletedUserAvatar
+            } else {
+                AsyncImage(url: displayURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    case .failure(_), .empty:
+                        fallbackAvatar
+                    @unknown default:
+                        fallbackAvatar
+                    }
+                }
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
         .task {
-            if iconURL == nil && profileIconURL == nil {
+            if iconURL == nil && profileIconURL == nil && !isDeletedUser && !disableAPIFetch {
                 await loadUserIcon()
             }
         }
@@ -58,9 +66,31 @@ struct UserAvatar: View {
         }
     }
     
+    private var deletedUserAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(.secondary.opacity(0.3))
+                .overlay(
+                    Circle()
+                        .stroke(.secondary.opacity(0.5), lineWidth: 1)
+                )
+            
+            Image(systemName: "person.slash")
+                .font(.system(size: size * 0.35, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+    
+    private var isDeletedUser: Bool {
+        return username == "[deleted]" || username == "deleted"
+    }
+    
     private func loadUserIcon() async {
         let cleanUsername = username.replacingOccurrences(of: "/u/", with: "")
             .replacingOccurrences(of: "u/", with: "")
+        
+        // Don't try to load avatars for deleted users
+        guard !isDeletedUser else { return }
         
         do {
             let profile = try await redditAPI.userService.fetchUserProfile(username: cleanUsername)
@@ -68,8 +98,7 @@ struct UserAvatar: View {
                 self.profileIconURL = profile.profileIconURL
             }
         } catch {
-            // Silently fail - will show fallback avatar
-            print("Failed to load avatar for \(cleanUsername): \(error)")
+                print("Failed to load avatar for \(cleanUsername): \(error)")
         }
     }
     

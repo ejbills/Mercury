@@ -101,8 +101,7 @@ class SearchService: BaseRedditService {
             } catch {
                 throw APIError.parseError
             }
-        } catch let urlError as URLError {
-            print(urlError)
+        } catch is URLError {
             throw APIError.networkError
         } catch {
             throw error
