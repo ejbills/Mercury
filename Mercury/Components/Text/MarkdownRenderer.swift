@@ -25,7 +25,7 @@ struct MarkdownRenderer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Markdown(compactMode ? String("\(processedContent.prefix(150))...") : processedContent)
-                .font(.system(size: 12))
+                .font(.system(size: 10))
                 .textSelection(.enabled)
             if showEmbeddedContent {
                 let embedContent = extractLinks(from: content)
