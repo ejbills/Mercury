@@ -9,10 +9,16 @@ import SwiftUI
 
 struct InboxView: View {
     let apiService: RedditAPIManager
-    @State private var messages: [InboxMessage] = []
+    @State private var messages: [InboxItem] = []
     @State private var isLoading = true
+    @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var selectedFilter: InboxFilter = .all
+    @State private var after: String?
+    @State private var hasMore = true
+    @Namespace private var filterNamespace
+    @State private var selectedItem: InboxItem?
+    @Environment(\.navigationPathManager) private var navigationPath
     
     enum InboxFilter: String, CaseIterable {
         case all = "All"
@@ -50,117 +56,141 @@ struct InboxView: View {
             .navigationTitle("Inbox")
             .navigationBarTitleDisplayMode(.large)
             .refreshable {
-                await loadMessages()
+                await reload()
             }
         }
+        .sheet(item: $selectedItem) { item in
+            InboxDetailView(item: item)
+                .environment(\.redditAPI, apiService)
+        }
         .task {
-            await loadMessages()
+            await reload()
         }
     }
     
     private var filterPickerSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 ForEach(InboxFilter.allCases, id: \.self) { filter in
-                    filterButton(for: filter)
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedFilter = filter
+                        }
+                        Task { await reload() }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: filter.icon)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text(filter.rawValue)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(selectedFilter == filter ? .white : .primary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background {
+                            if selectedFilter == filter {
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(.blue)
+                                    .matchedGeometryEffect(id: "selectedFilter", in: filterNamespace)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
         .background(.regularMaterial)
     }
     
-    private func filterButton(for filter: InboxFilter) -> some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedFilter = filter
-            }
-        }) {
-            HStack(spacing: 8) {
-                Image(systemName: filter.icon)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Text(filter.rawValue)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-            .foregroundStyle(selectedFilter == filter ? .white : .primary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background {
-                if selectedFilter == filter {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.blue.gradient)
-                } else {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.quaternary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-    
     private var messagesList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: 8) {
                 ForEach(filteredMessages) { message in
-                    messageRow(message)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                    
-                    if message.id != filteredMessages.last?.id {
-                        Divider()
-                            .padding(.leading, 20)
+                    Card(style: .compact) {
+                        Button {
+                            handleTap(on: message)
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                UserAvatar(username: message.author, size: 32)
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack(alignment: .firstTextBaseline) {
+                                        if message.isUnread {
+                                            Circle()
+                                                .fill(Color.blue)
+                                                .frame(width: 6, height: 6)
+                                        }
+                                        Text(message.subject)
+                                            .font(.headline)
+                                            .fontWeight(message.isUnread ? .semibold : .medium)
+                                            .lineLimit(1)
+                                        Spacer()
+                                        Text(message.timeAgo)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    
+                                    HStack(spacing: 6) {
+                                        Text("u/\(message.author)")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                        if let subreddit = message.subreddit {
+                                            Text("• r/\(subreddit)")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    
+                                    Text(message.body)
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(3)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 12)
+                    .onAppear {
+                        if message.id == filteredMessages.last?.id && hasMore && !isLoadingMore {
+                            Task { await loadMore() }
+                        }
+                    }
+                }
+                
+                if hasMore {
+                    Group {
+                        if isLoadingMore {
+                            HStack(spacing: 12) {
+                                ProgressView().scaleEffect(0.8)
+                                Text("Loading more…").font(.body).foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                        } else {
+                            Color.clear.frame(height: 1)
+                        }
+                    }
+                } else if !messages.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Text("You're up to date").font(.subheadline).fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
                 }
             }
             .padding(.top, 8)
         }
     }
     
-    private func messageRow(_ message: InboxMessage) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: message.isUnread ? "envelope.fill" : "envelope.open.fill")
-                    .font(.caption)
-                    .foregroundStyle(message.isUnread ? .blue : .secondary)
-                
-                Text(message.subject)
-                    .font(.headline)
-                    .fontWeight(message.isUnread ? .semibold : .medium)
-                    .lineLimit(1)
-                
-                Spacer()
-                
-                Text(message.timeAgo)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            HStack {
-                Text("From: u/\(message.author)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                
-                if let subreddit = message.subreddit {
-                    Text("in r/\(subreddit)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                
-                Spacer()
-            }
-            
-            Text(message.body)
-                .font(.body)
-                .lineLimit(3)
-                .foregroundStyle(.primary)
-        }
-        .padding(.vertical, 4)
-    }
-    
-    private var filteredMessages: [InboxMessage] {
+    private var filteredMessages: [InboxItem] {
         switch selectedFilter {
         case .all:
             return messages
@@ -202,9 +232,7 @@ struct InboxView: View {
                 .multilineTextAlignment(.center)
             
             Button("Try Again") {
-                Task {
-                    await loadMessages()
-                }
+                Task { await reload() }
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.roundedRectangle(radius: 12))
@@ -232,99 +260,101 @@ struct InboxView: View {
         .padding(.horizontal, 32)
     }
     
-    private func loadMessages() async {
+    private func reload() async {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
+            messages = []
+            after = nil
+            hasMore = true
         }
-        
-        // TODO: Implement actual API call for inbox messages
-        // For now, simulate loading with mock data
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        
-        await MainActor.run {
-            self.messages = mockMessages
-            self.isLoading = false
+        do {
+            let page = try await apiService.fetchInbox(category: selectedFilter.apiCategory, limit: 25)
+            await MainActor.run {
+                self.messages = page.items
+                self.after = page.after
+                self.hasMore = page.after != nil && !page.items.isEmpty
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
         }
+    }
+    
+    private func loadMore() async {
+        guard hasMore, !isLoadingMore, let after else { return }
+        await MainActor.run { isLoadingMore = true }
+        do {
+            let page = try await apiService.fetchInbox(category: selectedFilter.apiCategory, after: after, limit: 25)
+            await MainActor.run {
+                let newItems = page.items.filter { newItem in
+                    !messages.contains { $0.id == newItem.id }
+                }
+                self.messages.append(contentsOf: newItems)
+                self.after = page.after
+                self.hasMore = page.after != nil && !newItems.isEmpty
+                self.isLoadingMore = false
+            }
+        } catch {
+            await MainActor.run { self.isLoadingMore = false }
+        }
+    }
+
+    // MARK: - Routing
+    private func handleTap(on item: InboxItem) {
+        switch item.type {
+        case .privateMessage:
+            selectedItem = item
+        case .commentReply, .mention:
+            guard let url = item.contextURL else {
+                // Fallback: show detail
+                selectedItem = item
+                return
+            }
+            Task {
+                if let post = await RedditPostFetchService.shared.fetchPost(from: url.absoluteString) {
+                    let commentId = extractCommentId(from: url)
+                    await MainActor.run {
+                        navigationPath.navigate(to: .postCommentsAnchor(post: post, commentId: commentId))
+                    }
+                } else {
+                    await MainActor.run { selectedItem = item }
+                }
+            }
+        }
+    }
+    
+    private func extractCommentId(from url: URL) -> String? {
+        // Try to parse paths like /r/<sub>/comments/<postId>/<slug>/<commentId>
+        let components = url.pathComponents
+        if let commentsIndex = components.firstIndex(of: "comments"), components.count > commentsIndex + 2 {
+            let maybeCommentIdIndex = commentsIndex + 3
+            if components.count > maybeCommentIdIndex {
+                let cid = components[maybeCommentIdIndex]
+                if cid.count >= 5 { // naive sanity check
+                    return cid
+                }
+            }
+        }
+        // If no explicit comment segment, nothing to scroll to
+        return nil
     }
 }
 
-// MARK: - Supporting Types
-
-struct InboxMessage: Identifiable {
-    let id: String
-    let subject: String
-    let body: String
-    let author: String
-    let subreddit: String?
-    let isUnread: Bool
-    let created: Date
-    let type: MessageType
-    
-    enum MessageType {
-        case privateMessage
-        case commentReply
-        case mention
-    }
-    
-    var timeAgo: String {
-        let now = Date()
-        let timeInterval = now.timeIntervalSince(created)
-        
-        if timeInterval < 60 {
-            return "now"
-        } else if timeInterval < 3600 {
-            let minutes = Int(timeInterval / 60)
-            return "\(minutes)m"
-        } else if timeInterval < 86400 {
-            let hours = Int(timeInterval / 3600)
-            return "\(hours)h"
-        } else if timeInterval < 2592000 {
-            let days = Int(timeInterval / 86400)
-            return "\(days)d"
-        } else if timeInterval < 31536000 {
-            let months = Int(timeInterval / 2592000)
-            return "\(months)mo"
-        } else {
-            let years = Int(timeInterval / 31536000)
-            return "\(years)y"
+private extension InboxView.InboxFilter {
+    var apiCategory: InboxService.Category {
+        switch self {
+        case .all: return .all
+        case .unread: return .unread
+        case .messages: return .messages
+        case .mentions: return .mentions
+        case .replies: return .replies
         }
     }
 }
-
-// Mock data for preview/development
-private let mockMessages: [InboxMessage] = [
-    InboxMessage(
-        id: "1",
-        subject: "Welcome to Mercury!",
-        body: "Thanks for trying out Mercury, the new Reddit client for iOS. We hope you enjoy using the app!",
-        author: "mercury_bot",
-        subreddit: nil,
-        isUnread: true,
-        created: Date().addingTimeInterval(-300),
-        type: .privateMessage
-    ),
-    InboxMessage(
-        id: "2",
-        subject: "Reply to your comment",
-        body: "Great point about the new filtering feature! I've been testing it and it works really well.",
-        author: "test_user",
-        subreddit: "apple",
-        isUnread: true,
-        created: Date().addingTimeInterval(-3600),
-        type: .commentReply
-    ),
-    InboxMessage(
-        id: "3",
-        subject: "Username mention",
-        body: "Hey u/yourname, thought you might be interested in this new app release!",
-        author: "another_user",
-        subreddit: "iOSProgramming",
-        isUnread: false,
-        created: Date().addingTimeInterval(-86400),
-        type: .mention
-    )
-]
 
 #Preview {
     InboxView(apiService: RedditAPIManager())

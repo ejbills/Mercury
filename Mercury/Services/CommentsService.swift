@@ -12,7 +12,7 @@ class CommentsService: BaseRedditService {
     
     // MARK: - Comment Fetching
     
-    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil) async throws -> [CommentResponse] {
+    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil, focusCommentId: String? = nil, context: Int? = nil) async throws -> [CommentResponse] {
         try validateAccessToken()
         
         var components = URLComponents(string: "\(baseURL)/comments/\(postId).json")!
@@ -24,6 +24,8 @@ class CommentsService: BaseRedditService {
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
         }
+        if let focus = focusCommentId { queryItems.append(URLQueryItem(name: "comment", value: focus)) }
+        if let ctx = context { queryItems.append(URLQueryItem(name: "context", value: String(ctx))) }
         
         components.queryItems = queryItems
         

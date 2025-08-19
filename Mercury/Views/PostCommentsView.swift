@@ -9,6 +9,7 @@ import SwiftUI
 
 struct PostCommentsView: View {
     let post: RedditPost
+    let targetCommentId: String?
     @State private var threadManager = CommentThreadManager()
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -18,21 +19,37 @@ struct PostCommentsView: View {
     @Namespace private var mediaNamespace
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
+    @State private var singleThreadMode: Bool = false
+
+    init(post: RedditPost, targetCommentId: String? = nil) {
+        self.post = post
+        self.targetCommentId = targetCommentId
+    }
     
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                PostRowView(
-                    post: post, 
-                    namespace: mediaNamespace, 
-                    selectedPost: .constant(nil),
-                    showLargeToolbar: true,
-                    showFullText: true
-                )
-                commentsSection
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    PostRowView(
+                        post: post, 
+                        namespace: mediaNamespace, 
+                        selectedPost: .constant(nil),
+                        showLargeToolbar: true,
+                        showFullText: true
+                    )
+                    if targetCommentId != nil { modePicker }
+                    commentsSection
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 20)
             }
-            .padding(.top, 8)
-            .padding(.bottom, 20)
+            .onChange(of: threadManager.commentThreads.count) { _, _ in
+                scrollToTargetIfNeeded(proxy: proxy)
+            }
+            .onAppear {
+                // If comments are already loaded (e.g., coming back), attempt scroll
+                scrollToTargetIfNeeded(proxy: proxy)
+            }
         }
         .navigationTitle("Comments")
         .navigationBarTitleDisplayMode(.inline)
@@ -72,6 +89,40 @@ struct PostCommentsView: View {
                 commentsListView
             }
         }
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: 8) {
+            Pill(action: {
+                guard !singleThreadMode else { return }
+                singleThreadMode = true
+                Task { await loadComments() }
+            }, size: .regular) {
+                HStack(spacing: 6) {
+                    Image(systemName: singleThreadMode ? "checkmark.circle.fill" : "text.bubble")
+                        .foregroundStyle(singleThreadMode ? .blue : .secondary)
+                    Text("Single comment thread")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+            }
+            
+            Pill(action: {
+                guard singleThreadMode else { return }
+                singleThreadMode = false
+                Task { await loadComments() }
+            }, size: .regular) {
+                HStack(spacing: 6) {
+                    Image(systemName: !singleThreadMode ? "checkmark.circle.fill" : "text.bubble.fill")
+                        .foregroundStyle(!singleThreadMode ? .blue : .secondary)
+                    Text("See full discussion")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
     }
     
     private var commentsListView: some View {
@@ -212,7 +263,14 @@ struct PostCommentsView: View {
         errorMessage = nil
         
         do {
-            let response = try await redditAPI.fetchPostComments(postId: post.id, sort: commentSort)
+            let response = try await redditAPI.fetchPostComments(
+                postId: post.id,
+                sort: commentSort,
+                limit: 50,
+                after: nil,
+                focusCommentId: singleThreadMode ? targetCommentId : nil,
+                context: singleThreadMode ? 3 : nil
+            )
             
             if response.count > 1 {
                 let commentsResponse = response[1]
@@ -231,12 +289,14 @@ struct PostCommentsView: View {
             isLoading = false
         }
     }
-}
 
-#Preview {
-    NavigationStack {
-        PostCommentsView(post: RedditPost.samplePost)
-            .environment(\.redditAPI, RedditAPIManager())
-            .environment(\.navigationPathManager, NavigationPathManager())
+    private func scrollToTargetIfNeeded(proxy: ScrollViewProxy) {
+        guard let targetId = targetCommentId, !targetId.isEmpty else { return }
+        // Attempt after a brief delay to allow layout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(targetId, anchor: .center)
+            }
+        }
     }
 }

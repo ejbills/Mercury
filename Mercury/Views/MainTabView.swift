@@ -155,6 +155,10 @@ struct MainTabView: View {
             PostCommentsView(post: post)
                 .environment(\.redditAPI, apiService)
                 .environment(\.navigationPathManager, navigationPath)
+        case .postCommentsAnchor(let post, let commentId):
+            PostCommentsView(post: post, targetCommentId: commentId)
+                .environment(\.redditAPI, apiService)
+                .environment(\.navigationPathManager, navigationPath)
         }
     }
 }

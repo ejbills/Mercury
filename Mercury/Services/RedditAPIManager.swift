@@ -17,6 +17,7 @@ class RedditAPIManager {
     let userService: UserService
     let searchService: SearchService
     let commentsService: CommentsService
+    let inboxService: InboxService
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -53,6 +54,7 @@ class RedditAPIManager {
         self.userService = UserService(authService: authService)
         self.searchService = SearchService(authService: authService)
         self.commentsService = CommentsService(authService: authService)
+        self.inboxService = InboxService(authService: authService)
     }
     
     // MARK: - Authentication Methods (Delegated)
@@ -125,8 +127,8 @@ class RedditAPIManager {
     
     // MARK: - Comments Methods (Delegated)
     
-    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil) async throws -> [CommentResponse] {
-        try await commentsService.fetchPostComments(postId: postId, sort: sort, limit: limit, after: after)
+    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil, focusCommentId: String? = nil, context: Int? = nil) async throws -> [CommentResponse] {
+        try await commentsService.fetchPostComments(postId: postId, sort: sort, limit: limit, after: after, focusCommentId: focusCommentId, context: context)
     }
     
     func fetchMoreComments(postId: String, commentIds: [String], sort: CommentSort = .best) async throws -> [RedditComment] {
@@ -143,5 +145,15 @@ class RedditAPIManager {
     
     func unsaveComment(commentId: String) async throws {
         try await commentsService.unsaveComment(commentId: commentId)
+    }
+    
+    // MARK: - Inbox Methods (Delegated)
+    
+    func fetchInbox(category: InboxService.Category, after: String? = nil, limit: Int = 25) async throws -> InboxService.Page {
+        try await inboxService.fetch(category: category, after: after, limit: limit)
+    }
+    
+    func replyToMessage(fullname: String, text: String) async throws {
+        try await inboxService.replyToMessage(fullname: fullname, text: text)
     }
 }
