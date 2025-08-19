@@ -27,15 +27,18 @@ struct PostRowView: View {
     @State private var showShareSheet = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
+    @State private var showingPostReply = false
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
+    var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
         self.showLargeToolbar = showLargeToolbar
         self.showFullText = showFullText
+        self.onRootReplyPosted = onRootReplyPosted
         self.postType = post.postType
         // Detect reddit post links (crossposts/embedded posts) regardless of thumbnail
         let isRedditPostLink: Bool = {
@@ -127,6 +130,7 @@ struct PostRowView: View {
                             displayScore: $displayScore,
                             isVoting: $isVoting,
                             onVote: handleVote,
+                            onReply: { showingPostReply = true },
                             onShare: handleShare,
                             onSave: handleSave,
                             onCopyLink: handleCopyLink,
@@ -144,6 +148,7 @@ struct PostRowView: View {
                         displayScore: $displayScore,
                         isVoting: $isVoting,
                         onVote: handleVote,
+                        onReply: { showingPostReply = true },
                         onShare: handleShare,
                         onSave: handleSave,
                         onCopyLink: handleCopyLink,
@@ -164,6 +169,15 @@ struct PostRowView: View {
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
         .sheet(isPresented: $showShareSheet) {
             MediaShareSheet(post: post, mediaURL: shareItem)
+        }
+        .sheet(isPresented: $showingPostReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                onCancel: { showingPostReply = false },
+                onSubmit: { text in
+                    try await submitRootReply(text: text)
+                }
+            )
         }
         .sheet(isPresented: $showingSafari) {
             if let urlString = post.url, let url = URL(string: urlString) {
@@ -570,6 +584,14 @@ struct PostRowView: View {
                     showShareSheet = true
                 }
             }
+        }
+    }
+
+    private func submitRootReply(text: String) async throws {
+        let parent = "t3_\(post.id)"
+        let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        await MainActor.run {
+            onRootReplyPosted?(created)
         }
     }
     

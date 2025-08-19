@@ -212,6 +212,69 @@ class CommentsService: BaseRedditService {
             throw error
         }
     }
+
+    // MARK: - Submit Comment
+
+    /// Submits a comment or reply.
+    /// - Parameters:
+    ///   - parentFullname: Fullname of parent (e.g., "t1_<commentId>" or "t3_<postId>").
+    ///   - text: Markdown body text.
+    /// - Returns: Created `RedditComment` on success.
+    func submitComment(parentFullname: String, text: String) async throws -> RedditComment {
+        try validateAccessToken()
+
+        guard let url = URL(string: "\(baseURL)/api/comment") else {
+            throw APIError.parseError
+        }
+
+        var request = createPOSTRequest(url: url)
+
+        let parameters = [
+            "api_type": "json",
+            "thing_id": parentFullname,
+            "text": text
+        ]
+
+        let postData = parameters
+            .map { key, value in
+                let escaped = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+                return "\(key)=\(escaped)"
+            }
+            .joined(separator: "&")
+            .data(using: .utf8)
+
+        request.httpBody = postData
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+
+            try validateResponse(httpResponse)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            let apiResponse = try decoder.decode(NewCommentAPIResponse.self, from: data)
+
+            if let errors = apiResponse.json.errors, !errors.isEmpty {
+                // If Reddit returns errors, treat as server error
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+
+            guard let thing = apiResponse.json.data.things.first, thing.kind == "t1" else {
+                throw APIError.parseError
+            }
+
+            return thing.data
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
 }
 
 // MARK: - Supporting Types
@@ -236,6 +299,26 @@ struct MoreChildrenAPIResponse: Codable {
     }
     
     struct CommentThing: Codable {
+        let kind: String
+        let data: RedditComment
+    }
+}
+
+// MARK: - Create Comment Response Types
+
+struct NewCommentAPIResponse: Codable {
+    let json: NewCommentJSON
+
+    struct NewCommentJSON: Codable {
+        let errors: [[String]]?
+        let data: NewCommentData
+    }
+
+    struct NewCommentData: Codable {
+        let things: [NewCommentThing]
+    }
+
+    struct NewCommentThing: Codable {
         let kind: String
         let data: RedditComment
     }

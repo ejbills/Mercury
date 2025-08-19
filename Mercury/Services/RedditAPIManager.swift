@@ -144,4 +144,9 @@ class RedditAPIManager {
     func unsaveComment(commentId: String) async throws {
         try await commentsService.unsaveComment(commentId: commentId)
     }
+
+    // Submit a new comment or reply
+    func submitComment(parentFullname: String, text: String) async throws -> RedditComment {
+        try await commentsService.submitComment(parentFullname: parentFullname, text: text)
+    }
 }

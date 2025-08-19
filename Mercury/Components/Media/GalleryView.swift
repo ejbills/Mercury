@@ -132,6 +132,7 @@ struct GalleryDetailView: View {
     @State private var shareItem: URL?
     @State private var shareItems: [URL]?
     @State private var showShareSheet = false
+    @State private var showingPostReply = false
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
     
@@ -215,6 +216,15 @@ struct GalleryDetailView: View {
                 MediaShareSheet(post: post, mediaURL: shareItem)
             }
         }
+        .sheet(isPresented: $showingPostReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                onCancel: { showingPostReply = false },
+                onSubmit: { text in
+                    try await submitRootReply(text: text)
+                }
+            )
+        }
     }
     
     private var mediaId: String {
@@ -254,6 +264,7 @@ struct GalleryDetailView: View {
                 displayScore: $displayScore,
                 isVoting: $isVoting,
                 onVote: handleVote,
+                onReply: { showingPostReply = true },
                 onShare: handleShare,
                 onSave: handleSave,
                 onCopyLink: nil,
@@ -300,7 +311,7 @@ struct GalleryDetailView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: downloadProgress)
     }
-    
+
     // MARK: - Action Handlers
     
     private func handleVote(_ newVoteState: RedditPost.VoteState) {
@@ -407,6 +418,11 @@ struct GalleryDetailView: View {
                 }
             }
         }
+    }
+
+    private func submitRootReply(text: String) async throws {
+        let parent = "t3_\(post.id)"
+        _ = try await redditAPI.submitComment(parentFullname: parent, text: text)
     }
 }
 

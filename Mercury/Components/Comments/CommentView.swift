@@ -13,6 +13,7 @@ struct CommentView: View {
     let post: RedditPost
     let isCollapsed: Bool
     let onCollapseToggle: () -> Void
+    let onReplyPosted: (RedditComment) -> Void
     
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
@@ -21,12 +22,15 @@ struct CommentView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}) {
+    @State private var showingReply = false
+
+    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
         self.depth = depth
         self.post = post
         self.isCollapsed = isCollapsed
         self.onCollapseToggle = onCollapseToggle
+        self.onReplyPosted = onReplyPosted
         self._voteState = State(initialValue: comment.currentVoteState)
         self._displayScore = State(initialValue: comment.displayScore)
     }
@@ -145,44 +149,41 @@ struct CommentView: View {
     }
     
     private var commentActions: some View {
-        HStack(spacing: 16) {
-            // Vote controls - compact and clean like post voting
-            HStack(spacing: 8) {
-                Button {
+        HStack(spacing: 8) {
+            // Mini vote controls styled after post voting
+            HStack(spacing: 4) {
+                VoteButton(
+                    direction: .up,
+                    isActive: voteState == .upvoted,
+                    size: .small,
+                    colorScheme: .light,
+                    disabled: isVoting || !comment.canVote
+                ) {
                     handleVote(.upvoted)
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.callout)
-                        .foregroundStyle(voteState == .upvoted ? .orange : .secondary)
                 }
-                .buttonStyle(.plain)
-                .disabled(isVoting || !comment.canVote)
-                .sensoryFeedback(.selection, trigger: voteState)
-                
-                Button {
+                VoteButton(
+                    direction: .down,
+                    isActive: voteState == .downvoted,
+                    size: .small,
+                    colorScheme: .light,
+                    disabled: isVoting || !comment.canVote
+                ) {
                     handleVote(.downvoted)
-                } label: {
-                    Image(systemName: "arrow.down")
-                        .font(.callout)
-                        .foregroundStyle(voteState == .downvoted ? .blue : .secondary)
                 }
-                .buttonStyle(.plain)
-                .disabled(isVoting || !comment.canVote)
-                .sensoryFeedback(.selection, trigger: voteState)
             }
-            
-            // Action menu
+
+            Button(action: { showingReply = true }) {
+                Image(systemName: "arrowshape.turn.up.left")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.plain)
+
+            // Action menu (save only)
             Menu {
-                Button(action: {
-                    // TODO: Implement reply functionality
-                }) {
-                    Label("Reply", systemImage: "arrowshape.turn.up.left")
-                }
-                
-                Button(action: {
-                    handleSave()
-                }) {
-                    Label(comment.saved ? "Unsave" : "Save", 
+                Button(action: { handleSave() }) {
+                    Label(comment.saved ? "Unsave" : "Save",
                           systemImage: comment.saved ? "bookmark.fill" : "bookmark")
                 }
             } label: {
@@ -192,10 +193,19 @@ struct CommentView: View {
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
-            
+
             Spacer()
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
+        .sheet(isPresented: $showingReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                onCancel: { showingReply = false },
+                onSubmit: { text in
+                    try await postReply(text: text)
+                }
+            )
+        }
     }
     
     // MARK: - Helper Properties
@@ -314,6 +324,14 @@ struct CommentView: View {
             } catch {
                 print("Failed to save/unsave comment: \(error)")
             }
+        }
+    }
+
+    private func postReply(text: String) async throws {
+        let parent = "t1_\(comment.id)"
+        let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        await MainActor.run {
+            onReplyPosted(created)
         }
     }
 }

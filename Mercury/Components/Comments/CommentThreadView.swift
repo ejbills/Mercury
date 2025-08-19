@@ -48,6 +48,9 @@ struct CommentThreadView: View {
                                 } else {
                                     collapsedComments.insert(flatComment.comment.id)
                                 }
+                            },
+                            onReplyPosted: { newComment in
+                                insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
                             }
                         )
                         .padding(.leading, CGFloat(flatComment.depth * 24))
@@ -261,7 +264,7 @@ struct CommentThreadView: View {
         
         return false
     }
-    
+
     // MARK: - Helper Functions
     
     private func depthColor(for depth: Int) -> Color {
@@ -271,6 +274,28 @@ struct CommentThreadView: View {
         }
         let colorIndex = (depth - 1) % threadColors.count
         return threadColors[colorIndex].opacity(0.8)
+    }
+
+    // MARK: - Insert New Reply
+
+    private func insertReply(_ reply: RedditComment, underParentId parentId: String, parentDepth: Int) {
+        guard let parentIndex = flatItems.firstIndex(where: { item in
+            if case .comment(let c) = item { return c.comment.id == parentId }
+            return false
+        }) else {
+            return
+        }
+
+        let newFlat = FlatComment(
+            id: reply.id,
+            comment: reply,
+            depth: parentDepth + 1,
+            parentId: parentId
+        )
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            flatItems.insert(.comment(newFlat), at: parentIndex + 1)
+        }
     }
 }
 

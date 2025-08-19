@@ -153,3 +153,10 @@ class CommentThreadManager {
     }
 
 }
+
+extension CommentThreadManager {
+    func addRootComment(_ comment: RedditComment) {
+        // Ensure depth is 0 for root-level insertion (server should return depth 0)
+        commentThreads.insert(CommentThread(parentComment: comment), at: 0)
+    }
+}
