@@ -12,23 +12,34 @@ struct Card<Content: View>: View {
     let content: () -> Content
     let style: CardStyle
     let interactionMode: CardInteractionMode
+    let highlightColor: Color?
     
     @State private var isPressed = false
     
     init(
         style: CardStyle = .default,
         interactionMode: CardInteractionMode = .none,
+        highlightColor: Color? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.content = content
         self.style = style
         self.interactionMode = interactionMode
+        self.highlightColor = highlightColor
     }
     
     var body: some View {
         content()
             .padding(style.padding)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
+            .background(alignment: .center) {
+                if let highlightColor {
+                    RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                        .fill(highlightColor)
+                } else {
+                    RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                        .fill(.thinMaterial)
+                }
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
                     .strokeBorder(
@@ -129,7 +140,8 @@ struct CardStyle {
             backgroundColor: Color.clear,
             borderColor: .gray.opacity(0.3),
             borderWidth: 0.5,
-            accentColor: depth > 0 ? accentColor : nil,
+            // Show accent if provided (OP stripe), regardless of depth
+            accentColor: accentColor,
             accentWidth: 4,
             accentPosition: .leading
         )
@@ -146,7 +158,6 @@ enum CardInteractionMode {
 
 extension Card {
     func onTap(_ action: @escaping () -> Void) -> Card<Content> {
-        Card(style: style, interactionMode: .tappable(action), content: content)
+        Card(style: style, interactionMode: .tappable(action), highlightColor: highlightColor, content: content)
     }
 }
-

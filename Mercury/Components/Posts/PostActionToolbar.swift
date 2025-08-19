@@ -13,6 +13,7 @@ struct PostActionToolbar: View {
     @Binding var displayScore: Int
     @Binding var isVoting: Bool
     let onVote: (RedditPost.VoteState) -> Void
+    let onReply: (() -> Void)?
     let onShare: () -> Void
     let onSave: () -> Void
     let onCopyLink: (() -> Void)?
@@ -39,6 +40,11 @@ struct PostActionToolbar: View {
             // More menu (only for compact size)
             if size == .compact {
                 Menu {
+                    if let onReply = onReply, !post.locked, !post.archived {
+                        Button(action: onReply) {
+                            Label("Reply", systemImage: "arrowshape.turn.up.left")
+                        }
+                    }
                     if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
                         Button(action: onDownload) {
                             let downloadLabel = switch post.postType {
@@ -91,79 +97,76 @@ struct PostActionToolbar: View {
                     .foregroundStyle(secondaryColor)
                 }
             }
+
+            // No inline Reply pill; Reply lives in the menu only
             
             if size == .large {
                 Spacer()
                 
-                // Large toolbar actions on the right
-                Button(action: onSave) {
-                    VStack(spacing: 4) {
+                // Large toolbar actions on the right (icon-only)
+                HStack(spacing: 8) {
+                    if let onReply = onReply, !post.locked, !post.archived {
+                        Button(action: onReply) {
+                            Image(systemName: "arrowshape.turn.up.left")
+                                .font(.title2)
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(secondaryColor)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: onSave) {
                         Image(systemName: post.saved ? "bookmark.fill" : "bookmark")
                             .font(.title2)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(post.saved ? accentColor : secondaryColor)
-                        
-                        Text(post.saved ? "Saved" : "Save")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(post.saved ? accentColor : secondaryColor)
+                            .contentShape(Rectangle())
                     }
-                }
-                .buttonStyle(.plain)
-                
-                Button(action: onShare) {
-                    VStack(spacing: 4) {
+                    .buttonStyle(.plain)
+
+                    Button(action: onShare) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.title2)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(secondaryColor)
-                        
-                        Text("Share")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(secondaryColor)
+                            .contentShape(Rectangle())
                     }
-                }
-                .buttonStyle(.plain)
-                
-                Menu {
-                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
-                        Button(action: onDownload) {
-                            let downloadLabel = switch post.postType {
-                            case .video: "Download Video"
-                            case .gif: "Download GIF"
-                            case .image: "Download Image"
-                            case .gallery: "Download Gallery"
-                            default: "Download"
+                    .buttonStyle(.plain)
+
+                    Menu {
+                        if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
+                            Button(action: onDownload) {
+                                let downloadLabel = switch post.postType {
+                                case .video: "Download Video"
+                                case .gif: "Download GIF"
+                                case .image: "Download Image"
+                                case .gallery: "Download Gallery"
+                                default: "Download"
+                                }
+                                Label(downloadLabel, systemImage: "arrow.down.circle")
                             }
-                            Label(downloadLabel, systemImage: "arrow.down.circle")
                         }
-                    }
-                    if let onCopyLink = onCopyLink {
-                        Button(action: onCopyLink) {
-                            Label("Copy Link", systemImage: "link")
+                        if let onCopyLink = onCopyLink {
+                            Button(action: onCopyLink) {
+                                Label("Copy Link", systemImage: "link")
+                            }
                         }
-                    }
-                    
-                    if let urlString = post.url, !urlString.isEmpty, let onOpenOriginal = onOpenOriginal {
-                        Button(action: onOpenOriginal) {
-                            Label("Open Original", systemImage: "safari")
+                        
+                        if let urlString = post.url, !urlString.isEmpty, let onOpenOriginal = onOpenOriginal {
+                            Button(action: onOpenOriginal) {
+                                Label("Open Original", systemImage: "safari")
+                            }
                         }
-                    }
-                } label: {
-                    VStack(spacing: 4) {
+                    } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.title2)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(secondaryColor)
-                        
-                        Text("More")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(secondaryColor)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             } else {
                 Spacer()
                 
@@ -200,6 +203,7 @@ struct PostActionToolbar: View {
             displayScore: .constant(42),
             isVoting: .constant(false),
             onVote: { _ in },
+            onReply: {},
             onShare: {},
             onSave: {},
             onCopyLink: {},
@@ -216,6 +220,7 @@ struct PostActionToolbar: View {
             displayScore: .constant(1205),
             isVoting: .constant(false),
             onVote: { _ in },
+            onReply: {},
             onShare: {},
             onSave: {},
             onCopyLink: nil,

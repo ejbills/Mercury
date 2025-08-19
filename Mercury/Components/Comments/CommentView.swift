@@ -13,6 +13,7 @@ struct CommentView: View {
     let post: RedditPost
     let isCollapsed: Bool
     let onCollapseToggle: () -> Void
+    let onReplyPosted: (RedditComment) -> Void
     
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
@@ -21,18 +22,27 @@ struct CommentView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}) {
+    @State private var showingReply = false
+    @State private var showingDeleteConfirm = false
+    @State private var isDeleting = false
+    @State private var wasDeleted = false
+
+    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
         self.depth = depth
         self.post = post
         self.isCollapsed = isCollapsed
         self.onCollapseToggle = onCollapseToggle
+        self.onReplyPosted = onReplyPosted
         self._voteState = State(initialValue: comment.currentVoteState)
         self._displayScore = State(initialValue: comment.displayScore)
     }
     
     var body: some View {
-        Card(style: .comment(depth: depth, accentColor: depth > 0 ? depthColor : nil)) {
+        Card(
+            style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
+            highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
+        ) {
             VStack(alignment: .leading, spacing: 8) {
                 commentHeader
                 
@@ -42,11 +52,6 @@ struct CommentView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                onCollapseToggle()
-            }
         }
     }
     
@@ -80,15 +85,7 @@ struct CommentView: View {
                                 .background(.blue, in: Capsule())
                         }
                         
-                        if let distinguished = comment.distinguished {
-                            Text(distinguished.uppercased())
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(.green, in: Capsule())
-                        }
+                        // Moderator badge removed; moderator username is styled green via authorColor
                     }
                 }
             }
@@ -125,12 +122,18 @@ struct CommentView: View {
                 }
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                onCollapseToggle()
+            }
+        }
     }
     
     private var commentBody: some View {
         Group {
-            if comment.body == "[deleted]" || comment.body == "[removed]" {
-                Text(comment.body)
+            if wasDeleted || comment.body == "[deleted]" || comment.body == "[removed]" {
+                Text("[deleted]")
                     .font(.subheadline)
                     .italic()
                     .foregroundStyle(.tertiary)
@@ -145,45 +148,47 @@ struct CommentView: View {
     }
     
     private var commentActions: some View {
-        HStack(spacing: 16) {
-            // Vote controls - compact and clean like post voting
-            HStack(spacing: 8) {
-                Button {
+        HStack(spacing: 8) {
+            // Mini vote controls styled after post voting
+            HStack(spacing: 4) {
+                VoteButton(
+                    direction: .up,
+                    isActive: voteState == .upvoted,
+                    size: .small,
+                    colorScheme: .light,
+                    disabled: isVoting || !comment.canVote
+                ) {
                     handleVote(.upvoted)
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.callout)
-                        .foregroundStyle(voteState == .upvoted ? .orange : .secondary)
                 }
-                .buttonStyle(.plain)
-                .disabled(isVoting || !comment.canVote)
-                .sensoryFeedback(.selection, trigger: voteState)
-                
-                Button {
+                VoteButton(
+                    direction: .down,
+                    isActive: voteState == .downvoted,
+                    size: .small,
+                    colorScheme: .light,
+                    disabled: isVoting || !comment.canVote
+                ) {
                     handleVote(.downvoted)
-                } label: {
-                    Image(systemName: "arrow.down")
-                        .font(.callout)
-                        .foregroundStyle(voteState == .downvoted ? .blue : .secondary)
                 }
-                .buttonStyle(.plain)
-                .disabled(isVoting || !comment.canVote)
-                .sensoryFeedback(.selection, trigger: voteState)
             }
-            
-            // Action menu
+
+            Button(action: { showingReply = true }) {
+                Image(systemName: "arrowshape.turn.up.left")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.plain)
+
+            // Action menu (save, delete)
             Menu {
-                Button(action: {
-                    // TODO: Implement reply functionality
-                }) {
-                    Label("Reply", systemImage: "arrowshape.turn.up.left")
-                }
-                
-                Button(action: {
-                    handleSave()
-                }) {
-                    Label(comment.saved ? "Unsave" : "Save", 
+                Button(action: { handleSave() }) {
+                    Label(comment.saved ? "Unsave" : "Save",
                           systemImage: comment.saved ? "bookmark.fill" : "bookmark")
+                }
+                if canDeleteComment {
+                    Button(role: .destructive, action: { showingDeleteConfirm = true }) {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -192,10 +197,27 @@ struct CommentView: View {
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
-            
+
             Spacer()
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
+        .sheet(isPresented: $showingReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                onCancel: { showingReply = false },
+                onSubmit: { text in
+                    try await postReply(text: text)
+                }
+            )
+        }
+        .alert("Delete Comment?", isPresented: $showingDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                Task { await deleteComment() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This cannot be undone.")
+        }
     }
     
     // MARK: - Helper Properties
@@ -213,7 +235,7 @@ struct CommentView: View {
         if isDeletedUser {
             return .secondary
         } else if comment.isSubmitter {
-            return .blue
+            return .accentColor
         } else if comment.distinguished != nil {
             return .green
         } else {
@@ -222,7 +244,7 @@ struct CommentView: View {
     }
     
     private var isDeletedUser: Bool {
-        return comment.author == "[deleted]" || comment.author == "deleted"
+        return wasDeleted || comment.author == "[deleted]" || comment.author == "deleted"
     }
     
     private var scoreText: String {
@@ -314,6 +336,35 @@ struct CommentView: View {
             } catch {
                 print("Failed to save/unsave comment: \(error)")
             }
+        }
+    }
+
+    private var canDeleteComment: Bool {
+        if let me = redditAPI.userInfo?.name {
+            return me.caseInsensitiveCompare(comment.author) == .orderedSame
+        }
+        return false
+    }
+
+    @MainActor
+    private func deleteComment() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        do {
+            try await redditAPI.deleteComment(commentId: comment.id)
+            wasDeleted = true
+            isDeleting = false
+        } catch {
+            isDeleting = false
+            print("Failed to delete comment: \(error)")
+        }
+    }
+
+    private func postReply(text: String) async throws {
+        let parent = "t1_\(comment.id)"
+        let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        await MainActor.run {
+            onReplyPosted(created)
         }
     }
 }

@@ -29,23 +29,15 @@ struct VotingCluster: View {
     var body: some View {
         HStack(spacing: size == .large ? 12 : 8) {
             // Upvote button
-            Button {
+            VoteButton(
+                direction: .up,
+                isActive: voteState == .upvoted,
+                size: size == .large ? .large : .medium,
+                colorScheme: colorScheme == .dark ? .dark : .light,
+                disabled: isVoting || !post.canVote
+            ) {
                 onVote(voteState == .upvoted ? .neutral : .upvoted)
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(size == .large ? .title2 : .callout)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(voteState == .upvoted ? upvoteActiveColor : inactiveColor)
-                    .frame(width: buttonSize, height: buttonSize)
-                    .background(voteState == .upvoted ? upvoteBackgroundColor : Color.clear, in: RoundedRectangle(cornerRadius: cornerRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(voteState == .upvoted ? upvoteBackgroundColor : strokeColor, lineWidth: 1)
-                    )
             }
-            .buttonStyle(.plain)
-            .disabled(isVoting || !post.canVote)
-            .sensoryFeedback(.selection, trigger: voteState)
             
             // Score display
             VStack(spacing: 2) {
@@ -63,35 +55,19 @@ struct VotingCluster: View {
             .frame(minWidth: 50)
             
             // Downvote button
-            Button {
+            VoteButton(
+                direction: .down,
+                isActive: voteState == .downvoted,
+                size: size == .large ? .large : .medium,
+                colorScheme: colorScheme == .dark ? .dark : .light,
+                disabled: isVoting || !post.canVote
+            ) {
                 onVote(voteState == .downvoted ? .neutral : .downvoted)
-            } label: {
-                Image(systemName: "arrow.down")
-                    .font(size == .large ? .title2 : .callout)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(voteState == .downvoted ? downvoteActiveColor : inactiveColor)
-                    .frame(width: buttonSize, height: buttonSize)
-                    .background(voteState == .downvoted ? downvoteBackgroundColor : Color.clear, in: RoundedRectangle(cornerRadius: cornerRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(voteState == .downvoted ? downvoteBackgroundColor : strokeColor, lineWidth: 1)
-                    )
             }
-            .buttonStyle(.plain)
-            .disabled(isVoting || !post.canVote)
-            .sensoryFeedback(.selection, trigger: voteState)
         }
     }
     
     // MARK: - Computed Properties
-    
-    private var buttonSize: CGFloat {
-        size == .large ? 44 : 32
-    }
-    
-    private var cornerRadius: CGFloat {
-        size == .large ? 12 : 8
-    }
     
     private var scoreText: String {
         let score = max(0, displayScore)
@@ -111,32 +87,8 @@ struct VotingCluster: View {
         }
     }
     
-    private var upvoteActiveColor: Color {
-        colorScheme == .dark ? .white : .white
-    }
-    
-    private var downvoteActiveColor: Color {
-        colorScheme == .dark ? .white : .white
-    }
-    
-    private var inactiveColor: Color {
-        colorScheme == .dark ? .white : .secondary
-    }
-    
     private var secondaryTextColor: Color {
         colorScheme == .dark ? .white.opacity(0.7) : .secondary
-    }
-    
-    private var upvoteBackgroundColor: Color {
-        .orange
-    }
-    
-    private var downvoteBackgroundColor: Color {
-        .blue
-    }
-    
-    private var strokeColor: Color {
-        colorScheme == .dark ? .white.opacity(0.3) : .secondary.opacity(0.3)
     }
 }
 
