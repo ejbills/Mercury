@@ -27,7 +27,10 @@ struct PostCommentsView: View {
                     namespace: mediaNamespace, 
                     selectedPost: .constant(nil),
                     showLargeToolbar: true,
-                    showFullText: true
+                    showFullText: true,
+                    onRootReplyPosted: { newComment in
+                        threadManager.addRootComment(newComment)
+                    }
                 )
                 commentsSection
             }

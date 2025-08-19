@@ -29,6 +29,7 @@ struct MediaDetailView: View {
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
     @State private var showShareSheet = false
+    @State private var showingPostReply = false
 
     init(post: RedditPost, namespace: Namespace.ID) {
         self.post = post
@@ -112,6 +113,7 @@ struct MediaDetailView: View {
                 displayScore: $displayScore,
                 isVoting: $isVoting,
                 onVote: handleVote,
+                onReply: { showingPostReply = true },
                 onShare: handleShare,
                 onSave: handleSave,
                 onCopyLink: nil,
@@ -136,10 +138,24 @@ struct MediaDetailView: View {
         .sheet(isPresented: $showShareSheet) {
             MediaShareSheet(post: post, mediaURL: shareItem)
         }
+        .sheet(isPresented: $showingPostReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                onCancel: { showingPostReply = false },
+                onSubmit: { text in
+                    try await submitRootReply(text: text)
+                }
+            )
+        }
     }
     
     private var mediaId: String {
         "\(post.id)-\(post.postType.displayName.lowercased())"
+    }
+
+    private func submitRootReply(text: String) async throws {
+        let parent = "t3_\(post.id)"
+        _ = try await redditAPI.submitComment(parentFullname: parent, text: text)
     }
     
     @ViewBuilder

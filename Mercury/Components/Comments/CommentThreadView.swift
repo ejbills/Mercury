@@ -16,6 +16,7 @@ struct CommentThreadView: View {
     @State private var flatItems: [FlatCommentItem] = []
     @State private var loadingMoreIds: Set<String> = []
     @State private var collapsedComments: Set<String> = []
+    @State private var itemVisibility: [Bool] = []
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -28,66 +29,101 @@ struct CommentThreadView: View {
         // Initialize flat structure from all comments
         let initialFlatItems = Self.flattenAllComments(comments: comments)
         self._flatItems = State(initialValue: initialFlatItems)
+        // Collapse stickied comments by default (top-level input only contains roots)
+        let initialCollapsed = Set(comments.filter { $0.stickied }.map { $0.id })
+        self._collapsedComments = State(initialValue: initialCollapsed)
     }
     
     var body: some View {
         LazyVStack(spacing: 0) {
-            ForEach(Array(flatItems.enumerated()), id: \.element.id) { index, item in
-                
-                switch item {
-                case .comment(let flatComment):
-                    if shouldShowComment(flatComment) {
-                        CommentView(
-                            comment: flatComment.comment,
-                            depth: flatComment.depth,
-                            post: post,
-                            isCollapsed: collapsedComments.contains(flatComment.comment.id),
-                            onCollapseToggle: {
-                                if collapsedComments.contains(flatComment.comment.id) {
-                                    collapsedComments.remove(flatComment.comment.id)
-                                } else {
-                                    collapsedComments.insert(flatComment.comment.id)
-                                }
-                            }
-                        )
-                        .padding(.leading, CGFloat(flatComment.depth * 24))
-                        .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
-                        .padding(.vertical, 4)
-                        .modifier(RootCommentWidthModifier(isRootComment: flatComment.depth == 0))
-                    }
-                    
-                case .loadMore(let flatMoreComments):
-                    if shouldShowLoadMore(flatMoreComments) {
-                        LoadMoreCommentsView(
-                            moreComments: flatMoreComments.moreComments,
-                            post: post,
-                            sort: sort,
-                            isLoading: loadingMoreIds.contains(flatMoreComments.id),
-                            onStartLoad: {
-                                loadingMoreIds.insert(flatMoreComments.id)
-                            },
-                            onLoadMore: { newComments in
-                                loadingMoreIds.remove(flatMoreComments.id)
-                                injectCommentsIntoFlatArray(newComments, replacingMoreId: flatMoreComments.id)
-                            },
-                            onError: {
-                                loadingMoreIds.remove(flatMoreComments.id)
-                            },
-                            depthColor: depthColor(for: flatMoreComments.depth)
-                        )
-                        .padding(.leading, CGFloat(flatMoreComments.depth * 24))
-                        .padding(.horizontal, flatMoreComments.depth == 0 ? 0 : 8)
-                        .padding(.vertical, 4)
-                        .modifier(RootCommentWidthModifier(isRootComment: flatMoreComments.depth == 0))
-                    }
-                }
+            ForEach(Array(flatItems.enumerated()), id: \.element.id) { index, _ in
+                row(at: index)
             }
         }
-        .onChange(of: comments) { oldComments, newComments in
-            guard oldComments.count != newComments.count else { return }
-            let rebuilt = Self.flattenAllComments(comments: newComments)
-                flatItems = rebuilt
-                    }
+        .onChange(of: topLevelCommentIDs) {
+            let rebuilt = Self.flattenAllComments(comments: comments)
+            flatItems = rebuilt
+            // Ensure newly present stickied comments start collapsed without overwriting user toggles
+            let stickyIds = comments.filter { $0.stickied }.map { $0.id }
+            collapsedComments.formUnion(stickyIds)
+            recomputeVisibility()
+        }
+        .onAppear {
+            recomputeVisibility()
+        }
+        .onChange(of: flatItemIDs) {
+            recomputeVisibility()
+        }
+        .onChange(of: collapsedComments) {
+            recomputeVisibility()
+        }
+    }
+
+    private var topLevelCommentIDs: [String] { comments.map { $0.id } }
+    private var flatItemIDs: [String] { flatItems.map { $0.id } }
+
+    // MARK: - Row Builder
+    
+    @ViewBuilder
+    private func row(at index: Int) -> some View {
+        if index >= 0 && index < flatItems.count {
+            let item = flatItems[index]
+            switch item {
+            case .comment(let flatComment):
+                if isIndexVisible(index) {
+                    CommentView(
+                        comment: flatComment.comment,
+                        depth: flatComment.depth,
+                        post: post,
+                        isCollapsed: collapsedComments.contains(flatComment.comment.id),
+                        onCollapseToggle: {
+                            if collapsedComments.contains(flatComment.comment.id) {
+                                collapsedComments.remove(flatComment.comment.id)
+                            } else {
+                                collapsedComments.insert(flatComment.comment.id)
+                            }
+                        },
+                        onReplyPosted: { newComment in
+                            insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
+                        }
+                    )
+                    .padding(.leading, CGFloat(flatComment.depth * 24))
+                    .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
+                    .padding(.vertical, 4)
+                    .modifier(RootCommentWidthModifier(isRootComment: flatComment.depth == 0))
+                } else {
+                    EmptyView()
+                }
+            case .loadMore(let flatMoreComments):
+                if isIndexVisible(index) {
+                    LoadMoreCommentsView(
+                        moreComments: flatMoreComments.moreComments,
+                        post: post,
+                        sort: sort,
+                        isLoading: loadingMoreIds.contains(flatMoreComments.id),
+                        onStartLoad: {
+                            loadingMoreIds.insert(flatMoreComments.id)
+                        },
+                        onLoadMore: { newComments in
+                            loadingMoreIds.remove(flatMoreComments.id)
+                            injectCommentsIntoFlatArray(newComments, replacingMoreId: flatMoreComments.id)
+                        },
+                        onError: {
+                            loadingMoreIds.remove(flatMoreComments.id)
+                        },
+                        depthColor: depthColor(for: flatMoreComments.depth)
+                    )
+                    .padding(.leading, CGFloat(flatMoreComments.depth * 24))
+                    .padding(.horizontal, flatMoreComments.depth == 0 ? 0 : 8)
+                    .padding(.vertical, 4)
+                    .modifier(RootCommentWidthModifier(isRootComment: flatMoreComments.depth == 0))
+                } else {
+                    EmptyView()
+                }
+            }
+        } else {
+            EmptyView()
+        }
     }
     
     // MARK: - Flat Array Management
@@ -175,8 +211,7 @@ struct CommentThreadView: View {
             }
         }
         
-        // Replace Load More with new comments
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.snappy(duration: 0.3)) {
             flatItems.remove(at: moreIndex)
             flatItems.insert(contentsOf: newFlatItems, at: moreIndex)
         }
@@ -184,84 +219,51 @@ struct CommentThreadView: View {
     
     // MARK: - Collapse Logic
     
-    private func shouldShowComment(_ flatComment: FlatComment) -> Bool {
-        // Always show root comments
-        if flatComment.depth == 0 {
-            return true
-        }
-        
-        // Check if any parent comment is collapsed
-        return !hasCollapsedParent(commentId: flatComment.comment.id, depth: flatComment.depth)
-    }
-    
-    private func shouldShowLoadMore(_ flatMoreComments: FlatMoreComments) -> Bool {
-        let more = flatMoreComments.moreComments
-        
-        if more.children.isEmpty && more.count == 0 {
-            return false
-        }
-        if more.name == "t1__" || more.rawId == "_" {
-            return false
-        }
-        if flatMoreComments.depth == 0 {
-            return true
-        }
-        
-        return !hasCollapsedParentForMore(moreComments: flatMoreComments)
-    }
-    
-    private func hasCollapsedParent(commentId: String, depth: Int) -> Bool {
-        guard depth > 0 else { return false }
-        
-        // Find the parent comment by looking for the comment at depth-1 that comes before this one
-        let currentIndex = flatItems.firstIndex { item in
-            if case .comment(let flatComment) = item, flatComment.comment.id == commentId {
-                return true
+    // Fast visibility computation using a single pass and a collapsed-ancestor stack
+    private func recomputeVisibility() {
+        var visibility = Array(repeating: true, count: flatItems.count)
+        var collapsedStack: [Bool] = [] // ancestors only; size == current depth
+        var collapsedCount = 0 // true entries in stack (collapsed ancestors)
+
+        for i in 0..<flatItems.count {
+            let depth = flatItems[i].depth
+
+            // Ensure stack represents exactly ancestors for this depth
+            while collapsedStack.count > depth {
+                if let removed = collapsedStack.popLast(), removed { collapsedCount -= 1 }
             }
-            return false
-        }
-        
-        guard let currentIndex = currentIndex else { return false }
-        
-        // Look backwards for parent at depth-1
-        for i in (0..<currentIndex).reversed() {
-            if case .comment(let flatComment) = flatItems[i], flatComment.depth == depth - 1 {
-                if collapsedComments.contains(flatComment.comment.id) {
-                    return true
+            while collapsedStack.count < depth {
+                collapsedStack.append(false)
+            }
+
+            // Determine base visibility for the item itself
+            var baseVisible = true
+            if case .loadMore(let flatMore) = flatItems[i] {
+                let more = flatMore.moreComments
+                if (more.children.isEmpty && more.count == 0) || more.name == "t1__" || more.rawId == "_" {
+                    baseVisible = false
                 }
-                // Continue checking parents recursively
-                return hasCollapsedParent(commentId: flatComment.comment.id, depth: flatComment.depth)
+            }
+
+            let hasCollapsedAncestor = collapsedCount > 0
+            visibility[i] = baseVisible && !hasCollapsedAncestor
+
+            // After evaluating current item, push current comment's collapse state for descendants
+            if case .comment(let flatComment) = flatItems[i] {
+                let isCollapsed = collapsedComments.contains(flatComment.comment.id)
+                collapsedStack.append(isCollapsed)
+                if isCollapsed { collapsedCount += 1 }
             }
         }
-        
-        return false
+
+        itemVisibility = visibility
     }
-    
-    private func hasCollapsedParentForMore(moreComments: FlatMoreComments) -> Bool {
-        guard moreComments.depth > 0 else { return false }
-        
-        let currentIndex = flatItems.firstIndex { item in
-            if case .loadMore(let flatMore) = item, flatMore.id == moreComments.id {
-                return true
-            }
-            return false
-        }
-        
-        guard let currentIndex = currentIndex else { return false }
-        
-        // Look backwards for parent at depth-1
-        for i in (0..<currentIndex).reversed() {
-            if case .comment(let flatComment) = flatItems[i], flatComment.depth == moreComments.depth - 1 {
-                if collapsedComments.contains(flatComment.comment.id) {
-                    return true
-                }
-                return hasCollapsedParent(commentId: flatComment.comment.id, depth: flatComment.depth)
-            }
-        }
-        
-        return false
+
+    private func isIndexVisible(_ index: Int) -> Bool {
+        guard index < itemVisibility.count else { return true }
+        return itemVisibility[index]
     }
-    
+
     // MARK: - Helper Functions
     
     private func depthColor(for depth: Int) -> Color {
@@ -271,6 +273,28 @@ struct CommentThreadView: View {
         }
         let colorIndex = (depth - 1) % threadColors.count
         return threadColors[colorIndex].opacity(0.8)
+    }
+
+    // MARK: - Insert New Reply
+
+    private func insertReply(_ reply: RedditComment, underParentId parentId: String, parentDepth: Int) {
+        guard let parentIndex = flatItems.firstIndex(where: { item in
+            if case .comment(let c) = item { return c.comment.id == parentId }
+            return false
+        }) else {
+            return
+        }
+
+        let newFlat = FlatComment(
+            id: reply.id,
+            comment: reply,
+            depth: parentDepth + 1,
+            parentId: parentId
+        )
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            flatItems.insert(.comment(newFlat), at: parentIndex + 1)
+        }
     }
 }
 
