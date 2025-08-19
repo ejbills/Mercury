@@ -210,13 +210,22 @@ struct CommentView: View {
                 }
             )
         }
-        .alert("Delete Comment?", isPresented: $showingDeleteConfirm) {
-            Button("Delete", role: .destructive) {
-                Task { await deleteComment() }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This cannot be undone.")
+        .sheet(isPresented: $showingDeleteConfirm) {
+            ConfirmSheet(
+                title: "Delete Comment?",
+                message: "This cannot be undone.",
+                confirmTitle: "Delete",
+                confirmRole: .destructive,
+                onConfirm: {
+                    Task { await deleteComment() }
+                    showingDeleteConfirm = false
+                },
+                onCancel: {
+                    showingDeleteConfirm = false
+                }
+            )
+            .presentationDetents([.fraction(0.25)])
+            .presentationDragIndicator(.visible)
         }
     }
     
