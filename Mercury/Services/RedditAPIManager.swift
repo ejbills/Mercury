@@ -149,4 +149,9 @@ class RedditAPIManager {
     func submitComment(parentFullname: String, text: String) async throws -> RedditComment {
         try await commentsService.submitComment(parentFullname: parentFullname, text: text)
     }
+
+    // Delete an existing comment (must be authored by the current user)
+    func deleteComment(commentId: String) async throws {
+        try await commentsService.deleteComment(commentId: commentId)
+    }
 }

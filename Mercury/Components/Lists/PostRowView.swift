@@ -365,7 +365,7 @@ struct PostRowView: View {
     @ViewBuilder
     private var textPostContent: some View {
         if let content = post.selftext, !content.isEmpty {
-            MarkdownRenderer(content: content, compactMode: !showFullText)
+            MarkdownRenderer(content: content, compactMode: !showFullText, showEmbeddedContent: showFullText)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
         }

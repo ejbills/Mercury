@@ -7,7 +7,9 @@
 
 import Foundation
 
-struct CommentThread {
+struct CommentThread: Identifiable {
+    // Stable UI identity separate from Reddit's comment id
+    let id = UUID()
     let parentComment: RedditComment
     init(parentComment: RedditComment) {
         self.parentComment = parentComment
@@ -156,7 +158,10 @@ class CommentThreadManager {
 
 extension CommentThreadManager {
     func addRootComment(_ comment: RedditComment) {
-        // Ensure depth is 0 for root-level insertion (server should return depth 0)
-        commentThreads.insert(CommentThread(parentComment: comment), at: 0)
+        // Insert a distinct thread object so it never reuses another comment's identity
+        // Keep internal list of all comments consistent as well
+        let newComment = comment // value copy for clarity
+        allComments.insert(newComment, at: 0)
+        commentThreads.insert(CommentThread(parentComment: newComment), at: 0)
     }
 }

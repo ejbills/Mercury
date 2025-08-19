@@ -104,13 +104,14 @@ struct PostActionToolbar: View {
                 Spacer()
                 
                 // Large toolbar actions on the right (icon-only)
-                HStack(spacing: 16) {
+                HStack(spacing: 8) {
                     if let onReply = onReply, !post.locked, !post.archived {
                         Button(action: onReply) {
                             Image(systemName: "arrowshape.turn.up.left")
                                 .font(.title2)
                                 .symbolRenderingMode(.hierarchical)
                                 .foregroundStyle(secondaryColor)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -120,6 +121,7 @@ struct PostActionToolbar: View {
                             .font(.title2)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(post.saved ? accentColor : secondaryColor)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
@@ -128,6 +130,7 @@ struct PostActionToolbar: View {
                             .font(.title2)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(secondaryColor)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
@@ -160,6 +163,7 @@ struct PostActionToolbar: View {
                             .font(.title2)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(secondaryColor)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

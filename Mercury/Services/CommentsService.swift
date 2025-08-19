@@ -213,6 +213,40 @@ class CommentsService: BaseRedditService {
         }
     }
 
+    func deleteComment(commentId: String) async throws {
+        try validateAccessToken()
+
+        guard let url = URL(string: "\(baseURL)/api/del") else {
+            throw APIError.parseError
+        }
+
+        var request = createPOSTRequest(url: url)
+
+        let parameters = [
+            "id": "t1_\(commentId)"
+        ]
+
+        let postData = parameters.map { "\($0.key)=\($0.value)" }
+            .joined(separator: "&")
+            .data(using: .utf8)
+
+        request.httpBody = postData
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+
+            try validateResponse(httpResponse)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
+
     // MARK: - Submit Comment
 
     /// Submits a comment or reply.
@@ -267,7 +301,6 @@ class CommentsService: BaseRedditService {
             guard let thing = apiResponse.json.data.things.first, thing.kind == "t1" else {
                 throw APIError.parseError
             }
-
             return thing.data
         } catch is URLError {
             throw APIError.networkError

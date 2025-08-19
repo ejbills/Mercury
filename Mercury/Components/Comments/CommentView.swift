@@ -23,6 +23,9 @@ struct CommentView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     
     @State private var showingReply = false
+    @State private var showingDeleteConfirm = false
+    @State private var isDeleting = false
+    @State private var wasDeleted = false
 
     init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
@@ -36,7 +39,10 @@ struct CommentView: View {
     }
     
     var body: some View {
-        Card(style: .comment(depth: depth, accentColor: depth > 0 ? depthColor : nil)) {
+        Card(
+            style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
+            highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
+        ) {
             VStack(alignment: .leading, spacing: 8) {
                 commentHeader
                 
@@ -46,11 +52,6 @@ struct CommentView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                onCollapseToggle()
-            }
         }
     }
     
@@ -84,15 +85,7 @@ struct CommentView: View {
                                 .background(.blue, in: Capsule())
                         }
                         
-                        if let distinguished = comment.distinguished {
-                            Text(distinguished.uppercased())
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(.green, in: Capsule())
-                        }
+                        // Moderator badge removed; moderator username is styled green via authorColor
                     }
                 }
             }
@@ -129,12 +122,18 @@ struct CommentView: View {
                 }
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                onCollapseToggle()
+            }
+        }
     }
     
     private var commentBody: some View {
         Group {
-            if comment.body == "[deleted]" || comment.body == "[removed]" {
-                Text(comment.body)
+            if wasDeleted || comment.body == "[deleted]" || comment.body == "[removed]" {
+                Text("[deleted]")
                     .font(.subheadline)
                     .italic()
                     .foregroundStyle(.tertiary)
@@ -180,11 +179,16 @@ struct CommentView: View {
             }
             .buttonStyle(.plain)
 
-            // Action menu (save only)
+            // Action menu (save, delete)
             Menu {
                 Button(action: { handleSave() }) {
                     Label(comment.saved ? "Unsave" : "Save",
                           systemImage: comment.saved ? "bookmark.fill" : "bookmark")
+                }
+                if canDeleteComment {
+                    Button(role: .destructive, action: { showingDeleteConfirm = true }) {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -206,6 +210,14 @@ struct CommentView: View {
                 }
             )
         }
+        .alert("Delete Comment?", isPresented: $showingDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                Task { await deleteComment() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This cannot be undone.")
+        }
     }
     
     // MARK: - Helper Properties
@@ -223,7 +235,7 @@ struct CommentView: View {
         if isDeletedUser {
             return .secondary
         } else if comment.isSubmitter {
-            return .blue
+            return .accentColor
         } else if comment.distinguished != nil {
             return .green
         } else {
@@ -232,7 +244,7 @@ struct CommentView: View {
     }
     
     private var isDeletedUser: Bool {
-        return comment.author == "[deleted]" || comment.author == "deleted"
+        return wasDeleted || comment.author == "[deleted]" || comment.author == "deleted"
     }
     
     private var scoreText: String {
@@ -324,6 +336,27 @@ struct CommentView: View {
             } catch {
                 print("Failed to save/unsave comment: \(error)")
             }
+        }
+    }
+
+    private var canDeleteComment: Bool {
+        if let me = redditAPI.userInfo?.name {
+            return me.caseInsensitiveCompare(comment.author) == .orderedSame
+        }
+        return false
+    }
+
+    @MainActor
+    private func deleteComment() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        do {
+            try await redditAPI.deleteComment(commentId: comment.id)
+            wasDeleted = true
+            isDeleting = false
+        } catch {
+            isDeleting = false
+            print("Failed to delete comment: \(error)")
         }
     }
 
