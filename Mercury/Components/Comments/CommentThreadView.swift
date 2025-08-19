@@ -10,6 +10,7 @@ import SwiftUI
 struct CommentThreadView: View {
     let comments: [RedditComment]
     let post: RedditPost
+    let sort: CommentSort
     
     // Unified flat state management for entire thread
     @State private var flatItems: [FlatCommentItem] = []
@@ -19,9 +20,10 @@ struct CommentThreadView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comments: [RedditComment], post: RedditPost) {
+    init(comments: [RedditComment], post: RedditPost, sort: CommentSort) {
         self.comments = comments
         self.post = post
+        self.sort = sort
         
         // Initialize flat structure from all comments
         let initialFlatItems = Self.flattenAllComments(comments: comments)
@@ -59,6 +61,7 @@ struct CommentThreadView: View {
                         LoadMoreCommentsView(
                             moreComments: flatMoreComments.moreComments,
                             post: post,
+                            sort: sort,
                             isLoading: loadingMoreIds.contains(flatMoreComments.id),
                             onStartLoad: {
                                 loadingMoreIds.insert(flatMoreComments.id)
@@ -80,13 +83,18 @@ struct CommentThreadView: View {
                 }
             }
         }
+        .onChange(of: comments) { oldComments, newComments in
+            guard oldComments.count != newComments.count else { return }
+            let rebuilt = Self.flattenAllComments(comments: newComments)
+                flatItems = rebuilt
+                    }
     }
     
     // MARK: - Flat Array Management
     
     private static func flattenAllComments(comments: [RedditComment]) -> [FlatCommentItem] {
         var items: [FlatCommentItem] = []
-        
+        // Flatten all comment trees (including nested MoreComments)
         for comment in comments {
             items.append(contentsOf: flattenCommentTree(comment: comment))
         }
@@ -142,28 +150,29 @@ struct CommentThreadView: View {
             return
         }
         
-        // Get parent info
+        // Get the MoreComments item being replaced
         let moreItem = flatItems[moreIndex]
-        let parentDepth = moreItem.depth - 1
+        let isRootLevel = moreItem.depth == 0
         
-        // Convert new comments to flat items
+        // Convert new comments to flat items using the complete tree structure
         var newFlatItems: [FlatCommentItem] = []
-        for comment in newComments {
-            var processedComment = comment
-            if processedComment.parentId == nil || processedComment.parentId?.isEmpty == true {
-                if comment.depth == parentDepth + 1 {
-                    // Set proper parent ID (simplified for now)
-                    processedComment = comment // Keep original for now
-                }
+        
+        if isRootLevel {
+            // For root-level, flatten each comment tree completely
+            for comment in newComments {
+                newFlatItems.append(contentsOf: Self.flattenCommentTree(comment: comment))
             }
-            
-            let flatComment = FlatComment(
-                id: processedComment.id,
-                comment: processedComment,
-                depth: processedComment.depth,
-                parentId: processedComment.parentId
-            )
-            newFlatItems.append(.comment(flatComment))
+        } else {
+            // For nested comments, just add as flat comments
+            for comment in newComments {
+                let flatComment = FlatComment(
+                    id: comment.id,
+                    comment: comment,
+                    depth: comment.depth,
+                    parentId: comment.parentId
+                )
+                newFlatItems.append(.comment(flatComment))
+            }
         }
         
         // Replace Load More with new comments
@@ -186,7 +195,14 @@ struct CommentThreadView: View {
     }
     
     private func shouldShowLoadMore(_ flatMoreComments: FlatMoreComments) -> Bool {
-        // Same logic as comments - check if parent is collapsed
+        let more = flatMoreComments.moreComments
+        
+        if more.children.isEmpty && more.count == 0 {
+            return false
+        }
+        if more.name == "t1__" || more.rawId == "_" {
+            return false
+        }
         if flatMoreComments.depth == 0 {
             return true
         }
@@ -306,8 +322,8 @@ struct RootCommentWidthModifier: ViewModifier {
         if isRootComment {
             content
                 .containerRelativeFrame(.horizontal) { width, _ in
-                    width - 32 // 16pt margin on each side, same as PostRowView
-                }
+                    width - 32
+                    }
         } else {
             content
         }

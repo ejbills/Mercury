@@ -22,12 +22,7 @@ struct SimpleImageView: View {
     @State private var isLoaded = false
     
     private var displayHeight: CGFloat {
-        guard let apiDimensions = apiDimensions else { return 300 } // Fallback
-        
-        let screenWidth = UIScreen.main.bounds.width - 24 // Account for padding
-        let aspectRatio = apiDimensions.width / apiDimensions.height
-        let calculatedHeight = screenWidth / aspectRatio
-        return min(calculatedHeight, 600) // Max height cap
+        MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
     }
     
     var body: some View {
@@ -140,12 +135,7 @@ struct SimpleVideoView: View {
     @State private var isLoaded = false
     
     private var displayHeight: CGFloat {
-        guard let apiDimensions = apiDimensions else { return 300 } // Fallback
-        
-        let screenWidth = UIScreen.main.bounds.width - 24 // Account for padding
-        let aspectRatio = apiDimensions.width / apiDimensions.height
-        let calculatedHeight = screenWidth / aspectRatio
-        return min(calculatedHeight, 600) // Max height cap
+        MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
     }
     
     var body: some View {

@@ -114,10 +114,8 @@ class SaveImageToPhotosActivity: UIActivity {
     
     @MainActor
     private func saveImageToPhotos() async {
-        // Request permission
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized else {
-            print("Photo library access denied")
             activityDidFinish(false)
             return
         }
@@ -133,7 +131,6 @@ class SaveImageToPhotosActivity: UIActivity {
                 // For regular images (jpg, png, etc.)
                 let imageData = try Data(contentsOf: fileURL)
                 guard let image = UIImage(data: imageData) else {
-                    print("Failed to create UIImage from data")
                     activityDidFinish(false)
                     return
                 }
@@ -143,10 +140,8 @@ class SaveImageToPhotosActivity: UIActivity {
                 }
             }
             
-            print("Successfully saved to Photos")
             activityDidFinish(true)
         } catch {
-            print("Failed to save image to Photos: \(error)")
             activityDidFinish(false)
         }
     }
@@ -184,7 +179,6 @@ class SaveVideoToPhotosActivity: UIActivity {
     
     @MainActor
     private func saveVideoToPhotos() async {
-        // Request permission
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized else {
             activityDidFinish(false)
@@ -197,7 +191,6 @@ class SaveVideoToPhotosActivity: UIActivity {
             }
             activityDidFinish(true)
         } catch {
-            print("Failed to save video to Photos: \(error)")
             activityDidFinish(false)
         }
     }
@@ -235,7 +228,6 @@ class SaveMultipleImagesToPhotosActivity: UIActivity {
     
     @MainActor
     private func saveImagesToPhotos() async {
-        // Request permission
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized else {
             activityDidFinish(false)

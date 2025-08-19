@@ -13,6 +13,7 @@
 		BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCC2E4E6C9000375C89 /* NukeUI */; };
 		BB157DD82E4E74A800375C89 /* SwiftyGif in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DD72E4E74A800375C89 /* SwiftyGif */; };
 		BB3917502E517BE800529397 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = BB39174F2E517BE800529397 /* Zoomable */; };
+		BB39177A2E51AFC600529397 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB3917792E51AFC600529397 /* MarkdownUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -32,9 +33,22 @@
 		BBD11B3C2E4E48D100827872 /* Mercury.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mercury.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BBCD99CD2E53AFA1007BB62F /* Exceptions for "Mercury" folder in "Mercury" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BBD11B3B2E4E48D100827872 /* Mercury */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BBD11B3E2E4E48D100827872 /* Mercury */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BBCD99CD2E53AFA1007BB62F /* Exceptions for "Mercury" folder in "Mercury" target */,
+			);
 			path = Mercury;
 			sourceTree = "<group>";
 		};
@@ -46,6 +60,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BB157DCB2E4E6C9000375C89 /* Nuke in Frameworks */,
+				BB39177A2E51AFC600529397 /* MarkdownUI in Frameworks */,
 				BB157DC02E4E59FC00375C89 /* Defaults in Frameworks */,
 				BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */,
 				BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */,
@@ -88,6 +103,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = BBD11B472E4E48D200827872 /* Build configuration list for PBXNativeTarget "Mercury" */;
 			buildPhases = (
+				BB3918CE2E52D07500529397 /* Generate Secrets.swift */,
 				BBD11B382E4E48D100827872 /* Sources */,
 				BBD11B392E4E48D100827872 /* Frameworks */,
 				BBD11B3A2E4E48D100827872 /* Resources */,
@@ -108,6 +124,7 @@
 				BB157DCC2E4E6C9000375C89 /* NukeUI */,
 				BB157DD72E4E74A800375C89 /* SwiftyGif */,
 				BB39174F2E517BE800529397 /* Zoomable */,
+				BB3917792E51AFC600529397 /* MarkdownUI */,
 			);
 			productName = Mercury;
 			productReference = BBD11B3C2E4E48D100827872 /* Mercury.app */;
@@ -142,6 +159,7 @@
 				BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */,
 				BB157DD62E4E74A800375C89 /* XCRemoteSwiftPackageReference "SwiftyGif" */,
 				BB39174E2E517BE800529397 /* XCRemoteSwiftPackageReference "Zoomable" */,
+				BB3917782E51AFC600529397 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBD11B3D2E4E48D100827872 /* Products */;
@@ -162,6 +180,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		BB3918CE2E52D07500529397 /* Generate Secrets.swift */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.env",
+			);
+			name = "Generate Secrets.swift";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Mercury/Generated/Secrets.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\n\n  set -e\n\n  ENV_FILE=\"$SRCROOT/.env\"\n  OUTPUT_FILE=\"$SRCROOT/Mercury/Generated/Secrets.swift\"\n\n  echo \"=== Generate Secrets Script ===\"\n  echo \"SRCROOT: $SRCROOT\"\n  echo \"ENV_FILE: $ENV_FILE\"\n  echo \"OUTPUT_FILE: $OUTPUT_FILE\"\n\n  # Create Generated directory if it doesn't exist\n  echo \"Creating directory: $(dirname \"$OUTPUT_FILE\")\"\n  mkdir -p \"$(dirname \"$OUTPUT_FILE\")\"\n\n  # Check if .env file exists\n  if [ ! -f \"$ENV_FILE\" ]; then\n      echo \"ERROR: .env file not found at $ENV_FILE\"\n      echo \"Creating empty Secrets.swift\"\n      echo \"// Generated file. Please do not delete, nor edit\" > \"$OUTPUT_FILE\"\n      echo \"\" >> \"$OUTPUT_FILE\"\n      echo \"enum Secrets {\" >> \"$OUTPUT_FILE\"\n      echo \"    static var giphyAPIKey: String { \\\"\\\" }\" >> \"$OUTPUT_FILE\"\n      echo \"}\" >> \"$OUTPUT_FILE\"\n      echo \"Created empty Secrets.swift successfully\"\n      exit 0\n  fi\n\n  echo \"Found .env file, parsing...\"\n\n  # Parse .env file and extract GIPHY_API_KEY\n  GIPHY_API_KEY=\"\"\n  while IFS= read -r line || [ -n \"$line\" ]; do\n      # Skip empty lines and comments\n      if [[ -z \"$line\" || \"$line\" =~ ^[[:space:]]*# ]]; then\n          continue\n      fi\n\n      # Extract GIPHY_API_KEY\n      if [[ \"$line\" =~ ^GIPHY_API_KEY[[:space:]]*=[[:space:]]*(.*) ]]; then\n          GIPHY_API_KEY=\"${BASH_REMATCH[1]}\"\n          # Remove quotes if present\n          GIPHY_API_KEY=\"${GIPHY_API_KEY%\\\"}\"\n          GIPHY_API_KEY=\"${GIPHY_API_KEY#\\\"}\"\n          GIPHY_API_KEY=\"${GIPHY_API_KEY%\\'}\"\n          GIPHY_API_KEY=\"${GIPHY_API_KEY#\\'}\"\n      fi\n  done < \"$ENV_FILE\"\n\n  echo \"Found GIPHY_API_KEY: [REDACTED]\"\n\n  # Generate Secrets.swift using echo commands instead of heredoc\n  echo \"Generating Secrets.swift...\"\n  echo \"// Generated file. Please do not delete, nor edit\" > \"$OUTPUT_FILE\"\n  echo \"\" >> \"$OUTPUT_FILE\"\n  echo \"enum Secrets {\" >> \"$OUTPUT_FILE\"\n  echo \"    static var giphyAPIKey: String { \\\"$GIPHY_API_KEY\\\" }\" >> \"$OUTPUT_FILE\"\n  echo \"}\" >> \"$OUTPUT_FILE\"\n\n  echo \"Generated Secrets.swift successfully\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		BBD11B382E4E48D100827872 /* Sources */ = {
@@ -305,6 +346,7 @@
 				DEVELOPMENT_TEAM = 2Q775S63Q3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Mercury/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mercury Client";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -343,6 +385,7 @@
 				DEVELOPMENT_TEAM = 2Q775S63Q3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Mercury/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mercury Client";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -427,6 +470,14 @@
 				kind = branch;
 			};
 		};
+		BB3917782E51AFC600529397 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -459,6 +510,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB39174E2E517BE800529397 /* XCRemoteSwiftPackageReference "Zoomable" */;
 			productName = Zoomable;
+		};
+		BB3917792E51AFC600529397 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB3917782E51AFC600529397 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

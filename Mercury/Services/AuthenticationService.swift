@@ -16,11 +16,14 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     var userInfo: RedditUser?
     var errorMessage: String?
     var accessToken: String?
+    var refreshToken: String?
+    var accessTokenExpiry: Date?
     
     private var clientId: String = ""
     private let redirectURI = "mercury://oauth"
     private var authSession: ASWebAuthenticationSession?
     private var cancellables = Set<AnyCancellable>()
+    private var tokenRefreshTimer: Timer?
     
     enum APIStatus {
         case unknown
@@ -51,16 +54,26 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     private func loadStoredCredentials() {
         self.clientId = Defaults[.clientId]
         self.accessToken = Defaults[.accessToken]
+        self.refreshToken = Defaults[.refreshToken]
+        self.accessTokenExpiry = Defaults[.accessTokenExpiry]
         self.userInfo = Defaults[.userInfo]
         
         if !clientId.isEmpty && accessToken != nil && userInfo != nil {
             self.apiStatus = .valid
+            // If expired already, try to refresh immediately; otherwise schedule
+            if isAccessTokenExpired(threshold: 0), refreshToken != nil {
+                Task { _ = await self.refreshAccessToken() }
+            } else {
+                scheduleTokenRefreshIfNeeded()
+            }
         }
     }
     
     private func saveCredentials() {
         Defaults[.clientId] = clientId
         Defaults[.accessToken] = accessToken
+        Defaults[.refreshToken] = refreshToken
+        Defaults[.accessTokenExpiry] = accessTokenExpiry
         Defaults[.userInfo] = userInfo
         Defaults[.isSetupComplete] = true
         Defaults[.lastLoginDate] = Date()
@@ -69,15 +82,21 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     func clearStoredCredentials() {
         Defaults[.clientId] = ""
         Defaults[.accessToken] = nil
+        Defaults[.refreshToken] = nil
+        Defaults[.accessTokenExpiry] = nil
         Defaults[.userInfo] = nil
         Defaults[.isSetupComplete] = false
         Defaults[.lastLoginDate] = nil
         
         self.clientId = ""
         self.accessToken = nil
+        self.refreshToken = nil
+        self.accessTokenExpiry = nil
         self.userInfo = nil
         self.apiStatus = .unknown
         self.errorMessage = nil
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = nil
     }
     
     var hasStoredCredentials: Bool {
@@ -97,7 +116,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
         
-        print("🔑 Starting OAuth flow with client ID: \(clientId)")
+        
         
         let state = UUID().uuidString
         // Full Reddit API permissions
@@ -119,7 +138,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
         
-        print("🌐 OAuth URL: \(authURL.absoluteString)")
+        
         
         self.apiStatus = .validating
         self.errorMessage = nil
@@ -204,6 +223,14 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
+                // Store refresh token if provided (first grant)
+                if let rt = tokenResponse.refreshToken {
+                    self.refreshToken = rt
+                }
+                // Compute expiry if provided
+                if let expiresIn = tokenResponse.expiresIn {
+                    self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
+                }
             }
             
             await fetchUserInfo()
@@ -248,6 +275,11 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
         
+        // If token appears expired, attempt refresh before the request
+        if isAccessTokenExpired(), let _ = refreshToken {
+            _ = await refreshAccessToken()
+        }
+        
         var request = URLRequest(url: url)
         request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
@@ -262,15 +294,23 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                 return
             }
             
-            guard httpResponse.statusCode == 200 else {
-                await MainActor.run {
-                    if httpResponse.statusCode == 401 {
+            if httpResponse.statusCode == 401 {
+                // Try one token refresh and retry once
+                let refreshed = await refreshAccessToken()
+                if refreshed {
+                    await fetchUserInfo()
+                    return
+                } else {
+                    await MainActor.run {
                         self.apiStatus = .invalid
                         self.errorMessage = "Access token expired or invalid"
-                    } else {
-                        self.apiStatus = .invalid
-                        self.errorMessage = "Server error (HTTP \(httpResponse.statusCode))"
                     }
+                    return
+                }
+            } else if httpResponse.statusCode != 200 {
+                await MainActor.run {
+                    self.apiStatus = .invalid
+                    self.errorMessage = "Server error (HTTP \(httpResponse.statusCode))"
                 }
                 return
             }
@@ -284,6 +324,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                 self.userInfo = user
                 self.apiStatus = .valid
                 self.saveCredentials()
+                self.scheduleTokenRefreshIfNeeded()
             }
             
         } catch {
@@ -293,17 +334,74 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             }
         }
     }
+
+    // MARK: - Token Refresh
+    private func isAccessTokenExpired(threshold: TimeInterval = 60) -> Bool {
+        guard let expiry = accessTokenExpiry else { return false }
+        return Date().addingTimeInterval(threshold) >= expiry
+    }
+    
+    private func scheduleTokenRefreshIfNeeded() {
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = nil
+        guard let expiry = accessTokenExpiry, refreshToken != nil else { return }
+        let interval = max(5, expiry.timeIntervalSinceNow - 60) // refresh 60s early, min 5s
+        tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { _ = await self?.refreshAccessToken() }
+        }
+    }
+    
+    @discardableResult
+    func refreshAccessToken() async -> Bool {
+        guard let refreshToken = refreshToken, !clientId.isEmpty else { return false }
+        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else { return false }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        let credentials = "\(clientId):".data(using: .utf8)!.base64EncodedString()
+        request.addValue("Basic \(credentials)", forHTTPHeaderField: "Authorization")
+        
+        let body = "grant_type=refresh_token&refresh_token=\(refreshToken)"
+        request.httpBody = body.data(using: .utf8)
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return false
+            }
+            let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+            await MainActor.run {
+                self.accessToken = tokenResponse.accessToken
+                if let newRT = tokenResponse.refreshToken { // Reddit may not return this on refresh
+                    self.refreshToken = newRT
+                }
+                if let expiresIn = tokenResponse.expiresIn {
+                    self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
+                }
+                self.saveCredentials()
+                self.scheduleTokenRefreshIfNeeded()
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
 }
 
 struct TokenResponse: Codable {
     let accessToken: String
     let tokenType: String
     let scope: String
+    let refreshToken: String?
+    let expiresIn: Int?
     
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
         case tokenType = "token_type"
         case scope
+        case refreshToken = "refresh_token"
+        case expiresIn = "expires_in"
     }
 }
 

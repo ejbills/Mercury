@@ -38,13 +38,12 @@ class UserService: BaseRedditService {
                     throw APIError.serverError(httpResponse.statusCode)
                 }
             }
-            
-            
+                        
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let userResponse = try decoder.decode(UserProfileResponse.self, from: data)
             return userResponse.data
-        } catch let decodingError as DecodingError {
+        } catch _ as DecodingError {
             throw APIError.parseError
         } catch _ as URLError {
             throw APIError.networkError
@@ -106,8 +105,7 @@ class UserService: BaseRedditService {
             } catch {
                 throw APIError.parseError
             }
-        } catch let urlError as URLError {
-            print(urlError)
+        } catch is URLError {
             throw APIError.networkError
         } catch {
             throw error

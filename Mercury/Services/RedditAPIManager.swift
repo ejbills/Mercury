@@ -125,8 +125,8 @@ class RedditAPIManager {
     
     // MARK: - Comments Methods (Delegated)
     
-    func fetchPostComments(postId: String, sort: CommentSort = .best) async throws -> [CommentResponse] {
-        try await commentsService.fetchPostComments(postId: postId, sort: sort)
+    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil) async throws -> [CommentResponse] {
+        try await commentsService.fetchPostComments(postId: postId, sort: sort, limit: limit, after: after)
     }
     
     func fetchMoreComments(postId: String, commentIds: [String], sort: CommentSort = .best) async throws -> [RedditComment] {
