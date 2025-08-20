@@ -2,7 +2,6 @@
 //  RedditPostFetchService.swift
 //  Mercury
 //
-//  Created by AI Assistant on 8/18/25.
 //
 
 import Foundation

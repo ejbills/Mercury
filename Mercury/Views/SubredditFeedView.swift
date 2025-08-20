@@ -20,6 +20,7 @@ struct SubredditFeedView: View {
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
     @State private var selectedPost: RedditPost?
+    @State private var videoHandoffState: VideoHandoffState?
     
     private let pageSize = 25
     
@@ -37,8 +38,15 @@ struct SubredditFeedView: View {
                             .padding(.top, 100)
                     } else {
                         ForEach(posts) { post in
-                            PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                                .id(post.id) // Important for scroll position tracking
+                            PostRowView(
+                                post: post, 
+                                namespace: mediaNamespace, 
+                                selectedPost: $selectedPost,
+                                onVideoHandoff: { handoffState in
+                                    videoHandoffState = handoffState
+                                }
+                            )
+                                .id(post.id)
                                 .onAppear {
                                     if post.id == posts.last?.id && hasMore && !isLoadingMore {
                                         Task {
@@ -72,7 +80,15 @@ struct SubredditFeedView: View {
         .navigationTitle(subredditDisplayName)
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $selectedPost) { post in
-            PostDetailRouter(post: post, namespace: mediaNamespace)
+            // Create a custom view that can reactively access the latest videoHandoffState
+            PostDetailContainer(
+                post: post,
+                namespace: mediaNamespace,
+                videoHandoffState: $videoHandoffState,
+                onDismiss: {
+                    selectedPost = nil
+                }
+            )
         }
         .refreshable {
             await refreshFeed()

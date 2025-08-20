@@ -10,7 +10,6 @@ import Foundation
 /// Base class providing common functionality for all Reddit services
 class BaseRedditService {
     let baseURL = "https://oauth.reddit.com"
-    let userAgent = "Mercury/1.0"
     
     weak var authService: AuthenticationService?
     
@@ -20,9 +19,7 @@ class BaseRedditService {
     
     /// Creates a URLRequest with common headers
     func createRequest(url: URL) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.addValue(userAgent, forHTTPHeaderField: "User-Agent")
-        
+        var request = URLRequest(url: url)        
         if let accessToken = authService?.accessToken {
             request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }

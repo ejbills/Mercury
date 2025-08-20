@@ -12,7 +12,7 @@ struct UserProfileView: View {
     let username: String
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
-
+    
     @State private var profile: UserProfile?
     @State private var posts: [RedditPost] = []
     @State private var comments: [RedditComment] = []
@@ -22,15 +22,16 @@ struct UserProfileView: View {
     @State private var isLoadingMorePosts = false
     @State private var isLoadingMoreComments = false
     @State private var errorMessage: String?
-    @State private var selectedSection: Section = .posts
-    @Namespace private var ns
-    @Namespace private var tabNs
+    @Namespace private var mediaNamespace
     @State private var selectedPost: RedditPost?
     @State private var showCompose = false
     @State private var commentPostMap: [String: RedditPost] = [:]
     @State private var commentsContextReady = false
-
-    enum Section: String, CaseIterable {
+    
+    @State private var videoHandoffState: VideoHandoffState?
+    @State private var selectedSection: ProfileSection = .posts
+    
+    enum ProfileSection: String, CaseIterable {
         case posts = "Posts"
         case comments = "Comments"
         case about = "About"
@@ -43,15 +44,15 @@ struct UserProfileView: View {
             }
         }
     }
-
+    
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 header
-                segmentControl
+                segmentPicker
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
-
+                
                 switch selectedSection {
                 case .posts:
                     postsList
@@ -67,7 +68,15 @@ struct UserProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await initialLoad() }
         .fullScreenCover(item: $selectedPost) { post in
-            MediaDetailView(post: post, namespace: ns)
+            MediaDetailView(
+                post: post,
+                namespace: mediaNamespace,
+                videoHandoffState: videoHandoffState,
+                onVideoHandoffReturn: { returnedState in
+                    videoHandoffState = returnedState
+                    selectedPost = nil
+                }
+            )
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -82,9 +91,9 @@ struct UserProfileView: View {
                 .environment(\.redditAPI, redditAPI)
         }
     }
-
+    
     // MARK: - Header
-
+    
     private var header: some View {
         ZStack(alignment: .bottomLeading) {
             LinearGradient(colors: [accentColor.opacity(0.35), accentColor.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -97,7 +106,7 @@ struct UserProfileView: View {
                     Circle().fill(accentColor.opacity(0.12)).frame(width: 220)
                         .offset(x: -60, y: 60)
                 }
-
+            
             HStack(alignment: .center, spacing: 16) {
                 avatar
                 VStack(alignment: .leading, spacing: 6) {
@@ -119,7 +128,7 @@ struct UserProfileView: View {
         .clipped()
         .overlay(Divider(), alignment: .bottom)
     }
-
+    
     private var avatar: some View {
         Group {
             if let url = profile?.profileIconURL {
@@ -139,7 +148,7 @@ struct UserProfileView: View {
         .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
         .shadow(color: accentColor.opacity(0.2), radius: 6, x: 0, y: 2)
     }
-
+    
     private func labelChip(system: String, text: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: system)
@@ -150,25 +159,25 @@ struct UserProfileView: View {
         .padding(.vertical, 6)
         .background(.ultraThinMaterial, in: Capsule())
     }
-
+    
     private func cakeDayText(_ createdUTC: Double) -> String {
         let date = Date(timeIntervalSince1970: createdUTC)
         let df = DateFormatter()
         df.dateStyle = .medium
         return df.string(from: date)
     }
-
+    
     private var initials: String { String(username.prefix(1)).uppercased() }
+    
     private var accentColor: Color {
         let colors: [Color] = [.orange, .pink, .purple, .blue, .teal, .mint, .indigo]
         return colors[abs(username.hashValue) % colors.count]
     }
-
-    // MARK: - Segments
-    private var segmentControl: some View {
+    
+    private var segmentPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(Section.allCases, id: \.self) { s in
+                ForEach(ProfileSection.allCases, id: \.self) { s in
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) { selectedSection = s }
                     }) {
@@ -187,18 +196,18 @@ struct UserProfileView: View {
                             if selectedSection == s {
                                 RoundedRectangle(cornerRadius: 20)
                                     .fill(.blue)
-                                    .matchedGeometryEffect(id: "selectedSectionTab", in: tabNs)
+                                    .matchedGeometryEffect(id: "selectedSectionTab", in: mediaNamespace)
                             }
                         }
                     }
                     .buttonStyle(.plain)
                 }
-                Spacer(minLength: 0)
             }
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
         }
     }
-
+    
+    
     // MARK: - Posts
     private var postsList: some View {
         Group {
@@ -211,7 +220,7 @@ struct UserProfileView: View {
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(posts) { post in
-                        PostRowView(post: post, namespace: ns, selectedPost: $selectedPost)
+                        PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                             .onAppear {
                                 if post.id == posts.last?.id { Task { await loadMorePostsIfNeeded() } }
                             }
@@ -223,7 +232,7 @@ struct UserProfileView: View {
             }
         }
     }
-
+    
     // MARK: - Comments
     private var commentsList: some View {
         Group {
@@ -257,7 +266,7 @@ struct UserProfileView: View {
             }
         }
     }
-
+    
     // MARK: - About
     private var aboutSection: some View {
         Group {
@@ -281,11 +290,11 @@ struct UserProfileView: View {
             }
         }
     }
-
+    
     private func sectionHeader(_ title: String) -> some View {
         Text(title).font(.headline)
     }
-
+    
     private func infoRow(label: String, value: String) -> some View {
         HStack {
             Text(label).foregroundStyle(.secondary)
@@ -296,7 +305,7 @@ struct UserProfileView: View {
         .padding(.vertical, 8)
         .overlay(Divider().offset(y: 16), alignment: .bottom)
     }
-
+    
     // MARK: - States
     private func loadingState(text: String) -> some View {
         VStack(spacing: 12) {
@@ -306,7 +315,7 @@ struct UserProfileView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
     }
-
+    
     private func emptyState(title: String, message: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: "tray").font(.system(size: 36, weight: .regular)).foregroundStyle(.secondary)
@@ -316,7 +325,7 @@ struct UserProfileView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
     }
-
+    
     private func errorState(message: String, retry: @escaping () -> Void) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
@@ -328,7 +337,7 @@ struct UserProfileView: View {
         .padding(.vertical, 48)
         .padding(.horizontal, 24)
     }
-
+    
     private func progressRow(text: String) -> some View {
         HStack(spacing: 8) {
             ProgressView().scaleEffect(0.8)
@@ -337,18 +346,18 @@ struct UserProfileView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
     }
-
+    
     // MARK: - Data
     private func initialLoad() async {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
-
+        
         do {
             async let p = redditAPI.fetchUserProfile(username: username)
             async let postsResp = redditAPI.fetchUserPosts(username: username, after: nil, limit: 25)
             async let commentsResp = redditAPI.fetchUserComments(username: username, after: nil, limit: 25)
-
+            
             let (profile, postsResponse, commentsResponse) = try await (p, postsResp, commentsResp)
             await MainActor.run {
                 self.profile = profile
@@ -365,7 +374,7 @@ struct UserProfileView: View {
             await MainActor.run { self.errorMessage = error.localizedDescription }
         }
     }
-
+    
     private func refreshAll() async {
         posts = []
         comments = []
@@ -373,7 +382,7 @@ struct UserProfileView: View {
         commentsAfter = nil
         await initialLoad()
     }
-
+    
     private func loadMorePostsIfNeeded() async {
         guard !isLoadingMorePosts, let after = postsAfter else { return }
         isLoadingMorePosts = true
@@ -388,7 +397,7 @@ struct UserProfileView: View {
             }
         } catch { }
     }
-
+    
     private func loadMoreCommentsIfNeeded() async {
         guard !isLoadingMoreComments, let after = commentsAfter else { return }
         isLoadingMoreComments = true
@@ -407,7 +416,7 @@ struct UserProfileView: View {
             }
         } catch { }
     }
-
+    
     private func ensurePostsForComments(_ comments: [RedditComment]) async {
         let needed = Set(comments.compactMap { linkKey(for: $0) }).filter { key in
             commentPostMap[key] == nil && commentPostMap[stripT3(key)] == nil
@@ -423,7 +432,7 @@ struct UserProfileView: View {
             await MainActor.run { self.commentPostMap = map }
         } catch { }
     }
-
+    
     private func linkKey(for comment: RedditComment) -> String? {
         if let linkId = comment.linkId, !linkId.isEmpty { return linkId }
         // Fallback: parse from permalink /r/<sub>/comments/<postId>/...
@@ -434,9 +443,9 @@ struct UserProfileView: View {
         }
         return nil
     }
-
+    
     private func stripT3(_ key: String) -> String { key.hasPrefix("t3_") ? String(key.dropFirst(3)) : key }
-
+    
     private func shareProfile() {
         let profileURL = URL(string: "https://reddit.com/u/\(username)")!
         let vc = UIActivityViewController(activityItems: [profileURL], applicationActivities: nil)
@@ -444,112 +453,105 @@ struct UserProfileView: View {
             window.rootViewController?.present(vc, animated: true)
         }
     }
-}
-
-// Lightweight fallback used while post context loads
-private struct CommentFallbackRow: View {
-    let comment: RedditComment
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(comment.subreddit.map { "r/\($0)" } ?? "Comment")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(comment.timeAgo).font(.caption).foregroundStyle(.secondary)
-            }
-            MarkdownRenderer(content: comment.body, compactMode: true, showEmbeddedContent: false)
-                .font(.body)
-            HStack { Spacer() }
-        }
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-// Compose PM sheet
-private struct ComposeMessageSheet: View {
-    let toUsername: String
-    @Binding var isPresented: Bool
-    @Environment(\.redditAPI) private var redditAPI
-    @State private var subject: String = ""
-    @State private var bodyText: String = ""
-    @State private var selectedRange: NSRange = .init(location: 0, length: 0)
-    @State private var isFirstResponder: Bool = true
-    @State private var isSending = false
-    @State private var error: String?
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
+    
+    // Lightweight fallback used while post context loads
+    private struct CommentFallbackRow: View {
+        let comment: RedditComment
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("To")
+                    Text(comment.subreddit.map { "r/\($0)" } ?? "Comment")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     Spacer()
-                    Text("u/\(toUsername)").foregroundStyle(.secondary)
+                    Text(comment.timeAgo).font(.caption).foregroundStyle(.secondary)
                 }
-                .font(.subheadline)
-                .padding(.horizontal)
-
-                HStack(spacing: 8) {
-                    Text("Subject")
-                    TextField("Subject", text: $subject)
-                        .textFieldStyle(.roundedBorder)
-                }
-                .padding(.horizontal)
-
-                ZStack(alignment: .topLeading) {
-                    MarkdownTextView(text: $bodyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
-                        .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
-                        .padding(.horizontal)
-                    if bodyText.isEmpty {
-                        Text("Message in Markdown…")
-                            .foregroundStyle(.secondary)
+                MarkdownRenderer(content: comment.body, compactMode: true, showEmbeddedContent: false)
+                    .font(.body)
+                HStack { Spacer() }
+            }
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+    
+    // Compose PM sheet
+    private struct ComposeMessageSheet: View {
+        let toUsername: String
+        @Binding var isPresented: Bool
+        @Environment(\.redditAPI) private var redditAPI
+        @State private var subject: String = ""
+        @State private var bodyText: String = ""
+        @State private var selectedRange: NSRange = .init(location: 0, length: 0)
+        @State private var isFirstResponder: Bool = true
+        @State private var isSending = false
+        @State private var error: String?
+        
+        var body: some View {
+            NavigationStack {
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("To")
+                        Spacer()
+                        Text("u/\(toUsername)").foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                    .padding(.horizontal)
+                    
+                    HStack(spacing: 8) {
+                        Text("Subject")
+                        TextField("Subject", text: $subject)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    .padding(.horizontal)
+                    
+                    ZStack(alignment: .topLeading) {
+                        MarkdownTextView(text: $bodyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
+                            .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
                             .padding(.horizontal)
-                            .padding(.top, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if bodyText.isEmpty {
+                            Text("Message in Markdown…")
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal)
+                                .padding(.top, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    Spacer()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { isPresented = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task { await send() }
+                        } label: {
+                            if isSending { ProgressView() } else { Text("Send") }
+                        }
+                        .disabled(isSending || subject.trimmingCharacters(in: .whitespaces).isEmpty || bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
-                Spacer()
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isPresented = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await send() }
-                    } label: {
-                        if isSending { ProgressView() } else { Text("Send") }
-                    }
-                    .disabled(isSending || subject.trimmingCharacters(in: .whitespaces).isEmpty || bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .navigationTitle("New Message")
+                .navigationBarTitleDisplayMode(.inline)
+                .alert("Couldn't send message", isPresented: .constant(error != nil)) {
+                    Button("OK") { error = nil }
+                } message: {
+                    Text(error ?? "Unknown error")
                 }
             }
-            .navigationTitle("New Message")
-            .navigationBarTitleDisplayMode(.inline)
-            .alert("Couldn't send message", isPresented: .constant(error != nil)) {
-                Button("OK") { error = nil }
-            } message: {
-                Text(error ?? "Unknown error")
+        }
+        
+        private func send() async {
+            guard !isSending else { return }
+            isSending = true
+            defer { isSending = false }
+            do {
+                try await redditAPI.composePrivateMessage(to: toUsername, subject: subject, text: bodyText)
+                await MainActor.run { isPresented = false }
+            } catch {
+                await MainActor.run { self.error = error.localizedDescription }
             }
         }
-    }
-
-    private func send() async {
-        guard !isSending else { return }
-        isSending = true
-        defer { isSending = false }
-        do {
-            try await redditAPI.composePrivateMessage(to: toUsername, subject: subject, text: bodyText)
-            await MainActor.run { isPresented = false }
-        } catch {
-            await MainActor.run { self.error = error.localizedDescription }
-        }
-    }
-}
-
-#Preview {
-    NavigationStack {
-        UserProfileView(username: "testuser")
-            .environment(\.redditAPI, RedditAPIManager())
     }
 }
