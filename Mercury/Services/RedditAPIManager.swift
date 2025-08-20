@@ -93,6 +93,10 @@ class RedditAPIManager {
         try await contentService.fetchPopularFeed(after: after, limit: limit)
     }
     
+    func fetchPostsByFullnames(_ fullnames: [String]) async throws -> [RedditPost] {
+        try await contentService.fetchPostsByFullnames(fullnames)
+    }
+    
     func voteOnPost(postId: String, voteDirection: VoteDirection) async throws {
         try await contentService.voteOnPost(postId: postId, voteDirection: voteDirection)
     }
@@ -113,6 +117,10 @@ class RedditAPIManager {
     
     func fetchUserPosts(username: String, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try await userService.fetchUserPosts(username: username, after: after, limit: limit)
+    }
+    
+    func fetchUserComments(username: String, after: String? = nil, limit: Int = 25) async throws -> UserCommentsResponse {
+        try await userService.fetchUserComments(username: username, after: after, limit: limit)
     }
     
     // MARK: - Search Methods (Delegated)
@@ -155,6 +163,11 @@ class RedditAPIManager {
     
     func replyToMessage(fullname: String, text: String) async throws {
         try await inboxService.replyToMessage(fullname: fullname, text: text)
+    }
+    
+    // Compose a new private message to a user
+    func composePrivateMessage(to username: String, subject: String, text: String) async throws {
+        try await inboxService.composeMessage(to: username, subject: subject, text: text)
     }
 
     // Submit a new comment or reply

@@ -11,6 +11,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
     let id: String
     let subreddit: String?
     let author: String
+    let authorFullname: String?
     let body: String
     let bodyHtml: String?
     let score: Int
@@ -39,6 +40,8 @@ struct RedditComment: Codable, Identifiable, Hashable {
     // Local state management
     var currentVoteState: VoteState = .neutral
     var displayScore: Int
+    // Enriched metadata (not from Reddit's listing JSON)
+    var authorIconURL: URL? = nil
     var isCollapsed: Bool = false
     
     enum VoteState {
@@ -52,6 +55,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
         case bodyHtml = "body_html"
         case createdUtc = "created_utc"
         case edited
+        case authorFullname = "author_fullname"
         case parentId = "parent_id"
         case linkId = "link_id"
         case isSubmitter = "is_submitter"
@@ -67,6 +71,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
         id = try container.decode(String.self, forKey: .id)
         subreddit = try container.decodeIfPresent(String.self, forKey: .subreddit)
         author = try container.decode(String.self, forKey: .author)
+        authorFullname = try container.decodeIfPresent(String.self, forKey: .authorFullname)
         body = try container.decode(String.self, forKey: .body)
         bodyHtml = try container.decodeIfPresent(String.self, forKey: .bodyHtml)
         score = try container.decodeIfPresent(Int.self, forKey: .score) ?? 0

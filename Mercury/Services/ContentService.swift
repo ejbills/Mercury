@@ -9,6 +9,10 @@ import Foundation
 
 /// Service responsible for fetching posts, feeds, and subreddit content
 class ContentService: BaseRedditService {
+    private lazy var avatarService: AvatarService = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return AvatarService(authService: auth)
+    }()
     
     // MARK: - Subreddits
     
@@ -101,6 +105,39 @@ class ContentService: BaseRedditService {
         
         let request = createRequest(url: url)
         return try await performPostRequest(request: request, endpoint: "popular")
+    }
+
+    // MARK: - Fetch posts by fullnames (e.g., ["t3_abc", "t3_def"]) for comment context
+    func fetchPostsByFullnames(_ fullnames: [String]) async throws -> [RedditPost] {
+        try validateAccessToken()
+
+        let names = fullnames
+            .filter { !$0.isEmpty }
+            .map { $0.hasPrefix("t3_") ? $0 : "t3_\($0)" }
+            .joined(separator: ",")
+
+        guard !names.isEmpty else { return [] }
+
+        guard let url = URL(string: "\(baseURL)/by_id/\(names).json") else {
+            throw APIError.parseError
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .useDefaultKeys
+            let listing = try decoder.decode(PostResponse.self, from: data)
+            return listing.data.children.compactMap { $0.data }
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
     }
     
     // MARK: - Voting
@@ -204,22 +241,33 @@ class ContentService: BaseRedditService {
             
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
-                
-                let filteredPosts = FilterService.shared.filterPosts(postResponse.data.children.compactMap { $0.data })
-                
-                let filteredChildren = postResponse.data.children.filter { child in
-                    guard let post = child.data else { return false }
-                    return !FilterService.shared.shouldFilterPost(post)
+
+                // Filter unwanted posts
+                let filteredChildren = postResponse.data.children.compactMap { child -> PostChild? in
+                    guard let post = child.data else { return nil }
+                    if FilterService.shared.shouldFilterPost(post) { return nil }
+                    return PostChild(kind: child.kind, data: post)
                 }
-                
+
+                // Batch fetch avatars for authors
+                let authorIds = Array(Set(filteredChildren.compactMap { $0.data?.authorFullname }))
+                let avatarMap = try await avatarService.fetchUserAvatars(for: authorIds)
+
+                // Enrich posts with avatar URLs
+                let enrichedChildren: [PostChild] = filteredChildren.map { child in
+                    var post = child.data!
+                    if let fid = post.authorFullname, let url = avatarMap[fid] { post.authorIconURL = url }
+                    return PostChild(kind: child.kind, data: post)
+                }
+
                 let filteredData = PostListData(
-                    children: filteredChildren,
+                    children: enrichedChildren,
                     after: postResponse.data.after,
                     before: postResponse.data.before,
                     dist: postResponse.data.dist,
                     modhash: postResponse.data.modhash
                 )
-                
+
                 return PostResponse(data: filteredData)
             } catch {
                 throw APIError.parseError
@@ -230,4 +278,5 @@ class ContentService: BaseRedditService {
             throw error
         }
     }
+
 }

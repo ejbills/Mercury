@@ -142,4 +142,3 @@ struct InboxDetailView: View {
         }
     }
 }
-

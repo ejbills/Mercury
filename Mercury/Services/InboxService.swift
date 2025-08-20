@@ -145,6 +145,28 @@ class InboxService: BaseRedditService {
         } catch { throw error }
     }
     
+    /// Compose a new private message to a username
+    func composeMessage(to username: String, subject: String, text: String) async throws {
+        try validateAccessToken()
+        guard let url = URL(string: "\(baseURL)/api/compose") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: url)
+        let parameters = [
+            "api_type": "json",
+            "to": username,
+            "subject": subject,
+            "text": text
+        ]
+        let body = parameters.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
+        request.httpBody = body.data(using: .utf8)
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch { throw error }
+    }
+    
     private static func urlEncode(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
     }

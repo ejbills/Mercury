@@ -12,19 +12,25 @@ struct UserProfileView: View {
     let username: String
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
-    
-    @State private var userProfile: UserProfile?
-    @State private var userPosts: [RedditPost] = []
-    @State private var isLoading = true
-    @State private var isLoadingPosts = false
+
+    @State private var profile: UserProfile?
+    @State private var posts: [RedditPost] = []
+    @State private var comments: [RedditComment] = []
+    @State private var postsAfter: String?
+    @State private var commentsAfter: String?
+    @State private var isLoading = false
+    @State private var isLoadingMorePosts = false
+    @State private var isLoadingMoreComments = false
     @State private var errorMessage: String?
-    @State private var after: String?
-    @State private var hasMore = true
-    @Namespace private var mediaNamespace
+    @State private var selectedSection: Section = .posts
+    @Namespace private var ns
+    @Namespace private var tabNs
     @State private var selectedPost: RedditPost?
-    @State private var selectedSection: ProfileSection = .posts
-    
-    enum ProfileSection: String, CaseIterable {
+    @State private var showCompose = false
+    @State private var commentPostMap: [String: RedditPost] = [:]
+    @State private var commentsContextReady = false
+
+    enum Section: String, CaseIterable {
         case posts = "Posts"
         case comments = "Comments"
         case about = "About"
@@ -37,476 +43,506 @@ struct UserProfileView: View {
             }
         }
     }
-    
-    // Generate consistent color for user based on username
-    private var userColor: Color {
-        let hash = username.hashValue
-        let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .indigo, .purple, .pink, .cyan, .mint, .teal]
-        return colors[abs(hash) % colors.count]
-    }
-    
-    private var profileImageView: some View {
-        ZStack {
-            Circle()
-                .fill(.white.opacity(0.3))
-                .frame(width: 120, height: 120)
-            
-            Circle()
-                .fill(userColor.gradient)
-                .frame(width: 110, height: 110)
-            
-            // Try to load profile image if available
-            if let profile = userProfile, let iconUrl = profile.effectiveIconImg, !iconUrl.isEmpty {
-                LazyImage(url: URL(string: iconUrl)) { state in
-                    if let image = state.image {
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 110, height: 110)
-                            .clipShape(Circle())
-                    } else {
-                        // Fallback to initial
-                        Text(String(username.prefix(1)).uppercased())
-                            .font(.system(size: 48, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-            } else {
-                // Default initial
-                Text(String(username.prefix(1)).uppercased())
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-        }
-    }
-    
+
     var body: some View {
-        GeometryReader { geometry in
+        ScrollViewReader { proxy in
             ScrollView {
-                VStack(spacing: 0) {
-                    // Header with gradient background
-                    headerSection
-                        .frame(height: 320)
-                    
-                    // Action buttons
-                    actionButtonsSection
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                    
-                    // Content sections
-                    contentSections
+                header
+                segmentControl
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+
+                switch selectedSection {
+                case .posts:
+                    postsList
+                case .comments:
+                    commentsList
+                case .about:
+                    aboutSection
                 }
             }
+            .refreshable { await refreshAll() }
         }
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
+        .task { await initialLoad() }
         .fullScreenCover(item: $selectedPost) { post in
-            MediaDetailView(post: post, namespace: mediaNamespace)
+            MediaDetailView(post: post, namespace: ns)
         }
-        .task {
-            await loadUserProfile()
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button { showCompose = true } label: { Image(systemName: "bubble.right") }
+                    .accessibilityLabel("Chat")
+                Button { shareProfile() } label: { Image(systemName: "square.and.arrow.up") }
+                    .accessibilityLabel("Share profile")
+            }
+        }
+        .sheet(isPresented: $showCompose) {
+            ComposeMessageSheet(toUsername: username, isPresented: $showCompose)
+                .environment(\.redditAPI, redditAPI)
         }
     }
-    
-    private var headerSection: some View {
-        ZStack {
-            // User-specific gradient background
-            LinearGradient(
-                colors: [userColor.opacity(0.8), userColor.opacity(0.6)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea(.all)
-            
-            VStack(spacing: 20) {
-                Spacer().frame(height: 60)
-                
-                // Profile image - large circular design like iOS Contacts
-                profileImageView
-                
-                // User info
-                VStack(spacing: 8) {
+
+    // MARK: - Header
+
+    private var header: some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(colors: [accentColor.opacity(0.35), accentColor.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                .frame(height: 220)
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(accentColor.opacity(0.12)).frame(width: 160)
+                        .offset(x: 40, y: -40)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    Circle().fill(accentColor.opacity(0.12)).frame(width: 220)
+                        .offset(x: -60, y: 60)
+                }
+
+            HStack(alignment: .center, spacing: 16) {
+                avatar
+                VStack(alignment: .leading, spacing: 6) {
                     Text("u/\(username)")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                    
-                    if let profile = userProfile {
-                        Text("\(profile.totalKarma.formatted()) karma")
-                            .font(.title3)
-                            .foregroundStyle(.white.opacity(0.9))
-                        
-                        if let created = profile.created {
-                            let createdDate = Date(timeIntervalSince1970: created)
-                            Text("Redditor since \(createdDate.formatted(.dateTime.year().month(.wide)))")
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.8))
+                        .font(.system(size: 28, weight: .bold))
+                    if let profile {
+                        HStack(spacing: 10) {
+                            labelChip(system: "arrow.up.circle.fill", text: "\(profile.totalKarma.formatted()) karma")
+                            if let cake = profile.created { labelChip(system: "gift.fill", text: cakeDayText(cake)) }
                         }
                     }
                 }
-                
                 Spacer()
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 20)
         }
+        .frame(height: 220)
+        .clipped()
+        .overlay(Divider(), alignment: .bottom)
     }
-    
-    private var actionButtonsSection: some View {
-        HStack(spacing: 16) {
-            actionButton(icon: "message.fill", title: "Message", color: .blue) {
-                // Handle message action
-            }
-            
-            actionButton(icon: "person.badge.plus.fill", title: "Follow", color: .green) {
-                // Handle follow action
-            }
-            
-            actionButton(icon: "square.and.arrow.up.fill", title: "Share", color: .orange) {
-                handleShare()
-            }
-            
-            actionButton(icon: "ellipsis", title: "More", color: .gray) {
-                // Handle more actions
-            }
-        }
-    }
-    
-    private func actionButton(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
-        VStack(spacing: 8) {
-            Button(action: action) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(color.gradient, in: Circle())
-                    .shadow(color: color.opacity(0.3), radius: 4, x: 0, y: 2)
-            }
-            
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-    
-    private var contentSections: some View {
-        VStack(spacing: 0) {
-            // Section picker
-            sectionPicker
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-            
-            // Content based on selected section
-            switch selectedSection {
-            case .posts:
-                postsSection
-            case .comments:
-                commentsSection
-            case .about:
-                aboutSection
-            }
-        }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 20)
-    }
-    
-    private var sectionPicker: some View {
-        HStack(spacing: 0) {
-            ForEach(ProfileSection.allCases, id: \.self) { section in
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        selectedSection = section
-                    }
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: section.icon)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                        Text(section.rawValue)
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundStyle(selectedSection == section ? .white : .primary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background {
-                        if selectedSection == section {
-                            RoundedRectangle(cornerRadius: 25, style: .continuous)
-                                .fill(.blue.gradient)
-                                .matchedGeometryEffect(id: "selectedSection", in: mediaNamespace)
-                        }
+
+    private var avatar: some View {
+        Group {
+            if let url = profile?.profileIconURL {
+                LazyImage(url: url) { state in
+                    if let image = state.image {
+                        image.resizable().scaledToFill()
+                    } else {
+                        ZStack { Circle().fill(accentColor); Text(initials).font(.title).bold().foregroundStyle(.white) }
                     }
                 }
-                .buttonStyle(.plain)
+            } else {
+                ZStack { Circle().fill(accentColor); Text(initials).font(.title).bold().foregroundStyle(.white) }
             }
-            
-            Spacer()
         }
-        .padding(.top, 20)
+        .frame(width: 72, height: 72)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
+        .shadow(color: accentColor.opacity(0.2), radius: 6, x: 0, y: 2)
     }
-    
-    @ViewBuilder
-    private var postsSection: some View {
-        if isLoading && userPosts.isEmpty {
-            profileLoadingView
-        } else if let errorMessage = errorMessage {
-            profileErrorView(errorMessage)
-        } else if userPosts.isEmpty {
-            profileEmptyStateView
-        } else {
-            LazyVStack(spacing: 12) {
-                ForEach(userPosts) { post in
-                    PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                        .onAppear {
-                            if post.id == userPosts.last?.id && hasMore && !isLoadingPosts {
-                                Task {
-                                    await loadMorePosts()
-                                }
+
+    private func labelChip(system: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: system)
+            Text(text)
+        }
+        .font(.footnote)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: Capsule())
+    }
+
+    private func cakeDayText(_ createdUTC: Double) -> String {
+        let date = Date(timeIntervalSince1970: createdUTC)
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        return df.string(from: date)
+    }
+
+    private var initials: String { String(username.prefix(1)).uppercased() }
+    private var accentColor: Color {
+        let colors: [Color] = [.orange, .pink, .purple, .blue, .teal, .mint, .indigo]
+        return colors[abs(username.hashValue) % colors.count]
+    }
+
+    // MARK: - Segments
+    private var segmentControl: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Section.allCases, id: \.self) { s in
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) { selectedSection = s }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: s.icon)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text(s.rawValue)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(selectedSection == s ? .white : .primary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background {
+                            if selectedSection == s {
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(.blue)
+                                    .matchedGeometryEffect(id: "selectedSectionTab", in: tabNs)
                             }
                         }
-                }
-                
-                if hasMore && !userPosts.isEmpty {
-                    loadMoreSection
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 20)
-        }
-    }
-    
-    @ViewBuilder
-    private var commentsSection: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            
-            Text("Comments Coming Soon")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text("User comments will be displayed here in a future update.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-    }
-    
-    @ViewBuilder
-    private var aboutSection: some View {
-        if let profile = userProfile {
-            VStack(alignment: .leading, spacing: 20) {
-                profileInfoCard("Account Info", icon: "person.circle") {
-                    profileInfoRow("Username", value: "u/\(username)")
-                    profileInfoRow("Total Karma", value: profile.totalKarma.formatted())
-                    profileInfoRow("Link Karma", value: (profile.linkKarma ?? 0).formatted())
-                    profileInfoRow("Comment Karma", value: (profile.commentKarma ?? 0).formatted())
-                    
-                    if let created = profile.created {
-                        let createdDate = Date(timeIntervalSince1970: created)
-                        profileInfoRow("Cake Day", value: createdDate.formatted(.dateTime.year().month(.wide).day()))
                     }
+                    .buttonStyle(.plain)
                 }
-                
-                profileInfoCard("Account Status", icon: "checkmark.shield") {
-                    profileInfoRow("Verified", value: (profile.verified ?? false) ? "Yes" : "No")
-                    profileInfoRow("Email Verified", value: (profile.hasVerifiedEmail ?? false) ? "Yes" : "No")
-                }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 20)
-        } else {
-            profileLoadingView
+            .padding(.vertical, 8)
         }
     }
-    
-    private func profileInfoCard<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundStyle(.blue)
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
+
+    // MARK: - Posts
+    private var postsList: some View {
+        Group {
+            if isLoading && posts.isEmpty {
+                loadingState(text: "Loading posts…")
+            } else if let errorMessage, posts.isEmpty {
+                errorState(message: errorMessage) { Task { await refreshAll() } }
+            } else if posts.isEmpty {
+                emptyState(title: "No Posts", message: "This user hasn't posted yet.")
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(posts) { post in
+                        PostRowView(post: post, namespace: ns, selectedPost: $selectedPost)
+                            .onAppear {
+                                if post.id == posts.last?.id { Task { await loadMorePostsIfNeeded() } }
+                            }
+                    }
+                    if isLoadingMorePosts { progressRow(text: "Loading more…") }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 24)
             }
-            
-            VStack(spacing: 0) {
-                content()
-            }
-            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
         }
     }
-    
-    private func profileInfoRow(_ label: String, value: String) -> some View {
+
+    // MARK: - Comments
+    private var commentsList: some View {
+        Group {
+            if isLoading && comments.isEmpty {
+                loadingState(text: "Loading comments…")
+            } else if let errorMessage, comments.isEmpty {
+                errorState(message: errorMessage) { Task { await refreshAll() } }
+            } else if comments.isEmpty {
+                emptyState(title: "No Comments", message: "This user hasn't commented yet.")
+            } else if !commentsContextReady {
+                loadingState(text: "Preparing comments…")
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(comments, id: \.self) { comment in
+                        if let key = linkKey(for: comment), let post = commentPostMap[key] ?? commentPostMap[stripT3(key)] {
+                                CommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
+                                    .allowsHitTesting(false)
+                                    .environment(\.redditAPI, redditAPI)
+                                    .environment(\.navigationPathManager, navigationPath)
+                                    .onTapGesture {
+                                        navigationPath.navigate(to: .postComments(post: post))
+                                    }
+                        }
+                        Color.clear.frame(height: 1)
+                            .onAppear { if comment.id == comments.last?.id { Task { await loadMoreCommentsIfNeeded() } } }
+                    }
+                    if isLoadingMoreComments { progressRow(text: "Loading more…") }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 24)
+            }
+        }
+    }
+
+    // MARK: - About
+    private var aboutSection: some View {
+        Group {
+            if let profile {
+                VStack(alignment: .leading, spacing: 16) {
+                    sectionHeader("About")
+                    infoRow(label: "Username", value: "u/\(profile.actualName)")
+                    infoRow(label: "Total Karma", value: profile.totalKarma.formatted())
+                    infoRow(label: "Link Karma", value: (profile.linkKarma ?? 0).formatted())
+                    infoRow(label: "Comment Karma", value: (profile.commentKarma ?? 0).formatted())
+                    if let created = profile.created { infoRow(label: "Cake Day", value: cakeDayText(created)) }
+                    infoRow(label: "Verified", value: (profile.verified ?? false) ? "Yes" : "No")
+                    infoRow(label: "Email Verified", value: (profile.hasVerifiedEmail ?? false) ? "Yes" : "No")
+                }
+                .padding(16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            } else {
+                loadingState(text: "Loading profile…")
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title).font(.headline)
+    }
+
+    private func infoRow(label: String, value: String) -> some View {
         HStack {
-            Text(label)
-                .font(.body)
-                .foregroundStyle(.secondary)
+            Text(label).foregroundStyle(.secondary)
             Spacer()
             Text(value)
-                .font(.body)
-                .fontWeight(.medium)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .font(.body)
+        .padding(.vertical, 8)
+        .overlay(Divider().offset(y: 16), alignment: .bottom)
     }
-    
-    private var profileLoadingView: some View {
-        VStack(spacing: 16) {
+
+    // MARK: - States
+    private func loadingState(text: String) -> some View {
+        VStack(spacing: 12) {
             ProgressView()
-                .scaleEffect(1.2)
-            Text("Loading profile...")
-                .font(.body)
-                .foregroundStyle(.secondary)
+            Text(text).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 48)
     }
-    
-    private func profileErrorView(_ message: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.orange)
-            
-            Text("Failed to load profile")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text(message)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Button("Try Again") {
-                Task {
-                    await loadUserProfile()
-                }
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.roundedRectangle(radius: 12))
+
+    private func emptyState(title: String, message: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: "tray").font(.system(size: 36, weight: .regular)).foregroundStyle(.secondary)
+            Text(title).font(.headline)
+            Text(message).font(.subheadline).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
-        .padding(.vertical, 60)
+        .padding(.vertical, 48)
     }
-    
-    private var profileEmptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "tray")
-                .font(.system(size: 48, weight: .thin))
-                .foregroundStyle(.secondary)
-            
-            Text("No Posts")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text("This user hasn't posted anything yet.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+
+    private func errorState(message: String, retry: @escaping () -> Void) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            Text("Failed to load").font(.headline)
+            Text(message).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Button("Try Again", action: retry)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 48)
+        .padding(.horizontal, 24)
     }
-    
-    private var loadMoreSection: some View {
-        Group {
-            if isLoadingPosts {
-                HStack(spacing: 12) {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    
-                    Text("Loading more posts...")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            } else {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        if hasMore && !isLoadingPosts {
-                            Task {
-                                await loadMorePosts()
-                            }
-                        }
-                    }
-            }
+
+    private func progressRow(text: String) -> some View {
+        HStack(spacing: 8) {
+            ProgressView().scaleEffect(0.8)
+            Text(text).foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
     }
-    
-    private func loadUserProfile() async {
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil
-        }
-        
+
+    // MARK: - Data
+    private func initialLoad() async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+
         do {
-            async let profileTask = redditAPI.fetchUserProfile(username: username)
-            async let postsTask = redditAPI.fetchUserPosts(username: username, after: nil, limit: 25)
-            
-            let (profile, postsResponse) = try await (profileTask, postsTask)
-            
+            async let p = redditAPI.fetchUserProfile(username: username)
+            async let postsResp = redditAPI.fetchUserPosts(username: username, after: nil, limit: 25)
+            async let commentsResp = redditAPI.fetchUserComments(username: username, after: nil, limit: 25)
+
+            let (profile, postsResponse, commentsResponse) = try await (p, postsResp, commentsResp)
             await MainActor.run {
-                self.userProfile = profile
-                self.userPosts = postsResponse.data.children.compactMap { $0.data }
-                self.after = postsResponse.data.after
-                self.hasMore = postsResponse.data.after != nil && !self.userPosts.isEmpty
-                self.isLoading = false
+                self.profile = profile
+                self.posts = postsResponse.data.children.compactMap { $0.data }
+                self.postsAfter = postsResponse.data.after
+                self.comments = commentsResponse.data.children.compactMap { child in
+                    if case .comment(let c) = child.data { return c } else { return nil }
+                }
+                self.commentsAfter = commentsResponse.data.after
             }
+            await ensurePostsForComments(comments)
+            await MainActor.run { commentsContextReady = true }
         } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
-            }
+            await MainActor.run { self.errorMessage = error.localizedDescription }
         }
     }
-    
-    private func loadMorePosts() async {
-        guard hasMore && !isLoadingPosts && after != nil else { return }
-        
-        await MainActor.run {
-            isLoadingPosts = true
-        }
-        
+
+    private func refreshAll() async {
+        posts = []
+        comments = []
+        postsAfter = nil
+        commentsAfter = nil
+        await initialLoad()
+    }
+
+    private func loadMorePostsIfNeeded() async {
+        guard !isLoadingMorePosts, let after = postsAfter else { return }
+        isLoadingMorePosts = true
+        defer { isLoadingMorePosts = false }
         do {
             let response = try await redditAPI.fetchUserPosts(username: username, after: after, limit: 25)
             await MainActor.run {
                 let newPosts = response.data.children.compactMap { $0.data }
-                
-                let uniqueNewPosts = newPosts.filter { newPost in
-                    !userPosts.contains { existingPost in
-                        existingPost.id == newPost.id
+                let unique = newPosts.filter { np in !posts.contains(where: { $0.id == np.id }) }
+                posts.append(contentsOf: unique)
+                postsAfter = response.data.after
+            }
+        } catch { }
+    }
+
+    private func loadMoreCommentsIfNeeded() async {
+        guard !isLoadingMoreComments, let after = commentsAfter else { return }
+        isLoadingMoreComments = true
+        defer { isLoadingMoreComments = false }
+        do {
+            let response = try await redditAPI.fetchUserComments(username: username, after: after, limit: 25)
+            let new = response.data.children.compactMap { child -> RedditComment? in
+                if case .comment(let c) = child.data { return c } else { return nil }
+            }
+            let unique = new.filter { nc in !comments.contains(where: { $0.id == nc.id }) }
+            // ensure post context before appending so we always render CommentView
+            await ensurePostsForComments(unique)
+            await MainActor.run {
+                comments.append(contentsOf: unique)
+                commentsAfter = response.data.after
+            }
+        } catch { }
+    }
+
+    private func ensurePostsForComments(_ comments: [RedditComment]) async {
+        let needed = Set(comments.compactMap { linkKey(for: $0) }).filter { key in
+            commentPostMap[key] == nil && commentPostMap[stripT3(key)] == nil
+        }
+        guard !needed.isEmpty else { return }
+        do {
+            let posts = try await redditAPI.fetchPostsByFullnames(Array(needed))
+            var map = commentPostMap
+            for p in posts {
+                map["t3_\(p.id)"] = p
+                map[p.id] = p
+            }
+            await MainActor.run { self.commentPostMap = map }
+        } catch { }
+    }
+
+    private func linkKey(for comment: RedditComment) -> String? {
+        if let linkId = comment.linkId, !linkId.isEmpty { return linkId }
+        // Fallback: parse from permalink /r/<sub>/comments/<postId>/...
+        let parts = comment.permalink.split(separator: "/")
+        if let idx = parts.firstIndex(of: Substring("comments")), parts.count > idx + 1 {
+            let postId = String(parts[idx + 1])
+            return "t3_\(postId)"
+        }
+        return nil
+    }
+
+    private func stripT3(_ key: String) -> String { key.hasPrefix("t3_") ? String(key.dropFirst(3)) : key }
+
+    private func shareProfile() {
+        let profileURL = URL(string: "https://reddit.com/u/\(username)")!
+        let vc = UIActivityViewController(activityItems: [profileURL], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene, let window = scene.windows.first {
+            window.rootViewController?.present(vc, animated: true)
+        }
+    }
+}
+
+// Lightweight fallback used while post context loads
+private struct CommentFallbackRow: View {
+    let comment: RedditComment
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(comment.subreddit.map { "r/\($0)" } ?? "Comment")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(comment.timeAgo).font(.caption).foregroundStyle(.secondary)
+            }
+            MarkdownRenderer(content: comment.body, compactMode: true, showEmbeddedContent: false)
+                .font(.body)
+            HStack { Spacer() }
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// Compose PM sheet
+private struct ComposeMessageSheet: View {
+    let toUsername: String
+    @Binding var isPresented: Bool
+    @Environment(\.redditAPI) private var redditAPI
+    @State private var subject: String = ""
+    @State private var bodyText: String = ""
+    @State private var selectedRange: NSRange = .init(location: 0, length: 0)
+    @State private var isFirstResponder: Bool = true
+    @State private var isSending = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 12) {
+                HStack {
+                    Text("To")
+                    Spacer()
+                    Text("u/\(toUsername)").foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                .padding(.horizontal)
+
+                HStack(spacing: 8) {
+                    Text("Subject")
+                    TextField("Subject", text: $subject)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding(.horizontal)
+
+                ZStack(alignment: .topLeading) {
+                    MarkdownTextView(text: $bodyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
+                        .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+                        .padding(.horizontal)
+                    if bodyText.isEmpty {
+                        Text("Message in Markdown…")
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                
-                self.userPosts.append(contentsOf: uniqueNewPosts)
-                self.after = response.data.after
-                self.hasMore = response.data.after != nil && !newPosts.isEmpty
-                self.isLoadingPosts = false
+                Spacer()
             }
-        } catch {
-            await MainActor.run {
-                self.isLoadingPosts = false
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        if isSending { ProgressView() } else { Text("Send") }
+                    }
+                    .disabled(isSending || subject.trimmingCharacters(in: .whitespaces).isEmpty || bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .navigationTitle("New Message")
+            .navigationBarTitleDisplayMode(.inline)
+            .alert("Couldn't send message", isPresented: .constant(error != nil)) {
+                Button("OK") { error = nil }
+            } message: {
+                Text(error ?? "Unknown error")
             }
         }
     }
-    
-    private func handleShare() {
-        let profileURL = "https://reddit.com/u/\(username)"
-        let activityVC = UIActivityViewController(
-            activityItems: [profileURL],
-            applicationActivities: nil
-        )
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityVC, animated: true)
+
+    private func send() async {
+        guard !isSending else { return }
+        isSending = true
+        defer { isSending = false }
+        do {
+            try await redditAPI.composePrivateMessage(to: toUsername, subject: subject, text: bodyText)
+            await MainActor.run { isPresented = false }
+        } catch {
+            await MainActor.run { self.error = error.localizedDescription }
         }
     }
 }

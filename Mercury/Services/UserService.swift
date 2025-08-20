@@ -9,6 +9,10 @@ import Foundation
 
 /// Service responsible for user profile operations
 class UserService: BaseRedditService {
+    private lazy var avatarService: AvatarService = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return AvatarService(authService: auth)
+    }()
     
     // MARK: - User Profiles
     
@@ -71,6 +75,77 @@ class UserService: BaseRedditService {
         let request = createRequest(url: url)
         return try await performPostRequest(request: request, endpoint: "user/\(username)")
     }
+
+    // Fetch a user's recent comments as a flat listing
+    func fetchUserComments(username: String, after: String? = nil, limit: Int = 25) async throws -> UserCommentsResponse {
+        try validateAccessToken()
+
+        var components = URLComponents(string: "\(baseURL)/user/\(username)/comments.json")!
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if let after = after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        components.queryItems = queryItems
+
+        guard let url = components.url else {
+            throw APIError.parseError
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+
+            try validateResponse(httpResponse)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let commentsResponse = try decoder.decode(UserCommentsResponse.self, from: data)
+
+            // Filter
+            let filteredChildren: [CommentChild] = commentsResponse.data.children.compactMap { child in
+                switch child.data {
+                case .comment(let comment):
+                    return FilterService.shared.shouldFilterComment(comment) ? nil : CommentChild(kind: child.kind, data: .comment(comment))
+                case .more:
+                    return nil
+                }
+            }
+
+            // Batch avatars for authors
+            let authorIds = Array(Set(filteredChildren.compactMap { child -> String? in
+                if case .comment(let c) = child.data { return c.authorFullname } else { return nil }
+            }))
+            let avatarMap = try await avatarService.fetchUserAvatars(for: authorIds)
+
+            // Enrich comments with avatar URLs
+            let enrichedChildren: [CommentChild] = filteredChildren.map { child in
+                switch child.data {
+                case .comment(var c):
+                    if let fid = c.authorFullname, let url = avatarMap[fid] { c.authorIconURL = url }
+                    return CommentChild(kind: child.kind, data: .comment(c))
+                case .more(let m):
+                    return CommentChild(kind: child.kind, data: .more(m))
+                }
+            }
+
+            let filteredData = CommentListData(
+                children: enrichedChildren,
+                after: commentsResponse.data.after,
+                before: commentsResponse.data.before
+            )
+
+            return UserCommentsResponse(data: filteredData)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
     
     // MARK: - Helper Methods
     
@@ -96,12 +171,33 @@ class UserService: BaseRedditService {
             }
             
             let decoder = JSONDecoder()
-            // Note: We use explicit CodingKeys mappings instead of .convertFromSnakeCase
-            // to avoid conflicts with field decoding
-            
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
-                return postResponse
+
+                // Filter (respect global filters)
+                let filteredChildren = postResponse.data.children.compactMap { child -> PostChild? in
+                    guard let post = child.data else { return nil }
+                    if FilterService.shared.shouldFilterPost(post) { return nil }
+                    return PostChild(kind: child.kind, data: post)
+                }
+
+                // Batch-fetch avatar URLs
+                let authorIds = Array(Set(filteredChildren.compactMap { $0.data?.authorFullname }))
+                let avatarMap = try await avatarService.fetchUserAvatars(for: authorIds)
+
+                let enrichedChildren = filteredChildren.map { child in
+                    var post = child.data!
+                    if let fid = post.authorFullname, let url = avatarMap[fid] { post.authorIconURL = url }
+                    return PostChild(kind: child.kind, data: post)
+                }
+
+                return PostResponse(data: PostListData(
+                    children: enrichedChildren,
+                    after: postResponse.data.after,
+                    before: postResponse.data.before,
+                    dist: postResponse.data.dist,
+                    modhash: postResponse.data.modhash
+                ))
             } catch {
                 throw APIError.parseError
             }
@@ -111,6 +207,7 @@ class UserService: BaseRedditService {
             throw error
         }
     }
+
 }
 
 // MARK: - User Profile Models
@@ -215,4 +312,9 @@ struct ProfileSubreddit: Codable {
 
 struct UserProfileResponse: Codable {
     let data: UserProfile
+}
+
+// Listing response for user comments
+struct UserCommentsResponse: Codable {
+    let data: CommentListData
 }

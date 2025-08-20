@@ -13,6 +13,7 @@ struct MainTabView: View {
     @State private var inboxNavigationPath = NavigationPathManager()
     @State private var searchNavigationPath = NavigationPathManager()
     @State private var profileNavigationPath = NavigationPathManager()
+    @State private var settingsNavigationPath = NavigationPathManager()
     
     var body: some View {
         TabView {
@@ -42,7 +43,41 @@ struct MainTabView: View {
                 Text("Inbox")
             }
             
-            // Search Tab
+            // Profile Tab (center)
+            NavigationStack(path: $profileNavigationPath.path) {
+                Group {
+                    if let username = apiService.userInfo?.name, !username.isEmpty {
+                        UserProfileView(username: username)
+                    } else {
+                        // Fallback if not authenticated
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.secondary)
+                            Text("Sign in to view your profile")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("Add your Reddit Client ID and finish setup to continue.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 24)
+                        }
+                        .navigationTitle("Profile")
+                    }
+                }
+                .environment(\.navigationPathManager, profileNavigationPath)
+                .environment(\.redditAPI, apiService)
+                .navigationDestination(for: NavigationDestination.self) { destination in
+                    navigationDestination(for: destination, navigationPath: profileNavigationPath)
+                }
+            }
+            .tabItem {
+                Image(systemName: "person.fill")
+                Text("Profile")
+            }
+
+            // Search Tab (moved right of Profile)
             NavigationStack(path: $searchNavigationPath.path) {
                 SearchView(apiService: apiService)
                     .environment(\.navigationPathManager, searchNavigationPath)
@@ -54,85 +89,15 @@ struct MainTabView: View {
                 Image(systemName: "magnifyingglass")
                 Text("Search")
             }
-            
-            // Profile Tab
-            NavigationStack(path: $profileNavigationPath.path) {
-                VStack(spacing: 24) {
-                    if let userInfo = apiService.userInfo {
-                        VStack(spacing: 16) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.accentColor.gradient)
-                                    .frame(width: 80, height: 80)
-                                
-                                Text(String(userInfo.name.prefix(1)).uppercased())
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-                            
-                            Text("u/\(userInfo.name)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                            
-                            Text("\(userInfo.totalKarma.formatted()) karma")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.top, 40)
-                    }
-                    
-                    VStack(spacing: 16) {
-                        NavigationLink(destination: FilterSettingsView()) {
-                            HStack {
-                                Image(systemName: "line.3.horizontal.decrease.circle")
-                                    .font(.title3)
-                                    .foregroundStyle(.blue)
-                                    .frame(width: 24)
-                                
-                                Text("Content Filters")
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 20)
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(spacing: 12) {
-                        SecondaryButton(
-                            "Sign Out",
-                            icon: "rectangle.portrait.and.arrow.right"
-                        ) {
-                            apiService.clearStoredCredentials()
-                        }
-                        .padding(.horizontal, 20)
-                        
-                        Text("Mercury v1.0")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.bottom, 40)
-                }
-                .navigationTitle("Profile")
-                    .environment(\.navigationPathManager, profileNavigationPath)
-                    .navigationDestination(for: NavigationDestination.self) { destination in
-                        navigationDestination(for: destination, navigationPath: profileNavigationPath)
-                    }
+
+            // Settings Tab (far right)
+            NavigationStack(path: $settingsNavigationPath.path) {
+                SettingsView(apiService: apiService)
+                    .environment(\.navigationPathManager, settingsNavigationPath)
             }
             .tabItem {
-                Image(systemName: "person.fill")
-                Text("Profile")
+                Image(systemName: "gearshape.fill")
+                Text("Settings")
             }
         }
         .tint(Color.accentColor)

@@ -11,16 +11,11 @@ struct UserAvatar: View {
     let username: String
     let size: CGFloat
     let iconURL: URL?
-    let disableAPIFetch: Bool
     
-    @Environment(\.redditAPI) private var redditAPI
-    @State private var profileIconURL: URL?
-    
-    init(username: String, size: CGFloat = 32, iconURL: URL? = nil, disableAPIFetch: Bool = false) {
+    init(username: String, size: CGFloat = 32, iconURL: URL? = nil) {
         self.username = username
         self.size = size
         self.iconURL = iconURL
-        self.disableAPIFetch = disableAPIFetch
     }
     
     var body: some View {
@@ -44,15 +39,10 @@ struct UserAvatar: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .task {
-            if iconURL == nil && profileIconURL == nil && !isDeletedUser && !disableAPIFetch {
-                await loadUserIcon()
-            }
-        }
     }
     
     private var displayURL: URL? {
-        return iconURL ?? profileIconURL ?? constructAvatarURL()
+        return iconURL ?? constructAvatarURL()
     }
     
     private var fallbackAvatar: some View {
@@ -83,23 +73,6 @@ struct UserAvatar: View {
     
     private var isDeletedUser: Bool {
         return username == "[deleted]" || username == "deleted"
-    }
-    
-    private func loadUserIcon() async {
-        let cleanUsername = username.replacingOccurrences(of: "/u/", with: "")
-            .replacingOccurrences(of: "u/", with: "")
-        
-        // Don't try to load avatars for deleted users
-        guard !isDeletedUser else { return }
-        
-        do {
-            let profile = try await redditAPI.userService.fetchUserProfile(username: cleanUsername)
-            await MainActor.run {
-                self.profileIconURL = profile.profileIconURL
-            }
-        } catch {
-                print("Failed to load avatar for \(cleanUsername): \(error)")
-        }
     }
     
     private func constructAvatarURL() -> URL? {
