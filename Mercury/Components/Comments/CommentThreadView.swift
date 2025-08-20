@@ -2,7 +2,6 @@
 //  CommentThreadView.swift
 //  Mercury
 //
-//  Created by AI Assistant on 1/20/25.
 //
 
 import SwiftUI

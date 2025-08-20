@@ -2,7 +2,6 @@
 //  VideoDownloadService.swift
 //  Mercury
 //
-//  Created by AI Assistant on 8/17/25.
 //
 
 import Foundation
@@ -223,5 +222,4 @@ final class VideoDownloadService {
         return outputURL
     }
 }
-
 

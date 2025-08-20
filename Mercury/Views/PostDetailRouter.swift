@@ -1,22 +1,25 @@
-//
-//  PostDetailRouter.swift
-//  Mercury
-//
-//  Created by AI Assistant on 1/20/25.
-//
+// PostDetailRouter.swift
+// Mercury
 
 import SwiftUI
 
 struct PostDetailRouter: View {
     let post: RedditPost
     let namespace: Namespace.ID
+    let videoHandoffState: VideoHandoffState?
+    let onVideoHandoffReturn: ((VideoHandoffState) -> Void)?
     
     var body: some View {
         switch post.postType {
         case .gallery:
             GalleryDetailView(post: post, namespace: namespace)
         case .image, .gif, .video:
-            MediaDetailView(post: post, namespace: namespace)
+            MediaDetailView(
+                post: post, 
+                namespace: namespace, 
+                videoHandoffState: videoHandoffState, 
+                onVideoHandoffReturn: onVideoHandoffReturn
+            )
         case .text, .link:
             // For text and link posts, we could show a different view or fallback
             // For now, just dismiss since these shouldn't trigger media detail
@@ -32,6 +35,8 @@ struct PostDetailRouter: View {
     
     PostDetailRouter(
         post: RedditPost.samplePost,
-        namespace: namespace
+        namespace: namespace,
+        videoHandoffState: nil,
+        onVideoHandoffReturn: nil
     )
 }

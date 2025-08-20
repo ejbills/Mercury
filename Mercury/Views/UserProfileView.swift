@@ -22,6 +22,7 @@ struct UserProfileView: View {
     @State private var hasMore = true
     @Namespace private var mediaNamespace
     @State private var selectedPost: RedditPost?
+    @State private var videoHandoffState: VideoHandoffState?
     @State private var selectedSection: ProfileSection = .posts
     
     enum ProfileSection: String, CaseIterable {
@@ -100,7 +101,15 @@ struct UserProfileView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $selectedPost) { post in
-            MediaDetailView(post: post, namespace: mediaNamespace)
+            MediaDetailView(
+                post: post, 
+                namespace: mediaNamespace,
+                videoHandoffState: videoHandoffState,
+                onVideoHandoffReturn: { returnedState in
+                    videoHandoffState = returnedState
+                    selectedPost = nil
+                }
+            )
         }
         .task {
             await loadUserProfile()
@@ -255,7 +264,14 @@ struct UserProfileView: View {
         } else {
             LazyVStack(spacing: 12) {
                 ForEach(userPosts) { post in
-                    PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                    PostRowView(
+                        post: post, 
+                        namespace: mediaNamespace, 
+                        selectedPost: $selectedPost,
+                        onVideoHandoff: { handoffState in
+                            videoHandoffState = handoffState
+                        }
+                    )
                         .onAppear {
                             if post.id == userPosts.last?.id && hasMore && !isLoadingPosts {
                                 Task {

@@ -16,6 +16,7 @@ struct PostRowView: View {
     @Binding var selectedPost: RedditPost?
     let showLargeToolbar: Bool
     let showFullText: Bool
+    let onVideoHandoff: ((VideoHandoffState) -> Void)?
     @State private var showingSafari = false
     @State private var isVoting = false
     @State private var showingCopiedToast = false
@@ -28,17 +29,19 @@ struct PostRowView: View {
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @State private var showingPostReply = false
+    @State private var videoHandoffState: VideoHandoffState? = nil
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
         self.showLargeToolbar = showLargeToolbar
         self.showFullText = showFullText
         self.onRootReplyPosted = onRootReplyPosted
+        self.onVideoHandoff = onVideoHandoff
         self.postType = post.postType
         // Detect reddit post links (crossposts/embedded posts) regardless of thumbnail
         let isRedditPostLink: Bool = {
@@ -345,7 +348,12 @@ struct PostRowView: View {
                     namespace: namespace,
                     apiDimensions: post.videoThumbnailDimensions,
                     post: post,
-                    selectedPost: $selectedPost
+                    onRequestDetail: { handoffState in
+                        videoHandoffState = handoffState
+                        onVideoHandoff?(handoffState)
+                        selectedPost = post
+                    },
+                    resumeFromState: videoHandoffState
                 )
             }
         case .gallery:
