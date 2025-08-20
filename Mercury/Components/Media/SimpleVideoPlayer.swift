@@ -10,7 +10,15 @@ struct SimpleVideoPlayer: UIViewRepresentable {
     let showControls: Bool
     let shouldLoop: Bool
     let autoPlay: Bool
-    let gravity: AVLayerVideoGravity = .resizeAspectFill
+    let gravity: AVLayerVideoGravity
+    
+    init(player: AVPlayer, showControls: Bool, shouldLoop: Bool, autoPlay: Bool, gravity: AVLayerVideoGravity = .resizeAspectFill) {
+        self.player = player
+        self.showControls = showControls
+        self.shouldLoop = shouldLoop
+        self.autoPlay = autoPlay
+        self.gravity = gravity
+    }
     
     func makeUIView(context: Context) -> UIView {
         let view = UIView()

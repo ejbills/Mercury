@@ -46,7 +46,7 @@ struct SubredditFeedView: View {
                                     videoHandoffState = handoffState
                                 }
                             )
-                                .id(post.id) // Important for scroll position tracking
+                                .id(post.id)
                                 .onAppear {
                                     if post.id == posts.last?.id && hasMore && !isLoadingMore {
                                         Task {

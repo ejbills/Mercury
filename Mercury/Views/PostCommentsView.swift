@@ -15,6 +15,8 @@ struct PostCommentsView: View {
     @State private var commentSort: CommentSort = .best
     @State private var showingSortOptions = false
     @State private var loadingRootMoreIds: Set<String> = []
+    @State private var selectedPost: RedditPost?
+    @State private var videoHandoffState: VideoHandoffState?
     @Namespace private var mediaNamespace
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -25,11 +27,14 @@ struct PostCommentsView: View {
                 PostRowView(
                     post: post, 
                     namespace: mediaNamespace, 
-                    selectedPost: .constant(nil),
+                    selectedPost: $selectedPost,
                     showLargeToolbar: true,
                     showFullText: true,
                     onRootReplyPosted: { newComment in
                         threadManager.addRootComment(newComment)
+                    },
+                    onVideoHandoff: { handoffState in
+                        videoHandoffState = handoffState
                     }
                 )
                 commentsSection
@@ -59,6 +64,16 @@ struct PostCommentsView: View {
                     }
                 }
             }
+        }
+        .fullScreenCover(item: $selectedPost) { post in
+            MediaDetailView(
+                post: post,
+                namespace: mediaNamespace,
+                videoHandoffState: videoHandoffState,
+                onVideoHandoffReturn: { handoffState in
+                    videoHandoffState = handoffState
+                }
+            )
         }
     }
     

@@ -216,6 +216,7 @@ struct MediaDetailView: View {
                             showControls: true,
                             shouldLoop: false,
                             autoPlay: true,
+                            gravity: .resizeAspect
                         )
                     } else {
                         Color.clear
