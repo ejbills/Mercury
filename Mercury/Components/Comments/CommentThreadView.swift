@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Defaults
 
 struct CommentThreadView: View {
     let comments: [RedditComment]
@@ -17,6 +18,7 @@ struct CommentThreadView: View {
     @State private var loadingMoreIds: Set<String> = []
     @State private var collapsedComments: Set<String> = []
     @State private var itemVisibility: [Bool] = []
+    @Default(.compactMode) private var compactMode
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -71,22 +73,43 @@ struct CommentThreadView: View {
             switch item {
             case .comment(let flatComment):
                 if isIndexVisible(index) {
-                    CommentView(
-                        comment: flatComment.comment,
-                        depth: flatComment.depth,
-                        post: post,
-                        isCollapsed: collapsedComments.contains(flatComment.comment.id),
-                        onCollapseToggle: {
-                            if collapsedComments.contains(flatComment.comment.id) {
-                                collapsedComments.remove(flatComment.comment.id)
-                            } else {
-                                collapsedComments.insert(flatComment.comment.id)
-                            }
-                        },
-                        onReplyPosted: { newComment in
-                            insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
+                    Group {
+                        if compactMode {
+                            CompactCommentView(
+                                comment: flatComment.comment,
+                                depth: flatComment.depth,
+                                post: post,
+                                isCollapsed: collapsedComments.contains(flatComment.comment.id),
+                                onCollapseToggle: {
+                                    if collapsedComments.contains(flatComment.comment.id) {
+                                        collapsedComments.remove(flatComment.comment.id)
+                                    } else {
+                                        collapsedComments.insert(flatComment.comment.id)
+                                    }
+                                },
+                                onReplyPosted: { newComment in
+                                    insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
+                                }
+                            )
+                        } else {
+                            CommentView(
+                                comment: flatComment.comment,
+                                depth: flatComment.depth,
+                                post: post,
+                                isCollapsed: collapsedComments.contains(flatComment.comment.id),
+                                onCollapseToggle: {
+                                    if collapsedComments.contains(flatComment.comment.id) {
+                                        collapsedComments.remove(flatComment.comment.id)
+                                    } else {
+                                        collapsedComments.insert(flatComment.comment.id)
+                                    }
+                                },
+                                onReplyPosted: { newComment in
+                                    insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
+                                }
+                            )
                         }
-                    )
+                    }
                     .padding(.leading, CGFloat(flatComment.depth * 24))
                     .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
                     .padding(.vertical, 4)

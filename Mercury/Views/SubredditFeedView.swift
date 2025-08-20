@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Defaults
 
 struct SubredditFeedView: View {
     let subreddit: String
@@ -20,6 +21,7 @@ struct SubredditFeedView: View {
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
     @State private var selectedPost: RedditPost?
+    @Default(.compactMode) private var compactMode
     
     private let pageSize = 25
     
@@ -37,15 +39,27 @@ struct SubredditFeedView: View {
                             .padding(.top, 100)
                     } else {
                         ForEach(posts) { post in
-                            PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                                .id(post.id) // Important for scroll position tracking
-                                .onAppear {
-                                    if post.id == posts.last?.id && hasMore && !isLoadingMore {
-                                        Task {
-                                            await loadMorePosts()
+                            if compactMode {
+                                CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                                    .id(post.id) // Important for scroll position tracking
+                                    .onAppear {
+                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                            Task {
+                                                await loadMorePosts()
+                                            }
                                         }
                                     }
-                                }
+                            } else {
+                                PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                                    .id(post.id) // Important for scroll position tracking
+                                    .onAppear {
+                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                            Task {
+                                                await loadMorePosts()
+                                            }
+                                        }
+                                    }
+                            }
                         }
                         
                         if hasMore {
@@ -71,6 +85,19 @@ struct SubredditFeedView: View {
         }
         .navigationTitle(subredditDisplayName)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        compactMode.toggle()
+                    }
+                }) {
+                    Image(systemName: compactMode ? "list.bullet" : "square.grid.2x2")
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                }
+            }
+        }
         .fullScreenCover(item: $selectedPost) { post in
             PostDetailRouter(post: post, namespace: mediaNamespace)
         }

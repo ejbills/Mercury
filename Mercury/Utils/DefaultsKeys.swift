@@ -16,4 +16,5 @@ extension Defaults.Keys {
     static let userInfo = Key<RedditUser?>("userInfo")
     static let isSetupComplete = Key<Bool>("isSetupComplete", default: false)
     static let lastLoginDate = Key<Date?>("lastLoginDate")
+    static let compactMode = Key<Bool>("compactMode", default: false)
 }
