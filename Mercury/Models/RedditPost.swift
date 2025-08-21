@@ -762,3 +762,46 @@ extension Optional where Wrapped == String {
         return self?.isEmpty ?? true
     }
 }
+
+enum PostSort: String, CaseIterable {
+    case hot = "hot"
+    case new = "new" 
+    case top = "top"
+    case rising = "rising"
+    
+    var displayName: String {
+        switch self {
+        case .hot: return "Hot"
+        case .new: return "New"
+        case .top: return "Top"
+        case .rising: return "Rising"
+        }
+    }
+    
+    var supportsTimeFrame: Bool {
+        switch self {
+        case .top: return true
+        default: return false
+        }
+    }
+}
+
+enum TopTimeFrame: String, CaseIterable {
+    case hour = "hour"
+    case day = "day"
+    case week = "week"
+    case month = "month"
+    case year = "year"
+    case all = "all"
+    
+    var displayName: String {
+        switch self {
+        case .hour: return "Past Hour"
+        case .day: return "Past 24 Hours"
+        case .week: return "Past Week"
+        case .month: return "Past Month"
+        case .year: return "Past Year"
+        case .all: return "All Time"
+        }
+    }
+}

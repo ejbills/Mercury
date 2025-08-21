@@ -9,6 +9,10 @@ struct SubredditFeedView: View {
     @State private var errorMessage: String?
     @State private var after: String?
     @State private var hasMore = true
+    @State private var postSort: PostSort = .hot
+    @State private var topTimeFrame: TopTimeFrame = .day
+    @State private var showingSortOptions = false
+    @State private var showingTimeFrameOptions = false
     @Namespace private var mediaNamespace
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
@@ -71,6 +75,11 @@ struct SubredditFeedView: View {
         }
         .navigationTitle(subredditDisplayName)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                sortButton
+            }
+        }
         .fullScreenCover(item: $selectedPost) { post in
             PostDetailContainer(
                 post: post,
@@ -84,6 +93,34 @@ struct SubredditFeedView: View {
         .refreshable {
             await refreshFeed()
         }
+        .confirmationDialog("Sort Posts", isPresented: $showingSortOptions) {
+            ForEach(PostSort.allCases, id: \.self) { sort in
+                Button(sort.displayName) {
+                    postSort = sort
+                    if sort.supportsTimeFrame {
+                        showingTimeFrameOptions = true
+                    } else {
+                        Task {
+                            await loadInitialPosts()
+                        }
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Top Posts Time Frame", isPresented: $showingTimeFrameOptions) {
+            ForEach(TopTimeFrame.allCases, id: \.self) { timeFrame in
+                Button(timeFrame.displayName) {
+                    topTimeFrame = timeFrame
+                    Task {
+                        await loadInitialPosts()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                // Reset to previous sort if cancelled
+                postSort = .hot
+            }
+        }
     }
     
     private var subredditDisplayName: String {
@@ -91,6 +128,8 @@ struct SubredditFeedView: View {
             return "Popular"
         } else if subreddit == "all" {
             return "All"
+        } else if subreddit == "user/saved" || subreddit == "saved" {
+            return "Saved"
         } else if subreddit.hasPrefix("r/") {
             return subreddit
         } else {
@@ -203,6 +242,28 @@ struct SubredditFeedView: View {
         .padding(.horizontal, 32)
     }
     
+    private var sortButton: some View {
+        Button(action: {
+            showingSortOptions = true
+        }) {
+            HStack(spacing: 4) {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(postSort.displayName)
+                        .font(.callout)
+                        .fontWeight(.medium)
+                    
+                    if postSort.supportsTimeFrame {
+                        Text(topTimeFrame.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
+        }
+    }
+    
     private func loadInitialPosts() async {
         await MainActor.run {
             isLoading = true
@@ -287,9 +348,12 @@ struct SubredditFeedView: View {
             return try await apiService.fetchPopularFeed(after: after, limit: pageSize)
         case "home", "hot":
             return try await apiService.fetchHomeFeed(after: after, limit: pageSize)
+        case "user/saved", "saved":
+            return try await apiService.fetchSavedPosts(after: after, limit: pageSize)
         default:
             let cleanSubreddit = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
-            return try await apiService.fetchSubredditPosts(subreddit: cleanSubreddit, after: after, limit: pageSize)
+            let timeFrame = postSort.supportsTimeFrame ? topTimeFrame : nil
+            return try await apiService.fetchSubredditPosts(subreddit: cleanSubreddit, sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)
         }
     }
 }

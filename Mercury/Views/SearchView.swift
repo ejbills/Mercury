@@ -196,20 +196,13 @@ struct SearchView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 40)
         } else {
-            MaterialCard {
-                VStack(spacing: 0) {
-                    ForEach(subredditResults) { subreddit in
-                        SubredditRow(subreddit: subreddit) {
-                            navigationPath.navigate(to: .subredditFeed(subreddit: subreddit.displayName))
-                        }
-                        
-                        if subreddit.id != subredditResults.last?.id {
-                            Divider()
-                                .padding(.leading, 60)
-                        }
-                    }
+            SubredditList(
+                subreddits: subredditResults,
+                useCardStyle: true,
+                onSubredditTap: { subreddit in
+                    navigationPath.navigate(to: .subredditFeed(subreddit: subreddit.displayName))
                 }
-            }
+            )
         }
     }
     

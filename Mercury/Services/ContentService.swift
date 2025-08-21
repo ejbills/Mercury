@@ -12,42 +12,72 @@ class ContentService: BaseRedditService {
     func fetchSubscribedSubreddits() async throws -> [Subreddit] {
         try validateAccessToken()
         
-        guard let url = URL(string: "\(baseURL)/subreddits/mine.json") else {
-            throw APIError.parseError
-        }
+        var allSubreddits: [Subreddit] = []
+        var after: String? = nil
+        let limit = 100 // Maximum allowed by Reddit API
         
-        let request = createRequest(url: url)
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+        repeat {
+            var components = URLComponents(string: "\(baseURL)/subreddits/mine.json")!
+            var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIError.networkError
+            if let after = after {
+                queryItems.append(URLQueryItem(name: "after", value: after))
             }
             
-            try validateResponse(httpResponse)
+            components.queryItems = queryItems
             
-            let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            let subredditResponse = try decoder.decode(SubredditResponse.self, from: data)
-            return subredditResponse.data.children.map { $0.data }
-        } catch is URLError {
-            throw APIError.networkError
-        } catch {
-            throw error
-        }
+            guard let url = components.url else {
+                throw APIError.parseError
+            }
+            
+            let request = createRequest(url: url)
+            
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw APIError.networkError
+                }
+                
+                try validateResponse(httpResponse)
+                
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let subredditResponse = try decoder.decode(SubredditResponse.self, from: data)
+                
+                let pageSubreddits = subredditResponse.data.children.map { $0.data }
+                allSubreddits.append(contentsOf: pageSubreddits)
+                after = subredditResponse.data.after
+                
+                // If we got fewer than the limit, we've reached the end
+                if pageSubreddits.count < limit {
+                    break
+                }
+                
+            } catch is URLError {
+                throw APIError.networkError
+            } catch {
+                throw error
+            }
+        } while after != nil
+        
+        return allSubreddits
     }
     
     // MARK: - Posts and Feeds
     
-    func fetchSubredditPosts(subreddit: String, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+    func fetchSubredditPosts(subreddit: String, sort: PostSort = .hot, timeFrame: TopTimeFrame? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try validateAccessToken()
         
-        var components = URLComponents(string: "\(baseURL)/r/\(subreddit).json")!
+        var components = URLComponents(string: "\(baseURL)/r/\(subreddit)/\(sort.rawValue).json")!
         var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
         
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        
+        if let timeFrame = timeFrame, sort.supportsTimeFrame {
+            queryItems.append(URLQueryItem(name: "t", value: timeFrame.rawValue))
         }
         
         components.queryItems = queryItems
@@ -98,6 +128,26 @@ class ContentService: BaseRedditService {
         
         let request = createRequest(url: url)
         return try await performPostRequest(request: request, endpoint: "popular")
+    }
+    
+    func fetchSavedPosts(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        try validateAccessToken()
+        
+        var components = URLComponents(string: "\(baseURL)/user/\(authService?.userInfo?.name ?? "")/saved.json")!
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        
+        if let after = after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        
+        components.queryItems = queryItems
+        
+        guard let url = components.url else {
+            throw APIError.parseError
+        }
+        
+        let request = createRequest(url: url)
+        return try await performPostRequest(request: request, endpoint: "saved")
     }
 
     // MARK: - Fetch posts by fullnames (e.g., ["t3_abc", "t3_def"]) for comment context

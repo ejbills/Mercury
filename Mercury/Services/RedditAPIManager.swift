@@ -71,8 +71,8 @@ class RedditAPIManager {
         try await contentService.fetchSubscribedSubreddits()
     }
     
-    func fetchSubredditPosts(subreddit: String, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
-        try await contentService.fetchSubredditPosts(subreddit: subreddit, after: after, limit: limit)
+    func fetchSubredditPosts(subreddit: String, sort: PostSort = .hot, timeFrame: TopTimeFrame? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        try await contentService.fetchSubredditPosts(subreddit: subreddit, sort: sort, timeFrame: timeFrame, after: after, limit: limit)
     }
     
     func fetchHomeFeed(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
@@ -81,6 +81,10 @@ class RedditAPIManager {
     
     func fetchPopularFeed(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try await contentService.fetchPopularFeed(after: after, limit: limit)
+    }
+    
+    func fetchSavedPosts(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        try await contentService.fetchSavedPosts(after: after, limit: limit)
     }
     
     func fetchPostsByFullnames(_ fullnames: [String]) async throws -> [RedditPost] {

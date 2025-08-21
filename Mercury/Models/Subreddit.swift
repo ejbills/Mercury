@@ -69,6 +69,8 @@ struct SubredditResponse: Codable {
 
 struct SubredditListData: Codable {
     let children: [SubredditChild]
+    let after: String?
+    let before: String?
 }
 
 struct SubredditChild: Codable {
