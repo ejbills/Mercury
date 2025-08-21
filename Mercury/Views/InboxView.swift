@@ -12,8 +12,9 @@ struct InboxView: View {
     @Namespace private var filterNamespace
     @State private var selectedItem: InboxItem?
     @Environment(\.navigationPathManager) private var navigationPath
+    @State private var isRefreshing = false
     
-    enum InboxFilter: String, CaseIterable {
+    enum InboxFilter: String, CaseIterable, SectionPickerIconProvider {
         case all = "All"
         case unread = "Unread"
         case messages = "Messages"
@@ -38,7 +39,7 @@ struct InboxView: View {
                 
                 if isLoading && messages.isEmpty {
                     loadingView
-                } else if let errorMessage = errorMessage {
+                } else if let errorMessage = errorMessage, messages.isEmpty {
                     errorView(errorMessage)
                 } else if messages.isEmpty {
                     emptyStateView
@@ -48,56 +49,24 @@ struct InboxView: View {
             }
             .navigationTitle("Inbox")
             .navigationBarTitleDisplayMode(.large)
-            .refreshable {
-                await reload()
-            }
+            .refreshable { await reload(preservingData: false) }
         }
         .sheet(item: $selectedItem) { item in
             InboxDetailView(item: item)
                 .environment(\.redditAPI, apiService)
         }
-        .task {
-            await reload()
-        }
+        .task { await reload() }
     }
     
     private var filterPickerSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(InboxFilter.allCases, id: \.self) { filter in
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedFilter = filter
-                        }
-                        Task { await reload() }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: filter.icon)
-                                .font(.caption)
-                                .fontWeight(.medium)
-                            Text(filter.rawValue)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundStyle(selectedFilter == filter ? .white : .primary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background {
-                            if selectedFilter == filter {
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(.blue)
-                                    .matchedGeometryEffect(id: "selectedFilter", in: filterNamespace)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+        SectionPicker(
+            items: InboxFilter.allCases,
+            selectedItem: $selectedFilter,
+            namespace: filterNamespace,
+            accentColor: .accentColor
+        ) {
+            Task { await reload() }
         }
-        .background(.regularMaterial)
     }
     
     private var messagesList: some View {
@@ -253,26 +222,41 @@ struct InboxView: View {
         .padding(.horizontal, 32)
     }
     
-    private func reload() async {
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil
-            messages = []
-            after = nil
-            hasMore = true
-        }
-        do {
-            let page = try await apiService.fetchInbox(category: selectedFilter.apiCategory, limit: 25)
-            await MainActor.run {
-                self.messages = page.items
-                self.after = page.after
-                self.hasMore = page.after != nil && !page.items.isEmpty
-                self.isLoading = false
+    private func reload(preservingData: Bool = false) async {
+        if preservingData {
+            await MainActor.run { isRefreshing = true; errorMessage = nil }
+            do {
+                let page = try await apiService.fetchInbox(category: selectedFilter.apiCategory, limit: 25)
+                await MainActor.run {
+                    self.messages = page.items
+                    self.after = page.after
+                    self.hasMore = page.after != nil && !page.items.isEmpty
+                    self.isRefreshing = false
+                }
+            } catch {
+                await MainActor.run { self.isRefreshing = false }
             }
-        } catch {
+        } else {
             await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
+                isLoading = true
+                errorMessage = nil
+                messages = []
+                after = nil
+                hasMore = true
+            }
+            do {
+                let page = try await apiService.fetchInbox(category: selectedFilter.apiCategory, limit: 25)
+                await MainActor.run {
+                    self.messages = page.items
+                    self.after = page.after
+                    self.hasMore = page.after != nil && !page.items.isEmpty
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
             }
         }
     }

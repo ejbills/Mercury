@@ -23,7 +23,7 @@ struct SubredditFeedView: View {
                 LazyVStack(spacing: 8) {
                     if posts.isEmpty && isLoading {
                         skeletonLoadingView
-                    } else if posts.isEmpty && errorMessage != nil {
+                    } else if posts.isEmpty && errorMessage != nil && !isLoading {
                         errorView
                             .padding(.top, 100)
                     } else if posts.isEmpty {
@@ -259,7 +259,26 @@ struct SubredditFeedView: View {
     }
     
     private func refreshFeed() async {
-        await loadInitialPosts()
+        await MainActor.run { 
+            errorMessage = nil
+            after = nil
+            hasMore = true
+        }
+        
+        do {
+            let response = try await fetchPosts(after: nil)
+            await MainActor.run {
+                let newPosts = response.data.children.compactMap { $0.data }
+                self.posts = newPosts
+                self.after = response.data.after
+                self.hasMore = response.data.after != nil && !newPosts.isEmpty
+                self.errorMessage = nil // Clear any previous error on success
+            }
+        } catch {
+            await MainActor.run { 
+                self.errorMessage = error.localizedDescription
+            }
+        }
     }
     
     private func fetchPosts(after: String?) async throws -> PostResponse {

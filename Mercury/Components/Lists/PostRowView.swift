@@ -42,13 +42,19 @@ struct PostRowView: View {
             }
             return false
         }()
+        let hasContent = post.hasContent
+        let hasThumbnail = (post.thumbnail != nil &&
+                           post.thumbnail != "self" &&
+                           post.thumbnail != "nsfw" &&
+                           post.thumbnail != "spoiler" &&
+                           post.thumbnail != "")
+        let hasPreviewImages = (post.preview != nil && !(post.preview?.images.isEmpty ?? true))
+        let isExternalLink = post.postType == .link && post.url != nil && 
+                            post.domain != nil && 
+                            !post.domain!.contains("reddit.com")
+        
         self.shouldShowLinkPreview = (post.postType == .link && post.url != nil && (
-            post.hasContent || (post.thumbnail != nil &&
-                                post.thumbnail != "self" &&
-                                post.thumbnail != "default" &&
-                                post.thumbnail != "nsfw" &&
-                                post.thumbnail != "spoiler" &&
-                                post.thumbnail != "")
+            hasContent || hasThumbnail || hasPreviewImages || isExternalLink
         )) || isRedditPostLink
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
@@ -67,6 +73,8 @@ struct PostRowView: View {
             return post.gifURL != nil
         case .video:
             return post.videoURL != nil
+        case .youtube:
+            return post.url != nil
         case .gallery:
             return !post.galleryImages.isEmpty
         case .link:
@@ -339,6 +347,10 @@ struct PostRowView: View {
                     resumeFromState: videoHandoffState
                 )
             }
+        case .youtube:
+            if let youtubeURL = post.url {
+                YouTubeEmbedView(url: youtubeURL)
+            }
         case .gallery:
             SimpleGalleryView(
                 post: post,
@@ -584,6 +596,7 @@ struct PostRowView: View {
                 VStack(spacing: 4) {
                     let downloadText = switch post.postType {
                     case .video: "Downloading Video"
+                    case .youtube: "Opening YouTube"
                     case .gif: "Downloading GIF"
                     case .image: "Downloading Image"
                     default: "Downloading"

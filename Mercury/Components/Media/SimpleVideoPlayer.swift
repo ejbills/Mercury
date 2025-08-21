@@ -45,8 +45,7 @@ struct SimpleVideoPlayer: UIViewRepresentable {
             
             context.coordinator.playerController = controller
         } else {
-            guard let container = view as? PlayerContainerView else { return view }
-            let playerLayer = container.playerLayer
+            let playerLayer = view.playerLayer
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             playerLayer.player = player

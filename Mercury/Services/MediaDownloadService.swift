@@ -57,7 +57,7 @@ final class MediaDownloadService {
             return try await downloadGif(post: post, options: downloadOptions)
         case .video:
             return try await downloadVideo(post: post, options: downloadOptions)
-        case .text, .link:
+        case .text, .link, .youtube:
             throw Error.unsupported
         case .gallery:
             return try await downloadGallery(post: post, options: downloadOptions)

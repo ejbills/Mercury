@@ -210,6 +210,10 @@ struct RedditPost: Codable, Identifiable, Hashable {
             return .gallery
         }
         
+        if isYouTubeLink {
+            return .youtube
+        }
+        
         if isVideo || hasVideoURL {
             return .video
         } else if let hint = postHint {
@@ -249,14 +253,17 @@ struct RedditPost: Codable, Identifiable, Hashable {
     private var hasVideoURL: Bool {
         if let url = url {
             return url.contains("v.redd.it") || 
-                   url.contains("youtu.be") || 
-                   url.contains("youtube.com") ||
                    url.contains("vimeo.com") ||
                    url.lowercased().contains(".mp4") ||
                    url.lowercased().contains(".mov") ||
                    url.lowercased().contains(".webm")
         }
         return false
+    }
+    
+    var isYouTubeLink: Bool {
+        guard let url = url else { return false }
+        return url.contains("youtu.be") || url.contains("youtube.com")
     }
     
     var imageURL: String? {
@@ -533,6 +540,7 @@ enum PostType {
     case image
     case gif
     case video
+    case youtube
     case gallery
     case link
     
@@ -542,6 +550,7 @@ enum PostType {
         case .image: return "photo"
         case .gif: return "play.rectangle.fill"
         case .video: return "play.rectangle"
+        case .youtube: return "play.rectangle.on.rectangle"
         case .gallery: return "photo.stack"
         case .link: return "link"
         }
@@ -553,6 +562,7 @@ enum PostType {
         case .image: return "Image"
         case .gif: return "GIF"
         case .video: return "Video"
+        case .youtube: return "YouTube"
         case .gallery: return "Gallery"
         case .link: return "Link"
         }

@@ -20,12 +20,8 @@ struct SubredditDrawerView: View {
         }
         .navigationTitle("Communities")
         .navigationBarTitleDisplayMode(.large)
-        .refreshable {
-            await loadSubreddits()
-        }
-        .task {
-            await loadSubreddits()
-        }
+        .refreshable { await reloadSubreddits() }
+        .task { await reloadSubreddits() }
     }
     
     
@@ -43,7 +39,7 @@ struct SubredditDrawerView: View {
     
     private func quickLinkCard(for link: QuickLink) -> some View {
         Button(action: {
-            let subreddit = link.endpoint.isEmpty ? "popular" : link.endpoint
+            let subreddit = link.endpoint.isEmpty ? "home" : link.endpoint
             navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
         }) {
             VStack(spacing: 12) {
@@ -114,7 +110,7 @@ struct SubredditDrawerView: View {
                 Group {
                     if isLoading {
                         loadingView
-                    } else if let errorMessage = errorMessage {
+                    } else if let errorMessage = errorMessage, subreddits.isEmpty {
                         errorView(errorMessage)
                     } else if subreddits.isEmpty {
                         emptyStateView
@@ -155,9 +151,7 @@ struct SubredditDrawerView: View {
                 .multilineTextAlignment(.center)
             
             Button("Try Again") {
-                Task {
-                    await loadSubreddits()
-                }
+                Task { await reloadSubreddits() }
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.roundedRectangle(radius: 8))
@@ -209,10 +203,11 @@ struct SubredditDrawerView: View {
         }
     }
     
-    private func loadSubreddits() async {
+    private func reloadSubreddits() async {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
+            subreddits = []
         }
         
         do {

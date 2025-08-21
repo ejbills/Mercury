@@ -228,21 +228,13 @@ struct UserProfile: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case idRaw = "id"
         case name, verified, subreddit
-        case linkKarma = "link_karma"
-        case commentKarma = "comment_karma"
+        case linkKarma, commentKarma
         case created = "created_utc"
-        case hasVerifiedEmail = "has_verified_email"
-        case iconImg = "icon_img"
-        case isEmployee = "is_employee"
-        case isMod = "is_mod"
-        case isPremium = "is_premium"
-        case isGold = "is_gold"
-        case hasPaypalSubscription = "has_paypal_subscription"
-        case hasSubscribedToPremium = "has_subscribed_to_premium"
-        case isBlocked = "is_blocked"
-        case isFriend = "is_friend"
-        case acceptFollowers = "accept_followers"
-        case hideFromRobots = "hide_from_robots"
+        case hasVerifiedEmail
+        case iconImg
+        case isEmployee, isMod, isPremium, isGold
+        case hasPaypalSubscription, hasSubscribedToPremium
+        case isBlocked, isFriend, acceptFollowers, hideFromRobots
     }
     
     var id: String {

@@ -60,6 +60,11 @@ struct PostCommentsView: View {
             }
         }
         .refreshable {
+            await MainActor.run {
+                threadManager = CommentThreadManager()
+                isLoading = true
+                errorMessage = nil
+            }
             await loadComments()
         }
         .task {
@@ -92,7 +97,7 @@ struct PostCommentsView: View {
         Group {
             if isLoading && threadManager.commentThreads.isEmpty {
                 loadingView
-            } else if let errorMessage = errorMessage {
+            } else if let errorMessage = errorMessage, threadManager.commentThreads.isEmpty {
                 errorView(message: errorMessage)
             } else if threadManager.commentThreads.isEmpty {
                 emptyCommentsView
