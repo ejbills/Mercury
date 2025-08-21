@@ -1,10 +1,3 @@
-//
-//  MainTabView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 struct MainTabView: View {
@@ -17,7 +10,6 @@ struct MainTabView: View {
     
     var body: some View {
         TabView {
-            // Home Tab (Communities)
             NavigationStack(path: $homeNavigationPath.path) {
                 SubredditDrawerView(apiService: apiService)
                     .environment(\.navigationPathManager, homeNavigationPath)
@@ -30,7 +22,6 @@ struct MainTabView: View {
                 Text("Home")
             }
             
-            // Inbox Tab
             NavigationStack(path: $inboxNavigationPath.path) {
                 InboxView(apiService: apiService)
                     .environment(\.navigationPathManager, inboxNavigationPath)
@@ -43,13 +34,11 @@ struct MainTabView: View {
                 Text("Inbox")
             }
             
-            // Profile Tab (center)
             NavigationStack(path: $profileNavigationPath.path) {
                 Group {
                     if let username = apiService.userInfo?.name, !username.isEmpty {
                         UserProfileView(username: username)
                     } else {
-                        // Fallback if not authenticated
                         VStack(spacing: 16) {
                             Image(systemName: "person.crop.circle.badge.exclamationmark")
                                 .font(.system(size: 48))
@@ -77,7 +66,6 @@ struct MainTabView: View {
                 Text("Profile")
             }
 
-            // Search Tab (moved right of Profile)
             NavigationStack(path: $searchNavigationPath.path) {
                 SearchView(apiService: apiService)
                     .environment(\.navigationPathManager, searchNavigationPath)
@@ -90,7 +78,6 @@ struct MainTabView: View {
                 Text("Search")
             }
 
-            // Settings Tab (far right)
             NavigationStack(path: $settingsNavigationPath.path) {
                 SettingsView(apiService: apiService)
                     .environment(\.navigationPathManager, settingsNavigationPath)

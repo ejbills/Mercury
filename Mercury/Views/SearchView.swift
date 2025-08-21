@@ -1,10 +1,3 @@
-//
-//  SearchView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 struct SearchView: View {
@@ -44,19 +37,16 @@ struct SearchView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Search Bar
             searchBar
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
             
-            // Tab Picker
             if hasSearched {
                 tabPicker
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
             
-            // Content
             if isLoading && !hasSearched {
                 loadingView
             } else if let errorMessage = errorMessage {

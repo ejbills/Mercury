@@ -1,2 +1,9 @@
 *.env
 Mercury/Generated/Secrets.swift
+# Xcode and macOS noise
+.DS_Store
+**/*.xcuserstate
+**/*.xcuserdatad/
+Mercury.xcodeproj/xcuserdata/
+*.moved-aside
+DerivedData/

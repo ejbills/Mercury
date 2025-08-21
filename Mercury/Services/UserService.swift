@@ -1,17 +1,10 @@
-//
-//  UserService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 
 /// Service responsible for user profile operations
 class UserService: BaseRedditService {
-    private lazy var avatarService: AvatarService = {
+    private lazy var avatarManager: AvatarManager = {
         guard let auth = self.authService else { fatalError("Missing authService") }
-        return AvatarService(authService: auth)
+        return AvatarManager(authService: auth)
     }()
     
     // MARK: - User Profiles
@@ -55,6 +48,11 @@ class UserService: BaseRedditService {
             throw error
         }
     }
+
+    func fetchAvatarURL(username: String) async -> URL? {
+        let map = await avatarManager.fetchAvatars(for: [username])
+        return map[username]
+    }
     
     func fetchUserPosts(username: String, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try validateAccessToken()
@@ -76,7 +74,6 @@ class UserService: BaseRedditService {
         return try await performPostRequest(request: request, endpoint: "user/\(username)")
     }
 
-    // Fetch a user's recent comments as a flat listing
     func fetchUserComments(username: String, after: String? = nil, limit: Int = 25) async throws -> UserCommentsResponse {
         try validateAccessToken()
 
@@ -106,7 +103,6 @@ class UserService: BaseRedditService {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let commentsResponse = try decoder.decode(UserCommentsResponse.self, from: data)
 
-            // Filter
             let filteredChildren: [CommentChild] = commentsResponse.data.children.compactMap { child in
                 switch child.data {
                 case .comment(let comment):
@@ -116,17 +112,15 @@ class UserService: BaseRedditService {
                 }
             }
 
-            // Batch avatars for authors
-            let authorIds = Array(Set(filteredChildren.compactMap { child -> String? in
-                if case .comment(let c) = child.data { return c.authorFullname } else { return nil }
+            let usernames = Array(Set(filteredChildren.compactMap { child -> String? in
+                if case .comment(let c) = child.data { return c.author } else { return nil }
             }))
-            let avatarMap = try await avatarService.fetchUserAvatars(for: authorIds)
+            let avatarMap = await avatarManager.fetchAvatars(for: usernames)
 
-            // Enrich comments with avatar URLs
             let enrichedChildren: [CommentChild] = filteredChildren.map { child in
                 switch child.data {
                 case .comment(var c):
-                    if let fid = c.authorFullname, let url = avatarMap[fid] { c.authorIconURL = url }
+                    if let url = avatarMap[c.author] { c.authorIconURL = url }
                     return CommentChild(kind: child.kind, data: .comment(c))
                 case .more(let m):
                     return CommentChild(kind: child.kind, data: .more(m))
@@ -174,20 +168,18 @@ class UserService: BaseRedditService {
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
 
-                // Filter (respect global filters)
                 let filteredChildren = postResponse.data.children.compactMap { child -> PostChild? in
                     guard let post = child.data else { return nil }
                     if FilterService.shared.shouldFilterPost(post) { return nil }
                     return PostChild(kind: child.kind, data: post)
                 }
 
-                // Batch-fetch avatar URLs
-                let authorIds = Array(Set(filteredChildren.compactMap { $0.data?.authorFullname }))
-                let avatarMap = try await avatarService.fetchUserAvatars(for: authorIds)
+                let usernames = Array(Set(filteredChildren.compactMap { $0.data?.author }))
+                let avatarMap = await avatarManager.fetchAvatars(for: usernames)
 
                 let enrichedChildren = filteredChildren.map { child in
                     var post = child.data!
-                    if let fid = post.authorFullname, let url = avatarMap[fid] { post.authorIconURL = url }
+                    if let url = avatarMap[post.author] { post.authorIconURL = url }
                     return PostChild(kind: child.kind, data: post)
                 }
 
@@ -267,7 +259,6 @@ struct UserProfile: Codable, Identifiable {
         return link + comment
     }
     
-    // Use subreddit icon if main iconImg is not available
     var effectiveIconImg: String? {
         if let iconImg = iconImg, !iconImg.isEmpty {
             return iconImg
@@ -314,7 +305,6 @@ struct UserProfileResponse: Codable {
     let data: UserProfile
 }
 
-// Listing response for user comments
 struct UserCommentsResponse: Codable {
     let data: CommentListData
 }

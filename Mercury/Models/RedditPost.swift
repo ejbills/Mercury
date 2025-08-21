@@ -1,10 +1,3 @@
-//
-//  RedditPost.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 import CoreGraphics
 
@@ -56,10 +49,8 @@ struct RedditPost: Codable, Identifiable, Hashable {
     let downs: Int
     let likes: Bool?
     
-    // Local vote state management
     var currentVoteState: VoteState = .neutral
     var displayScore: Int
-    // Enriched metadata (not from Reddit's listing JSON)
     var authorIconURL: URL? = nil
     
     enum VoteState {
@@ -144,7 +135,6 @@ struct RedditPost: Codable, Identifiable, Hashable {
         downs = try container.decodeIfPresent(Int.self, forKey: .downs) ?? 0
         likes = try container.decodeIfPresent(Bool.self, forKey: .likes)
         
-        // Initialize local vote state and display score
         displayScore = score
         if let likes = likes {
             currentVoteState = likes ? .upvoted : .downvoted
@@ -216,25 +206,21 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var postType: PostType {
-        // Check for gallery first (multiple preview images)
         if isGalleryPost {
             return .gallery
         }
         
-        // Check for video content
         if isVideo || hasVideoURL {
             return .video
         } else if let hint = postHint {
             switch hint {
             case "image":
-                // Check if it's actually a GIF
                 if isGifContent {
                     return .gif
                 } else {
                     return .image
                 }
             case "link":
-                // Special case: if it's a link but has preview images, it might be an image post
                 if preview != nil && !isDirectImageURL(url ?? "") {
                     return .link
                 } else if isDirectImageURL(url ?? "") {
@@ -261,7 +247,6 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     private var hasVideoURL: Bool {
-        // Check if the URL indicates this is a video
         if let url = url {
             return url.contains("v.redd.it") || 
                    url.contains("youtu.be") || 
@@ -275,12 +260,9 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var imageURL: String? {
-        // First try to get the best quality image from preview
         if let preview = preview,
            let firstImage = preview.images.first {
             
-            // For optimal mobile display, use 1080px width resolution if available
-            // This provides crisp images without being excessive
             let allSources = [firstImage.source] + firstImage.resolutions
             let optimalSource = allSources.first { $0.width >= 1080 } ?? 
                               allSources.max { $0.width < $1.width } ?? 
@@ -290,13 +272,11 @@ struct RedditPost: Codable, Identifiable, Hashable {
             return sourceURL
         }
         
-        // For direct image URLs (like i.redd.it, imgur, etc.) - but prefer preview when available
         if let url = url, isDirectImageURL(url) {
             let cleanURL = url.replacingOccurrences(of: "&amp;", with: "&")
             return cleanURL
         }
         
-        // Last resort: use thumbnail only if it's actually an image URL
         if let thumb = thumbnail,
            thumb != "self" && thumb != "default" && thumb != "nsfw" && thumb != "spoiler" && thumb != "",
            thumb.hasPrefix("http") && (thumb.contains("redd.it") || thumb.contains("imgur")) {
@@ -310,7 +290,6 @@ struct RedditPost: Codable, Identifiable, Hashable {
     var imageDimensions: CGSize? {
         if let preview = preview,
            let firstImage = preview.images.first {
-            // Get the same optimal source we use for imageURL
             let allSources = [firstImage.source] + firstImage.resolutions
             let optimalSource = allSources.first { $0.width >= 1080 } ?? 
                               allSources.max { $0.width < $1.width } ?? 
@@ -324,7 +303,6 @@ struct RedditPost: Codable, Identifiable, Hashable {
         if isVideo,
            let preview = preview,
            let firstImage = preview.images.first {
-            // Use the same logic as videoThumbnailURL for consistency
             let allSources = [firstImage.source] + firstImage.resolutions
             let goodSource = allSources.first { $0.width >= 640 && $0.width <= 1080 } ?? 
                            allSources.last ?? firstImage.source
@@ -339,10 +317,7 @@ struct RedditPost: Codable, Identifiable, Hashable {
             return redditVideo.hlsUrl ?? redditVideo.fallbackUrl
         }
         
-        // For v.redd.it URLs, try to construct the video URL
         if let url = url, url.contains("v.redd.it") {
-            // v.redd.it URLs typically follow the pattern: https://v.redd.it/{id}
-            // The actual video is at: https://v.redd.it/{id}/HLSPlaylist.m3u8 or DASH_720.mp4
             if !url.hasSuffix("/") {
                 return "\(url)/DASH_720.mp4"
             }
@@ -352,12 +327,9 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var videoThumbnailURL: String? {
-        // For v.redd.it videos, try to get preview image
         if isVideo {
             if let preview = preview,
                let firstImage = preview.images.first {
-                // For videos, use a good resolution (not the highest to save bandwidth)
-                // Find a resolution around 640-1080px width, fallback to source
                 let allSources = [firstImage.source] + firstImage.resolutions
                 let goodSource = allSources.first { $0.width >= 640 && $0.width <= 1080 } ?? 
                                allSources.last ?? firstImage.source
@@ -365,7 +337,6 @@ struct RedditPost: Codable, Identifiable, Hashable {
                 return url
             }
             
-            // Fallback to thumbnail if available
             if let thumb = thumbnail,
                thumb != "self" && thumb != "default" && thumb != "nsfw" && thumb != "spoiler" && thumb != "",
                thumb.hasPrefix("http") {
@@ -382,32 +353,26 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var isGalleryPost: Bool {
-        // First check if Reddit explicitly marks this as a gallery
         if let isGallery = isGallery, isGallery {
             return true
         }
         
-        // Check if media_metadata exists (primary indicator for galleries)
         if let mediaMetadata = mediaMetadata, !mediaMetadata.isEmpty {
             return true
         }
         
-        // Check URL for gallery indicators
         if let url = url, url.contains("/gallery/") {
             return true
         }
         
-        // Check domain for gallery indicators
         if let domain = domain, domain.contains("reddit.com") && url?.contains("/gallery/") == true {
             return true
         }
         
-        // Also check for post_hint indicating gallery with multiple images
         if postHint == "image" && preview?.images.count ?? 0 > 1 {
             return true
         }
         
-        // Fallback: multiple preview images
         if let preview = preview, preview.images.count > 1 {
             return true
         }
@@ -416,7 +381,6 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var galleryImages: [GalleryImage] {
-        // Try to get images from media_metadata first (more reliable for galleries)
         if let mediaMetadata = mediaMetadata, !mediaMetadata.isEmpty {
             return Array(mediaMetadata.enumerated()).compactMap { (index, keyValue) in
                 let (_, metadata) = keyValue
@@ -439,11 +403,9 @@ struct RedditPost: Codable, Identifiable, Hashable {
             }
         }
         
-        // Fallback to preview images
         guard let preview = preview else { return [] }
         
         return preview.images.enumerated().map { index, previewImage in
-            // Get the best quality image for each gallery item
             let allSources = [previewImage.source] + previewImage.resolutions
             let optimalSource = allSources.first { $0.width >= 1080 } ?? 
                               allSources.max { $0.width < $1.width } ?? 
@@ -466,13 +428,11 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var isGifContent: Bool {
-        // Check if media indicates it's a GIF
         if let media = media ?? secureMedia,
            let redditVideo = media.redditVideo {
             return redditVideo.isGif
         }
         
-        // Check various ways a GIF might be indicated
         if let imageURL = imageURL {
             return imageURL.lowercased().contains(".gif") || 
                    imageURL.lowercased().contains("gif") ||
@@ -489,19 +449,16 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var gifURL: String? {
-        // For Reddit GIFs that are actually videos
         if let media = media ?? secureMedia,
            let redditVideo = media.redditVideo,
            redditVideo.isGif {
             return redditVideo.fallbackUrl
         }
         
-        // For direct GIF URLs
         if let url = url, url.lowercased().contains(".gif") {
             return url
         }
         
-        // Use the regular image URL for other GIF sources
         return imageURL
     }
     
@@ -525,7 +482,6 @@ struct RedditPost: Codable, Identifiable, Hashable {
         let oldState = currentVoteState
         currentVoteState = voteState
         
-        // Update display score based on vote change
         switch (oldState, voteState) {
         case (.neutral, .upvoted):
             displayScore += 1
@@ -563,12 +519,10 @@ struct RedditPost: Codable, Identifiable, Hashable {
         let imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"]
         let lowercaseURL = url.lowercased()
         
-        // Check for direct image file extensions
         if imageExtensions.contains(where: { lowercaseURL.contains($0) }) {
             return true
         }
         
-        // Check for known image hosting domains
         let imageHosts = ["i.imgur.com", "i.redd.it", "preview.redd.it", "external-preview.redd.it", "imgur.com"]
         return imageHosts.contains { lowercaseURL.contains($0) }
     }
@@ -769,7 +723,6 @@ struct PostChild: Codable {
         
         kind = try container.decode(String.self, forKey: .kind)
         
-        // Only decode if this is a post (t3), not a subreddit (t5) or comment (t1)
         if kind == "t3" {
             data = try container.decode(RedditPost.self, forKey: .data)
         } else {

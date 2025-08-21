@@ -1,10 +1,3 @@
-//
-//  SubredditFeedView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 struct SubredditFeedView: View {
@@ -68,7 +61,6 @@ struct SubredditFeedView: View {
             }
             .scrollPosition(id: $scrollPosition)
             .onAppear {
-                // Only load initial posts if we haven't appeared before and have no posts
                 if !hasAppeared && posts.isEmpty && !isLoading {
                     hasAppeared = true
                     Task {
@@ -80,7 +72,6 @@ struct SubredditFeedView: View {
         .navigationTitle(subredditDisplayName)
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $selectedPost) { post in
-            // Create a custom view that can reactively access the latest videoHandoffState
             PostDetailContainer(
                 post: post,
                 namespace: mediaNamespace,
@@ -224,7 +215,6 @@ struct SubredditFeedView: View {
         do {
             let response = try await fetchPosts(after: nil)
             await MainActor.run {
-                // Remove animation for initial load to prevent layout jumping
                 self.posts = response.data.children.compactMap { $0.data }
                 self.after = response.data.after
                 self.hasMore = response.data.after != nil && !response.data.children.isEmpty
@@ -265,12 +255,10 @@ struct SubredditFeedView: View {
             await MainActor.run {
                 self.isLoadingMore = false
             }
-            // Failed to load more posts
         }
     }
     
     private func refreshFeed() async {
-        // Don't restore position on refresh - user expects to go to top
         await loadInitialPosts()
     }
     

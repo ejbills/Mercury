@@ -1,10 +1,3 @@
-//
-//  PostCommentsView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import SwiftUI
 
 struct PostCommentsView: View {
@@ -56,7 +49,6 @@ struct PostCommentsView: View {
                 scrollToTargetIfNeeded(proxy: proxy)
             }
             .onAppear {
-                // If comments are already loaded (e.g., coming back), attempt scroll
                 scrollToTargetIfNeeded(proxy: proxy)
             }
         }
@@ -309,7 +301,6 @@ struct PostCommentsView: View {
     
     private func scrollToTargetIfNeeded(proxy: ScrollViewProxy) {
         guard let targetId = targetCommentId, !targetId.isEmpty else { return }
-        // Attempt after a brief delay to allow layout
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeInOut(duration: 0.25)) {
                 proxy.scrollTo(targetId, anchor: .center)

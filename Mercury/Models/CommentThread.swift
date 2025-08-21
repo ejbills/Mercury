@@ -1,14 +1,6 @@
-//
-//  CommentThread.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import Foundation
 
 struct CommentThread: Identifiable {
-    // Stable UI identity separate from Reddit's comment id
     let id = UUID()
     let parentComment: RedditComment
     init(parentComment: RedditComment) {
@@ -158,8 +150,6 @@ class CommentThreadManager {
 
 extension CommentThreadManager {
     func addRootComment(_ comment: RedditComment) {
-        // Insert a distinct thread object so it never reuses another comment's identity
-        // Keep internal list of all comments consistent as well
         let newComment = comment // value copy for clarity
         allComments.insert(newComment, at: 0)
         commentThreads.insert(CommentThread(parentComment: newComment), at: 0)

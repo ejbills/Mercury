@@ -1,10 +1,3 @@
-//
-//  InboxDetailView.swift
-//  Mercury
-//
-//  Created by AI Assistant on 8/19/25.
-//
-
 import SwiftUI
 
 struct InboxDetailView: View {

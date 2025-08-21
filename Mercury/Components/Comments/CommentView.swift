@@ -1,9 +1,3 @@
-//
-//  CommentView.swift
-//  Mercury
-//
-//
-
 import SwiftUI
 
 struct CommentView: View {
@@ -56,12 +50,9 @@ struct CommentView: View {
     
     private var commentHeader: some View {
         HStack(spacing: 8) {
-            // Author section with profile picture and pill
             HStack(spacing: 6) {
-                // Small profile picture (icon URL should be provided upstream when available)
                 UserAvatar(username: comment.author, size: 20, iconURL: comment.authorIconURL)
                 
-                // Author pill with badges - matches post design pattern
                 Pill(action: {
                     if !isDeletedUser {
                         navigationPath.navigate(to: .userProfile(username: comment.author))
@@ -84,14 +75,12 @@ struct CommentView: View {
                                 .background(.blue, in: Capsule())
                         }
                         
-                        // Moderator badge removed; moderator username is styled green via authorColor
                     }
                 }
             }
             
             Spacer()
             
-            // Meta info pills - clean and minimal
             HStack(spacing: 4) {
                 if !comment.scoreHidden {
                     Pill(size: .small) {
@@ -148,7 +137,6 @@ struct CommentView: View {
     
     private var commentActions: some View {
         HStack(spacing: 8) {
-            // Mini vote controls styled after post voting
             HStack(spacing: 4) {
                 VoteButton(
                     direction: .up,
@@ -178,7 +166,6 @@ struct CommentView: View {
             }
             .buttonStyle(.plain)
 
-            // Action menu (save, delete)
             Menu {
                 Button(action: { handleSave() }) {
                     Label(comment.saved ? "Unsave" : "Save",
@@ -285,7 +272,6 @@ struct CommentView: View {
         let originalState = voteState
         let originalScore = displayScore
         
-        // Optimistic update
         voteState = newState == voteState ? .neutral : newState
         updateDisplayScore(from: originalState, to: voteState)
         

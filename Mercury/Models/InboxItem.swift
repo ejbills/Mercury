@@ -1,10 +1,3 @@
-//
-//  InboxItem.swift
-//  Mercury
-//
-//  Created by AI Assistant on 8/19/25.
-//
-
 import Foundation
 
 /// Unified model used by the app to render inbox entries

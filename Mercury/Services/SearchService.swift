@@ -1,10 +1,3 @@
-//
-//  SearchService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 
 /// Service responsible for search functionality
@@ -92,8 +85,6 @@ class SearchService: BaseRedditService {
             try validateResponse(httpResponse)
             
             let decoder = JSONDecoder()
-            // Note: We use explicit CodingKeys mappings instead of .convertFromSnakeCase
-            // to avoid conflicts with field decoding
             
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)

@@ -1,10 +1,3 @@
-//
-//  FilterService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/17/25.
-//
-
 import Foundation
 import Defaults
 

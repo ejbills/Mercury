@@ -1,10 +1,3 @@
-//
-//  PostRowView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import Nuke
 import NukeUI
@@ -43,7 +36,6 @@ struct PostRowView: View {
         self.onRootReplyPosted = onRootReplyPosted
         self.onVideoHandoff = onVideoHandoff
         self.postType = post.postType
-        // Detect reddit post links (crossposts/embedded posts) regardless of thumbnail
         let isRedditPostLink: Bool = {
             if let u = post.url?.lowercased() {
                 return (u.contains("reddit.com/r/") && (u.contains("/comments/") || u.contains("/s/"))) || u.contains("redd.it/")
@@ -58,12 +50,10 @@ struct PostRowView: View {
                                 post.thumbnail != "spoiler" &&
                                 post.thumbnail != "")
         )) || isRedditPostLink
-        // Initialize state properties
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
     }
     
-    // Optimization: compute expensive properties once
     private let postType: PostType
     private let shouldShowLinkPreview: Bool
     
@@ -94,13 +84,11 @@ struct PostRowView: View {
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
-                // Header section
                 VStack(alignment: .leading, spacing: 8) {
                     postHeader
                     postTitle
                 }
                 
-                // TODO: make only postMediaContent toggle the media overlay, clicking other post elements should navigate to the post body rather than only just the comments button.
                 if hasMediaOrTextContent {
                     postMediaContent
                         .overlay {
@@ -112,7 +100,6 @@ struct PostRowView: View {
                 
                 postFooter
                 
-                // Bottom action toolbar
                 if showLargeToolbar {
                     HStack(spacing: 20) {
                         VotingCluster(
@@ -203,7 +190,6 @@ struct PostRowView: View {
     
     private var postTitle: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Title with better typography - ALWAYS show full title
             Text(post.title)
                 .font(.title3)
                 .fontWeight(.medium)
@@ -212,7 +198,6 @@ struct PostRowView: View {
             
             
             HStack(spacing: 6) {
-                // Post flair first if available
                 if let linkFlairText = post.linkFlairText, !linkFlairText.isEmpty {
                     Pill(size: .small) {
                         Text(linkFlairText)
@@ -251,7 +236,6 @@ struct PostRowView: View {
                     .background(.orange, in: Capsule())
                 }
                 
-                // Domain indicator for links
                 if post.postType == .link && !(post.domain?.isEmpty ?? true) {
                     Pill(size: .small) {
                         Text(shortenedDomain)
@@ -261,7 +245,6 @@ struct PostRowView: View {
                     }
                 }
                 
-                // Post status indicators (moved from footer)
                 if post.gilded > 0 {
                     Pill(size: .small) {
                         HStack(spacing: 3) {
@@ -382,8 +365,6 @@ struct PostRowView: View {
     @ViewBuilder
     private var linkPostContent: some View {
         if let urlString = post.url {
-            // Use RedditPostCard for reddit links (crossposts/embedded posts),
-            // otherwise fall back to rich article preview.
             if isRedditPostURL(urlString) {
                 RedditPostCard(url: urlString) { linkedPost in
                     if let linkedPost = linkedPost {
@@ -463,9 +444,7 @@ struct PostRowView: View {
         let originalState = voteState
         let originalScore = displayScore
         
-        // Apply optimistic update with iOS 18+ spring animation
         withAnimation(.bouncy(duration: 0.4)) {
-            // Calculate score change
             let scoreDelta = calculateScoreDelta(from: voteState, to: newVoteState)
             voteState = newVoteState
             displayScore = max(0, displayScore + scoreDelta)
@@ -487,7 +466,6 @@ struct PostRowView: View {
                     isVoting = false
                 }
             } catch {
-                // Revert optimistic update on error with bounce animation
                 await MainActor.run {
                     withAnimation(.bouncy(duration: 0.4)) {
                         voteState = originalState
@@ -512,7 +490,6 @@ struct PostRowView: View {
     }
     
     private func handleShare() {
-        // Simple share always shares the post URL, not the media
         shareItem = nil  // No media file to share
         showShareSheet = true
     }
@@ -523,18 +500,13 @@ struct PostRowView: View {
                 if post.saved {
                     try await redditAPI.unsavePost(postId: post.id)
                     await MainActor.run {
-                        // Note: We can't directly mutate post.saved as it's not part of our mutable state
-                        // This would typically be handled by refreshing the post data
                     }
                 } else {
                     try await redditAPI.savePost(postId: post.id)
                     await MainActor.run {
-                        // Note: We can't directly mutate post.saved as it's not part of our mutable state
-                        // This would typically be handled by refreshing the post data
                     }
                 }
             } catch {
-                // Handle error silently for now
                 print("Save/Unsave error: \(error)")
                 
             }
@@ -544,14 +516,11 @@ struct PostRowView: View {
     private func handleCopyLink() {
         UIPasteboard.general.string = post.permalinkURL
         
-        // Show toast feedback
         showingCopiedToast = true
         
-        // Provide haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
         
-        // Hide toast after delay
         Task {
             try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
             await MainActor.run {
@@ -587,7 +556,6 @@ struct PostRowView: View {
             } catch {
                 
                 await MainActor.run {
-                    // Fallback to sharing the post URL
                     shareItem = URL(string: post.permalinkURL)
                     showShareSheet = true
                 }

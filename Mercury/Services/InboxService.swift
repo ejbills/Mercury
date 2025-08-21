@@ -1,10 +1,3 @@
-//
-//  InboxService.swift
-//  Mercury
-//
-//  Created by AI Assistant on 8/19/25.
-//
-
 import Foundation
 
 /// Service responsible for fetching and mapping Reddit inbox data
@@ -66,7 +59,6 @@ class InboxService: BaseRedditService {
         }
     }
     
-    // Map raw API message/comment/mention to unified inbox item model
     private func mapThingToInboxItem(_ thing: MessageThing) -> InboxItem? {
         let raw = thing.data
         let id = raw.id
@@ -93,7 +85,6 @@ class InboxService: BaseRedditService {
                 contextURL: contextURL
             )
         case "t1": // Comment-based (reply or mention)
-            // Type may distinguish reply vs mention
             let apiType = (raw.type ?? "").lowercased()
             let inferredType: InboxItem.ItemType = apiType.contains("mention") ? .mention : .commentReply
             let subject = raw.subject ?? (inferredType == .mention ? "Mention" : "Comment reply")
@@ -117,7 +108,6 @@ class InboxService: BaseRedditService {
     
     private func buildContextURL(from contextPath: String?) -> URL? {
         guard let contextPath, !contextPath.isEmpty else { return nil }
-        // API returns relative paths like "/r/sub/comments/abc/…"
         return URL(string: "https://reddit.com\(contextPath)")
     }
     
@@ -128,7 +118,6 @@ class InboxService: BaseRedditService {
         try validateAccessToken()
         guard let url = URL(string: "\(baseURL)/api/comment") else { throw APIError.parseError }
         var request = createPOSTRequest(url: url)
-        // Reddit expects `thing_id` or `parent` for replies; use `thing_id` with fullname
         let parameters = [
             "api_type": "json",
             "thing_id": fullname,

@@ -1,10 +1,3 @@
-//
-//  UserProfileView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import NukeUI
 
@@ -27,6 +20,7 @@ struct UserProfileView: View {
     @State private var showCompose = false
     @State private var commentPostMap: [String: RedditPost] = [:]
     @State private var commentsContextReady = false
+    @State private var headerAvatarURL: URL? = nil
     
     @State private var videoHandoffState: VideoHandoffState?
     @State private var selectedSection: ProfileSection = .posts
@@ -131,13 +125,23 @@ struct UserProfileView: View {
     
     private var avatar: some View {
         Group {
-            if let url = profile?.profileIconURL {
+            if let url = profile?.profileIconURL ?? headerAvatarURL {
                 LazyImage(url: url) { state in
                     if let image = state.image {
                         image.resizable().scaledToFill()
+                    } else if state.isLoading {
+                        ZStack {
+                            Circle().fill(accentColor.opacity(0.2))
+                            ProgressView().progressViewStyle(.circular)
+                        }
                     } else {
                         ZStack { Circle().fill(accentColor); Text(initials).font(.title).bold().foregroundStyle(.white) }
                     }
+                }
+            } else if isLoading {
+                ZStack {
+                    Circle().fill(accentColor.opacity(0.2))
+                    ProgressView().progressViewStyle(.circular)
                 }
             } else {
                 ZStack { Circle().fill(accentColor); Text(initials).font(.title).bold().foregroundStyle(.white) }
@@ -359,14 +363,30 @@ struct UserProfileView: View {
             async let commentsResp = redditAPI.fetchUserComments(username: username, after: nil, limit: 25)
             
             let (profile, postsResponse, commentsResponse) = try await (p, postsResp, commentsResp)
+            let enrichedPosts = postsResponse.data.children.compactMap { $0.data }
+            let enrichedComments = commentsResponse.data.children.compactMap { child in
+                if case .comment(let c) = child.data { return c } else { return nil }
+            }
+
+            let derivedAvatarURL: URL? = (
+                enrichedPosts.first(where: { $0.authorIconURL != nil })?.authorIconURL ??
+                enrichedComments.first(where: { $0.authorIconURL != nil })?.authorIconURL
+            )
+
             await MainActor.run {
                 self.profile = profile
-                self.posts = postsResponse.data.children.compactMap { $0.data }
+                self.posts = enrichedPosts
                 self.postsAfter = postsResponse.data.after
-                self.comments = commentsResponse.data.children.compactMap { child in
-                    if case .comment(let c) = child.data { return c } else { return nil }
-                }
+                self.comments = enrichedComments
                 self.commentsAfter = commentsResponse.data.after
+                if self.headerAvatarURL == nil, profile.profileIconURL == nil, let d = derivedAvatarURL {
+                    self.headerAvatarURL = d
+                }
+            }
+            if await MainActor.run(body: { self.headerAvatarURL }) == nil && profile.profileIconURL == nil {
+                if let fetched = await redditAPI.fetchAvatarURL(username: username) {
+                    await MainActor.run { self.headerAvatarURL = fetched }
+                }
             }
             await ensurePostsForComments(comments)
             await MainActor.run { commentsContextReady = true }
@@ -408,7 +428,6 @@ struct UserProfileView: View {
                 if case .comment(let c) = child.data { return c } else { return nil }
             }
             let unique = new.filter { nc in !comments.contains(where: { $0.id == nc.id }) }
-            // ensure post context before appending so we always render CommentView
             await ensurePostsForComments(unique)
             await MainActor.run {
                 comments.append(contentsOf: unique)
@@ -435,7 +454,6 @@ struct UserProfileView: View {
     
     private func linkKey(for comment: RedditComment) -> String? {
         if let linkId = comment.linkId, !linkId.isEmpty { return linkId }
-        // Fallback: parse from permalink /r/<sub>/comments/<postId>/...
         let parts = comment.permalink.split(separator: "/")
         if let idx = parts.firstIndex(of: Substring("comments")), parts.count > idx + 1 {
             let postId = String(parts[idx + 1])
@@ -454,7 +472,6 @@ struct UserProfileView: View {
         }
     }
     
-    // Lightweight fallback used while post context loads
     private struct CommentFallbackRow: View {
         let comment: RedditComment
         var body: some View {
@@ -475,7 +492,6 @@ struct UserProfileView: View {
         }
     }
     
-    // Compose PM sheet
     private struct ComposeMessageSheet: View {
         let toUsername: String
         @Binding var isPresented: Bool

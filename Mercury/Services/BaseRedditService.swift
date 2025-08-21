@@ -1,10 +1,3 @@
-//
-//  BaseRedditService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 
 /// Base class providing common functionality for all Reddit services

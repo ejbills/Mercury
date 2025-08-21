@@ -1,17 +1,10 @@
-//
-//  ContentService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 
 /// Service responsible for fetching posts, feeds, and subreddit content
 class ContentService: BaseRedditService {
-    private lazy var avatarService: AvatarService = {
+    private lazy var avatarManager: AvatarManager = {
         guard let auth = self.authService else { fatalError("Missing authService") }
-        return AvatarService(authService: auth)
+        return AvatarManager(authService: auth)
     }()
     
     // MARK: - Subreddits
@@ -219,7 +212,6 @@ class ContentService: BaseRedditService {
                 throw APIError.networkError
             }
             
-            // Custom validation for posts to handle subreddit not found
             guard httpResponse.statusCode == 200 else {
                 switch httpResponse.statusCode {
                 case 401:
@@ -242,21 +234,18 @@ class ContentService: BaseRedditService {
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
 
-                // Filter unwanted posts
                 let filteredChildren = postResponse.data.children.compactMap { child -> PostChild? in
                     guard let post = child.data else { return nil }
                     if FilterService.shared.shouldFilterPost(post) { return nil }
                     return PostChild(kind: child.kind, data: post)
                 }
 
-                // Batch fetch avatars for authors
-                let authorIds = Array(Set(filteredChildren.compactMap { $0.data?.authorFullname }))
-                let avatarMap = try await avatarService.fetchUserAvatars(for: authorIds)
+                let usernames = Array(Set(filteredChildren.compactMap { $0.data?.author }))
+                let avatarMap = await avatarManager.fetchAvatars(for: usernames)
 
-                // Enrich posts with avatar URLs
                 let enrichedChildren: [PostChild] = filteredChildren.map { child in
                     var post = child.data!
-                    if let fid = post.authorFullname, let url = avatarMap[fid] { post.authorIconURL = url }
+                    if let url = avatarMap[post.author] { post.authorIconURL = url }
                     return PostChild(kind: child.kind, data: post)
                 }
 

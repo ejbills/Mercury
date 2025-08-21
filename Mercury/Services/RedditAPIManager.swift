@@ -1,17 +1,9 @@
-//
-//  RedditAPIManager.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 import Combine
 
 /// Main coordinator class that manages all Reddit services
 @Observable
 class RedditAPIManager {
-    // Core services
     let authService: AuthenticationService
     let contentService: ContentService
     let userService: UserService
@@ -46,10 +38,8 @@ class RedditAPIManager {
     // MARK: - Initialization
     
     init() {
-        // Initialize authentication service first
         self.authService = AuthenticationService()
         
-        // Initialize other services with auth service reference
         self.contentService = ContentService(authService: authService)
         self.userService = UserService(authService: authService)
         self.searchService = SearchService(authService: authService)
@@ -115,6 +105,10 @@ class RedditAPIManager {
         try await userService.fetchUserProfile(username: username)
     }
     
+    func fetchAvatarURL(username: String) async -> URL? {
+        await userService.fetchAvatarURL(username: username)
+    }
+    
     func fetchUserPosts(username: String, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try await userService.fetchUserPosts(username: username, after: after, limit: limit)
     }
@@ -165,17 +159,14 @@ class RedditAPIManager {
         try await inboxService.replyToMessage(fullname: fullname, text: text)
     }
     
-    // Compose a new private message to a user
     func composePrivateMessage(to username: String, subject: String, text: String) async throws {
         try await inboxService.composeMessage(to: username, subject: subject, text: text)
     }
 
-    // Submit a new comment or reply
     func submitComment(parentFullname: String, text: String) async throws -> RedditComment {
         try await commentsService.submitComment(parentFullname: parentFullname, text: text)
     }
 
-    // Delete an existing comment (must be authored by the current user)
     func deleteComment(commentId: String) async throws {
         try await commentsService.deleteComment(commentId: commentId)
     }

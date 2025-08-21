@@ -1,10 +1,3 @@
-//
-//  SubredditDrawerView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 struct SubredditDrawerView: View {
@@ -54,7 +47,6 @@ struct SubredditDrawerView: View {
             navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
         }) {
             VStack(spacing: 12) {
-                // Icon with gradient background
                 ZStack {
                     Circle()
                         .fill(iconGradient(for: link))
@@ -66,7 +58,6 @@ struct SubredditDrawerView: View {
                         .foregroundStyle(.white)
                 }
                 
-                // Title
                 Text(link.rawValue)
                     .font(.subheadline)
                     .fontWeight(.medium)
@@ -209,7 +200,6 @@ struct SubredditDrawerView: View {
             
             if subreddits.count > 50 {
                 Button("Show All (\(subreddits.count))") {
-                    // Show full subreddit list
                 }
                 .font(.body)
                 .fontWeight(.medium)

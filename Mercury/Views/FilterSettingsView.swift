@@ -1,10 +1,3 @@
-//
-//  FilterSettingsView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/17/25.
-//
-
 import SwiftUI
 import Defaults
 
@@ -26,14 +19,12 @@ struct FilterSettingsView: View {
     var body: some View {
         NavigationView {
             List {
-                // Filter Toggles Section
                 Section("Filter Settings") {
                     Toggle("Keyword Filtering", isOn: $keywordFilterEnabled)
                     Toggle("User Blocking", isOn: $userBlockingEnabled)
                     Toggle("Subreddit Blocking", isOn: $subredditBlockingEnabled)
                 }
                 
-                // Blocked Keywords Section
                 Section {
                     ForEach(Array(blockedKeywords), id: \.self) { keyword in
                         HStack {
@@ -60,7 +51,6 @@ struct FilterSettingsView: View {
                     }
                 }
                 
-                // Blocked Users Section
                 Section {
                     ForEach(Array(blockedUsers), id: \.self) { user in
                         HStack {
@@ -87,7 +77,6 @@ struct FilterSettingsView: View {
                     }
                 }
                 
-                // Blocked Subreddits Section
                 Section {
                     ForEach(Array(blockedSubreddits), id: \.self) { subreddit in
                         HStack {

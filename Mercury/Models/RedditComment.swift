@@ -1,10 +1,3 @@
-//
-//  RedditComment.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import Foundation
 
 struct RedditComment: Codable, Identifiable, Hashable {
@@ -37,10 +30,8 @@ struct RedditComment: Codable, Identifiable, Hashable {
     let locked: Bool
     var replies: CommentReplies?
     
-    // Local state management
     var currentVoteState: VoteState = .neutral
     var displayScore: Int
-    // Enriched metadata (not from Reddit's listing JSON)
     var authorIconURL: URL? = nil
     var isCollapsed: Bool = false
     
@@ -97,7 +88,6 @@ struct RedditComment: Codable, Identifiable, Hashable {
         locked = try container.decodeIfPresent(Bool.self, forKey: .locked) ?? false
         replies = try container.decodeIfPresent(CommentReplies.self, forKey: .replies)
         
-        // Initialize local state
         displayScore = score
         if let likes = likes {
             currentVoteState = likes ? .upvoted : .downvoted
@@ -171,7 +161,6 @@ struct RedditComment: Codable, Identifiable, Hashable {
         let oldState = currentVoteState
         currentVoteState = voteState
         
-        // Update display score based on vote change
         switch (oldState, voteState) {
         case (.neutral, .upvoted):
             displayScore += 1
@@ -283,9 +272,7 @@ struct CommentResponse: Codable {
                         }
                     }
                 case .more(let more):
-                    // Filter out dummy entries (t3 posts)
                     if !more.name.isEmpty {
-                        // Don't add MoreComments to the flattened list
                     }
                 }
             }
@@ -296,14 +283,12 @@ struct CommentResponse: Codable {
     }
     
     var moreComments: [MoreComments] {
-        // Recursively collect MoreComments from the entire comment tree
         var allMoreComments: [MoreComments] = []
         
         func collectMoreComments(from children: [CommentChild]) {
             for child in children {
                 switch child.data {
                 case .comment(let comment):
-                    // Recursively check this comment's replies
                     if let replies = comment.replies {
                         switch replies {
                         case .empty:
@@ -313,7 +298,6 @@ struct CommentResponse: Codable {
                         }
                     }
                 case .more(let more):
-                    // Only filter out completely empty entries (t3 posts)
                     if more.name.isEmpty && more.children.isEmpty && more.count == 0 {
                     } else {
                         allMoreComments.append(more)
@@ -377,7 +361,6 @@ struct CommentChild: Codable {
         }
     }
     
-    // Simple memberwise initializer
     init(kind: String, data: CommentData) {
         self.kind = kind
         self.data = data
@@ -414,7 +397,6 @@ struct MoreComments: Codable {
     let depth: Int
     let children: [String]
     
-    // Computed property to get the actual ID - use name if id is empty/underscore
     var id: String {
         if rawId.isEmpty || rawId == "_" {
             return name.isEmpty ? "_" : name

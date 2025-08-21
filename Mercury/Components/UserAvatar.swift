@@ -1,10 +1,3 @@
-//
-//  UserAvatar.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import SwiftUI
 
 struct UserAvatar: View {
@@ -22,27 +15,20 @@ struct UserAvatar: View {
         Group {
             if isDeletedUser {
                 deletedUserAvatar
-            } else {
-                AsyncImage(url: displayURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure(_), .empty:
-                        fallbackAvatar
-                    @unknown default:
-                        fallbackAvatar
-                    }
+            } else if let iconURL = iconURL {
+                AsyncImage(url: iconURL) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    fallbackAvatar
                 }
+            } else {
+                fallbackAvatar
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-    }
-    
-    private var displayURL: URL? {
-        return iconURL ?? constructAvatarURL()
     }
     
     private var fallbackAvatar: some View {
@@ -50,7 +36,7 @@ struct UserAvatar: View {
             Circle()
                 .fill(avatarBackgroundColor)
             
-            Text(String(username.prefix(1)).uppercased())
+            Text(firstLetter)
                 .font(.system(size: size * 0.4, weight: .semibold))
                 .foregroundStyle(.white)
         }
@@ -59,34 +45,23 @@ struct UserAvatar: View {
     private var deletedUserAvatar: some View {
         ZStack {
             Circle()
-                .fill(.secondary.opacity(0.3))
-                .overlay(
-                    Circle()
-                        .stroke(.secondary.opacity(0.5), lineWidth: 1)
-                )
+                .fill(.red.opacity(0.2))
             
-            Image(systemName: "person.slash")
+            Image(systemName: "trash")
                 .font(.system(size: size * 0.35, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.red)
         }
     }
     
     private var isDeletedUser: Bool {
-        return username == "[deleted]" || username == "deleted"
+        username == "[deleted]" || username == "deleted"
     }
     
-    private func constructAvatarURL() -> URL? {
-        // Clean username
-        let cleanUsername = username.replacingOccurrences(of: "/u/", with: "")
-            .replacingOccurrences(of: "u/", with: "")
-        
-        // Try Reddit's Snoovatar system with consistent hash-based selection
-        let hash = abs(cleanUsername.hashValue) % 20
-        return URL(string: "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_\(hash).png")
+    private var firstLetter: String {
+        String(username.prefix(1)).uppercased()
     }
     
     private var avatarBackgroundColor: Color {
-        // Generate consistent color based on username
         let hash = abs(username.hashValue)
         let colors: [Color] = [
             .blue, .green, .orange, .purple, .pink, .cyan, 
@@ -101,6 +76,7 @@ struct UserAvatar: View {
         UserAvatar(username: "testuser", size: 32)
         UserAvatar(username: "anotherguy", size: 48)
         UserAvatar(username: "coolperson", size: 64)
+        UserAvatar(username: "[deleted]", size: 32)
     }
     .padding()
 }

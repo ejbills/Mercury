@@ -1,10 +1,3 @@
-//
-//  SkeletonPostView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 struct SkeletonPostView: View {
@@ -13,7 +6,6 @@ struct SkeletonPostView: View {
     var body: some View {
         MaterialCard {
             VStack(alignment: .leading, spacing: 10) {
-                // Post header skeleton
                 HStack(spacing: 8) {
                     Circle()
                         .fill(skeletonGradient)
@@ -34,7 +26,6 @@ struct SkeletonPostView: View {
                         .frame(width: 30, height: 12)
                 }
                 
-                // Post title skeleton
                 VStack(alignment: .leading, spacing: 4) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(skeletonGradient)
@@ -44,7 +35,6 @@ struct SkeletonPostView: View {
                         .fill(skeletonGradient)
                         .frame(width: 280, height: 16)
                     
-                    // Sometimes show third line
                     if Bool.random() {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(skeletonGradient)
@@ -52,15 +42,12 @@ struct SkeletonPostView: View {
                     }
                 }
                 
-                // Media content skeleton (randomly show different types)
                 Group {
                     if Bool.random() {
-                        // Image skeleton
                         RoundedRectangle(cornerRadius: 8)
                             .fill(skeletonGradient)
                             .frame(height: CGFloat.random(in: 200...350))
                     } else if Bool.random() {
-                        // Text content skeleton
                         VStack(alignment: .leading, spacing: 4) {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(skeletonGradient)
@@ -77,7 +64,6 @@ struct SkeletonPostView: View {
                     }
                 }
                 
-                // Footer skeleton
                 HStack(spacing: 16) {
                     HStack(spacing: 4) {
                         RoundedRectangle(cornerRadius: 3)

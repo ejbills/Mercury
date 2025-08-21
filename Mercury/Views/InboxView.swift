@@ -1,10 +1,3 @@
-//
-//  InboxView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/17/25.
-//
-
 import SwiftUI
 
 struct InboxView: View {
@@ -310,7 +303,6 @@ struct InboxView: View {
             selectedItem = item
         case .commentReply, .mention:
             guard let url = item.contextURL else {
-                // Fallback: show detail
                 selectedItem = item
                 return
             }
@@ -328,7 +320,6 @@ struct InboxView: View {
     }
     
     private func extractCommentId(from url: URL) -> String? {
-        // Try to parse paths like /r/<sub>/comments/<postId>/<slug>/<commentId>
         let components = url.pathComponents
         if let commentsIndex = components.firstIndex(of: "comments"), components.count > commentsIndex + 2 {
             let maybeCommentIdIndex = commentsIndex + 3
@@ -339,7 +330,6 @@ struct InboxView: View {
                 }
             }
         }
-        // If no explicit comment segment, nothing to scroll to
         return nil
     }
 }

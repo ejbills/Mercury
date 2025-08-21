@@ -1,10 +1,3 @@
-//
-//  SettingsView.swift
-//  Mercury
-//
-//  Created by Assistant on 8/19/25.
-//
-
 import SwiftUI
 import Defaults
 
@@ -16,7 +9,6 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            // Account Section
             Section("Account") {
                 if let user = apiService.userInfo {
                     HStack(spacing: 12) {
@@ -49,7 +41,6 @@ struct SettingsView: View {
                 }
             }
 
-            // Preferences Section
             Section("Preferences") {
                 NavigationLink {
                     FilterSettingsView()
@@ -58,10 +49,8 @@ struct SettingsView: View {
                 }
             }
 
-            // Configuration Section
             Section("Configuration") {
                 NavigationLink {
-                    // Route to API status & setup screen for convenience
                     APIStatusView(
                         clientId: $clientId,
                         isSetupComplete: $isSetupComplete,
@@ -72,7 +61,6 @@ struct SettingsView: View {
                 }
             }
 
-            // About Section
             Section("About") {
                 HStack {
                     Text("Version")
