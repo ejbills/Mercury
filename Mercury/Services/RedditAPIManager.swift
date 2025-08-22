@@ -127,8 +127,22 @@ class RedditAPIManager {
         try await searchService.searchSubreddits(query: query, limit: limit)
     }
     
-    func searchPosts(query: String, subreddit: String? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
-        try await searchService.searchPosts(query: query, subreddit: subreddit, after: after, limit: limit)
+    func searchPosts(
+        query: String,
+        subreddit: String? = nil,
+        after: String? = nil,
+        limit: Int = 25,
+        sort: String = "relevance",
+        timeFrame: String? = nil
+    ) async throws -> PostResponse {
+        try await searchService.searchPosts(
+            query: query,
+            subreddit: subreddit,
+            after: after,
+            limit: limit,
+            sort: sort,
+            timeFrame: timeFrame
+        )
     }
     
     // MARK: - Comments Methods (Delegated)

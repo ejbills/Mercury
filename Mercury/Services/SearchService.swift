@@ -41,7 +41,14 @@ class SearchService: BaseRedditService {
         }
     }
     
-    func searchPosts(query: String, subreddit: String? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+    func searchPosts(
+        query: String,
+        subreddit: String? = nil,
+        after: String? = nil,
+        limit: Int = 25,
+        sort: String = "relevance",
+        timeFrame: String? = nil
+    ) async throws -> PostResponse {
         try validateAccessToken()
         
         let baseURLString = subreddit != nil ? "\(baseURL)/r/\(subreddit!)/search.json" : "\(baseURL)/search.json"
@@ -50,12 +57,15 @@ class SearchService: BaseRedditService {
         var queryItems = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "sort", value: "relevance"),
+            URLQueryItem(name: "sort", value: sort),
             URLQueryItem(name: "type", value: "link")
         ]
         
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        if let timeFrame = timeFrame, !timeFrame.isEmpty {
+            queryItems.append(URLQueryItem(name: "t", value: timeFrame))
         }
         
         if subreddit != nil {

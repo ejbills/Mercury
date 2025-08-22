@@ -6,19 +6,22 @@ struct SectionPicker<T: Hashable & RawRepresentable>: View where T.RawValue == S
     let namespace: Namespace.ID
     let accentColor: Color
     let onSelectionChanged: (() -> Void)?
+    let useBackground: Bool
     
     init(
         items: [T],
         selectedItem: Binding<T>,
         namespace: Namespace.ID,
         accentColor: Color = .blue,
-        onSelectionChanged: (() -> Void)? = nil
+        onSelectionChanged: (() -> Void)? = nil,
+        useBackground: Bool = true
     ) {
         self.items = items
         self._selectedItem = selectedItem
         self.namespace = namespace
         self.accentColor = accentColor
         self.onSelectionChanged = onSelectionChanged
+        self.useBackground = useBackground
     }
     
     var body: some View {
@@ -59,7 +62,7 @@ struct SectionPicker<T: Hashable & RawRepresentable>: View where T.RawValue == S
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .background(.regularMaterial)
+        .background(useBackground ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(.clear))
     }
 }
 
