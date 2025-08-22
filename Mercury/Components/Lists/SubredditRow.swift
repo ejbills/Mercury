@@ -1,10 +1,3 @@
-//
-//  SubredditRow.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import Nuke
 import NukeUI
@@ -51,8 +44,8 @@ struct SubredditRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -148,14 +141,12 @@ struct SubredditIconPlaceholder: View {
     
     return VStack(spacing: 0) {
         SubredditRow(subreddit: sampleSubreddit1) {
-            // Handle subreddit tap
         }
         
         Divider()
             .padding(.leading, 60)
         
         SubredditRow(subreddit: sampleSubreddit2) {
-            // Handle NSFW subreddit tap
         }
     }
     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))

@@ -20,7 +20,7 @@ struct PostDetailRouter: View {
                 videoHandoffState: videoHandoffState, 
                 onVideoHandoffReturn: onVideoHandoffReturn
             )
-        case .text, .link:
+        case .text, .link, .youtube:
             // For text and link posts, we could show a different view or fallback
             // For now, just dismiss since these shouldn't trigger media detail
             Text("Unsupported post type for detail view")

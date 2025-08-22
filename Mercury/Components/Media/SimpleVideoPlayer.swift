@@ -21,8 +21,8 @@ struct SimpleVideoPlayer: UIViewRepresentable {
     }
     
     func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = UIColor.clear
+        let view = PlayerContainerView()
+        view.backgroundColor = .clear
         view.clipsToBounds = true
         view.layer.masksToBounds = true
         
@@ -45,13 +45,14 @@ struct SimpleVideoPlayer: UIViewRepresentable {
             
             context.coordinator.playerController = controller
         } else {
-            let playerLayer = AVPlayerLayer(player: player)
+            let playerLayer = view.playerLayer
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.player = player
             playerLayer.videoGravity = gravity
             playerLayer.backgroundColor = UIColor.clear.cgColor
             playerLayer.frame = view.bounds
-            playerLayer.needsDisplayOnBoundsChange = true
-            view.layer.addSublayer(playerLayer)
-            
+            CATransaction.commit()
             context.coordinator.playerLayer = playerLayer
         }
         
@@ -73,16 +74,13 @@ struct SimpleVideoPlayer: UIViewRepresentable {
     
     func updateUIView(_ uiView: UIView, context: Context) {
         if let playerLayer = context.coordinator.playerLayer {
-            // Force frame update on main thread
-            DispatchQueue.main.async {
-                playerLayer.videoGravity = gravity
-                playerLayer.frame = uiView.bounds
-                if playerLayer.player !== player {
-                    playerLayer.player = player
-                }
-                // Force display update
-                playerLayer.setNeedsDisplay()
-            }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.videoGravity = gravity
+            playerLayer.frame = uiView.bounds
+            if playerLayer.player !== player { playerLayer.player = player }
+            playerLayer.removeAllAnimations()
+            CATransaction.commit()
         }
         
         if let controller = context.coordinator.playerController {
@@ -119,5 +117,17 @@ struct SimpleVideoPlayer: UIViewRepresentable {
         deinit {
             NotificationCenter.default.removeObserver(self)
         }
+    }
+}
+
+private final class PlayerContainerView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        playerLayer.frame = bounds
+        CATransaction.commit()
     }
 }

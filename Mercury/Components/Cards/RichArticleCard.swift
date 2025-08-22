@@ -1,10 +1,3 @@
-//
-//  RichArticleCard.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import Nuke
 import NukeUI
@@ -87,14 +80,11 @@ struct RichArticleCard: View {
     }
     
     private func loadMetadata() async {
-        // Load metadata completely in background to prevent UI stuttering
         Task.detached(priority: .utility) { [url] in
             let fetchedMetadata = await MetadataService.shared.fetchMetadata(for: url)
             
-            // Only update UI if we successfully got metadata and still need it
             if let fetchedMetadata = fetchedMetadata {
                 await MainActor.run {
-                    // Use a smooth animation to prevent jarring updates
                     withAnimation(.easeInOut(duration: 0.2)) {
                         if self.metadata == nil {
                             self.metadata = fetchedMetadata

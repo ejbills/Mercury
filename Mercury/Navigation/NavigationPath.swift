@@ -1,10 +1,3 @@
-//
-//  NavigationPath.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 // MARK: - Navigation Destinations
@@ -13,6 +6,7 @@ enum NavigationDestination: Hashable {
     case userProfile(username: String)
     case postDetail(post: RedditPost)
     case postComments(post: RedditPost)
+    case postCommentsAnchor(post: RedditPost, commentId: String?)
 }
 
 // MARK: - Navigation Path Manager

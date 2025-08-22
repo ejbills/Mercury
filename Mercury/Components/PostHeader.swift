@@ -1,10 +1,3 @@
-//
-//  PostHeader.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import SwiftUI
 
 struct PostHeader: View {
@@ -32,7 +25,8 @@ struct PostHeader: View {
             Pill(action: {
                 navigationPath.navigate(to: .userProfile(username: post.author))
             }) {
-                HStack(alignment: .center, spacing: 4) {
+                HStack(alignment: .center, spacing: 6) {
+                    UserAvatar(username: post.author, size: 16, iconURL: post.authorIconURL)
                     Text(post.timeAgo)
                         .font(.caption2)
                         .foregroundStyle(colorScheme.tertiaryTextColor)

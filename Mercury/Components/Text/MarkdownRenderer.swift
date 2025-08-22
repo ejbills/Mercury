@@ -180,6 +180,7 @@ struct GiphyEmbedView: View {
     @State private var isLoading = true
     @State private var hasError = false
     @State private var targetHeight: CGFloat? = nil
+    @Environment(\.colorScheme) private var colorScheme
     private let defaultHeight: CGFloat = 300
     
     var body: some View {
@@ -206,10 +207,18 @@ struct GiphyEmbedView: View {
 
             HStack {
                 Spacer()
-                Text("Powered by GIPHY")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
+                Image("GIPHY_white_text")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 16)
+                    .opacity(colorScheme == .dark ? 1 : 0)
+                    .overlay(
+                        Image("GIPHY_black_text")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 16)
+                            .opacity(colorScheme == .light ? 1 : 0)
+                    )
             }
         }
         .task {

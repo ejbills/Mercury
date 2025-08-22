@@ -1,10 +1,3 @@
-//
-//  SimpleMedia.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import Nuke
 import NukeUI
@@ -30,7 +23,6 @@ struct SimpleImageView: View {
     
     var body: some View {
         Button(action: { selectedPost = post }) {
-            // FIXED FRAME CONTAINER - NEVER CHANGES SIZE
             Rectangle()
                 .fill(.clear)
                 .frame(maxWidth: .infinity)
@@ -46,7 +38,6 @@ struct SimpleImageView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .opacity(isLoaded ? 1 : 0)
                                 .onAppear {
-                                    // Only animate when image actually loads
                                     if !isLoaded {
                                         withAnimation(.easeOut(duration: 0.3)) {
                                             isLoaded = true
@@ -54,7 +45,6 @@ struct SimpleImageView: View {
                                     }
                                 }
                         } else if state.error != nil {
-                            // Error placeholder maintains exact same size
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(.quaternary.opacity(0.3))
                                 .frame(maxWidth: .infinity)
@@ -70,7 +60,6 @@ struct SimpleImageView: View {
                                     }
                                 }
                         } else {
-                            // Loading placeholder maintains exact same size
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(.quaternary.opacity(0.3))
                                 .frame(maxWidth: .infinity)
@@ -111,7 +100,6 @@ struct SimpleGifView: View {
                 .frame(maxHeight: 600)
                 .opacity(isLoaded ? 1 : 0)
                 .onAppear {
-                    // Only animate when GIF actually loads, not on appear
                     if !isLoaded {
                         withAnimation(.easeOut(duration: 0.3)) {
                             isLoaded = true
@@ -153,10 +141,8 @@ struct SimpleVideoView: View {
             .frame(height: displayHeight)
             .overlay(alignment: .center) {
                 ZStack {
-                    // Background thumbnail
                     if showThumbnail { thumbnailView }
                     
-                    // Video player
                     if let player = player {
                         SimpleVideoPlayer(
                             player: player,
@@ -246,13 +232,11 @@ struct SimpleVideoView: View {
     private func setupVideo() {
         guard let url = URL(string: videoURL) else { return }
         
-        // Create individual player (no more shared pool!)
         player = AVPlayer(url: url)
         
         if let player = player {
             player.applyMuteState(muted: isMuted)
             
-            // Add time observer for loading state only
             timeObserver = player.addPeriodicTimeObserver(
                 forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
                 queue: .main
@@ -278,7 +262,6 @@ struct SimpleVideoView: View {
             timeObserver = nil
         }
         
-        // Clean shutdown - pause and clear player
         player?.pause()
         player = nil
         showThumbnail = true
@@ -287,7 +270,6 @@ struct SimpleVideoView: View {
     private func handleTap() {
         guard let player = player, let url = URL(string: videoURL) else { return }
         
-        // Create explicit handoff state using our local muted state, not player state
         let handoffState = VideoHandoffState(
             postId: post.id, 
             videoURL: url, 
@@ -296,28 +278,22 @@ struct SimpleVideoView: View {
             player: player
         )
         
-        // Pause inline player
         player.pause()
         
-        // Request detail with explicit state
         onRequestDetail(handoffState)
     }
     
     private func resumeFromExplicitState(_ state: VideoHandoffState) {
-        // Use the same player instance from handoff
         player = state.player
         
-        // Apply the final state and sync local state
         state.applyTo(state.player)
         isMuted = state.isMuted
-        // Resume playback
         state.player.play()
         isLoading = false
         showThumbnail = false
         
   
         
-        // Re-add time observer
         if timeObserver == nil {
             timeObserver = state.player.addPeriodicTimeObserver(
                 forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
@@ -337,6 +313,5 @@ struct SimpleVideoView: View {
     private func toggleMute() {
         isMuted.toggle()
         player?.applyMuteState(muted: isMuted)
-        // Note: Mute state is maintained locally and passed through handoff
     }
 }

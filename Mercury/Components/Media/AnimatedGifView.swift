@@ -1,10 +1,3 @@
-//
-//  AnimatedGifView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import SwiftyGif
 import UIKit
@@ -49,7 +42,6 @@ struct AnimatedGifView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {
-        // Update if needed
     }
     
     private func loadGif() {

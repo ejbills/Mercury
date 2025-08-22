@@ -1,10 +1,3 @@
-//
-//  AuthenticationService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 import AuthenticationServices
 import Combine
@@ -60,7 +53,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         
         if !clientId.isEmpty && accessToken != nil && userInfo != nil {
             self.apiStatus = .valid
-            // If expired already, try to refresh immediately; otherwise schedule
             if isAccessTokenExpired(threshold: 0), refreshToken != nil {
                 Task { _ = await self.refreshAccessToken() }
             } else {
@@ -119,7 +111,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         
         
         let state = UUID().uuidString
-        // Full Reddit API permissions
         let scope = "identity,edit,flair,history,modconfig,modflair,modlog,modposts,modwiki,mysubreddits,privatemessages,read,report,save,submit,subscribe,vote,wikiedit,wikiread"
         
         var components = URLComponents(string: "https://www.reddit.com/api/v1/authorize")!
@@ -223,11 +214,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
-                // Store refresh token if provided (first grant)
                 if let rt = tokenResponse.refreshToken {
                     self.refreshToken = rt
                 }
-                // Compute expiry if provided
                 if let expiresIn = tokenResponse.expiresIn {
                     self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
                 }
@@ -275,7 +264,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
         
-        // If token appears expired, attempt refresh before the request
         if isAccessTokenExpired(), let _ = refreshToken {
             _ = await refreshAccessToken()
         }
@@ -295,7 +283,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             }
             
             if httpResponse.statusCode == 401 {
-                // Try one token refresh and retry once
                 let refreshed = await refreshAccessToken()
                 if refreshed {
                     await fetchUserInfo()

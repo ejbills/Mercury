@@ -1,18 +1,15 @@
-//
-//  CommentsService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import Foundation
 
 /// Service responsible for fetching and managing comments
 class CommentsService: BaseRedditService {
+    private lazy var avatarManager: AvatarManager = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return AvatarManager(authService: auth)
+    }()
     
     // MARK: - Comment Fetching
     
-    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil) async throws -> [CommentResponse] {
+    func fetchPostComments(postId: String, sort: CommentSort = .best, limit: Int = 50, after: String? = nil, focusCommentId: String? = nil, context: Int? = nil) async throws -> [CommentResponse] {
         try validateAccessToken()
         
         var components = URLComponents(string: "\(baseURL)/comments/\(postId).json")!
@@ -24,6 +21,8 @@ class CommentsService: BaseRedditService {
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
         }
+        if let focus = focusCommentId { queryItems.append(URLQueryItem(name: "comment", value: focus)) }
+        if let ctx = context { queryItems.append(URLQueryItem(name: "context", value: String(ctx))) }
         
         components.queryItems = queryItems
         
@@ -45,7 +44,31 @@ class CommentsService: BaseRedditService {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
             let responses = try decoder.decode([CommentResponse].self, from: data)
-            return responses
+
+            var usernames = Set<String>()
+            let filteredResponses: [CommentResponse] = responses.map { response in
+                let filteredChildren: [CommentChild] = response.data.children.compactMap { child in
+                    switch child.data {
+                    case .comment(let comment):
+                        if FilterService.shared.shouldFilterComment(comment) { return nil }
+                        collectUsernames(from: comment, into: &usernames)
+                        return CommentChild(kind: child.kind, data: .comment(comment))
+                    case .more(let more):
+                        return CommentChild(kind: child.kind, data: .more(more))
+                    }
+                }
+                let filteredData = CommentListData(children: filteredChildren, after: response.data.after, before: response.data.before)
+                return CommentResponse(data: filteredData)
+            }
+
+            let avatarMap = await avatarManager.fetchAvatars(for: Array(usernames))
+
+            let enriched: [CommentResponse] = filteredResponses.map { response in
+                let newChildren = enrich(children: response.data.children, avatarMap: avatarMap)
+                return CommentResponse(data: CommentListData(children: newChildren, after: response.data.after, before: response.data.before))
+            }
+
+            return enriched
         } catch is URLError {
             throw APIError.networkError
         } catch {
@@ -100,7 +123,22 @@ class CommentsService: BaseRedditService {
                     comments.append(thing.data)
                 }
             }
-            return comments
+            
+            let filteredComments = comments.filter { !FilterService.shared.shouldFilterComment($0) }
+            
+            let usernames = Set(filteredComments.map { $0.author })
+            
+            let avatarMap = await avatarManager.fetchAvatars(for: Array(usernames))
+            
+            let enrichedComments = filteredComments.map { comment in
+                var enrichedComment = comment
+                if let avatarURL = avatarMap[comment.author] {
+                    enrichedComment.authorIconURL = avatarURL
+                }
+                return enrichedComment
+            }
+            
+            return enrichedComments
         } catch is URLError {
             throw APIError.networkError
         } catch {
@@ -294,7 +332,6 @@ class CommentsService: BaseRedditService {
             let apiResponse = try decoder.decode(NewCommentAPIResponse.self, from: data)
 
             if let errors = apiResponse.json.errors, !errors.isEmpty {
-                // If Reddit returns errors, treat as server error
                 throw APIError.serverError(httpResponse.statusCode)
             }
 
@@ -308,6 +345,52 @@ class CommentsService: BaseRedditService {
             throw error
         }
     }
+
+    private func collectUsernames(from comment: RedditComment, into usernames: inout Set<String>) {
+        usernames.insert(comment.author)
+        
+        if let replies = comment.replies {
+            switch replies {
+            case .listing(let commentResponse):
+                for child in commentResponse.data.children {
+                    if case .comment(let nestedComment) = child.data {
+                        if !FilterService.shared.shouldFilterComment(nestedComment) {
+                            collectUsernames(from: nestedComment, into: &usernames)
+                        }
+                    }
+                }
+            case .empty:
+                break
+            }
+        }
+    }
+    
+    private func enrich(children: [CommentChild], avatarMap: [String: URL]) -> [CommentChild] {
+        children.map { child in
+            switch child.data {
+            case .comment(var c):
+                if let url = avatarMap[c.author] {
+                    c.authorIconURL = url
+                }
+                var newReplies = c.replies
+                if let replies = c.replies {
+                    switch replies {
+                    case .listing(let resp):
+                        let enrichedChild = enrich(children: resp.data.children, avatarMap: avatarMap)
+                        let newData = CommentListData(children: enrichedChild, after: resp.data.after, before: resp.data.before)
+                        newReplies = .listing(CommentResponse(data: newData))
+                    case .empty:
+                        break
+                    }
+                }
+                c.replies = newReplies
+                return CommentChild(kind: child.kind, data: .comment(c))
+            case .more(let m):
+                return CommentChild(kind: child.kind, data: .more(m))
+            }
+        }
+    }
+
 }
 
 // MARK: - Supporting Types

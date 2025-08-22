@@ -1,10 +1,3 @@
-//
-//  LoadMoreCommentsView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import SwiftUI
 
 struct LoadMoreCommentsView: View {
@@ -14,7 +7,6 @@ struct LoadMoreCommentsView: View {
     let isLoading: Bool
     let onStartLoad: (() -> Void)?
     let onLoadMore: ([RedditComment]) -> Void
-    // Optional: for root-level pagination, deliver next after token too
     let onLoadMoreRootPage: (([RedditComment], String?) -> Void)?
     let onError: (() -> Void)?
     let depthColor: Color?

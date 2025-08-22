@@ -1,10 +1,3 @@
-//
-//  PrimaryButton.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 struct PrimaryButton: View {
