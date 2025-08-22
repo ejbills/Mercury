@@ -8,6 +8,7 @@ import SwiftUI
 import Nuke
 import NukeUI
 import Zoomable
+import Defaults
 
 // MARK: - Gallery View for Feed
 struct SimpleGalleryView: View {
@@ -17,6 +18,7 @@ struct SimpleGalleryView: View {
     @Binding var selectedPost: RedditPost?
     
     @State private var isLoaded = false
+    @State private var isBlurred = false
     
     private var galleryImages: [GalleryImage] {
         return post.galleryImages
@@ -92,14 +94,15 @@ struct SimpleGalleryView: View {
                     }
                 }
                 .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .bottomTrailing) {
                     // Gallery badge with count
                     galleryBadge
                 }
+                .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
+        .nsfwBlurred(post: post, contentType: .gallery, isBlurred: $isBlurred)
     }
     
     private var galleryBadge: some View {

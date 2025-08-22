@@ -3,6 +3,7 @@ import Nuke
 import NukeUI
 import AVKit
 import AVFoundation
+import Defaults
  
 
 // MARK: - Simple Image View
@@ -16,6 +17,7 @@ struct SimpleImageView: View {
     @Binding var selectedPost: RedditPost?
     
     @State private var isLoaded = false
+    @State private var isBlurred = false
     
     private var displayHeight: CGFloat {
         MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
@@ -75,10 +77,11 @@ struct SimpleImageView: View {
                 .transition(.opacity) // Smooth transition only
             }
             .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
+        .nsfwBlurred(post: post, contentType: .image, isBlurred: $isBlurred)
     }
 }
 
@@ -92,6 +95,7 @@ struct SimpleGifView: View {
     @Binding var selectedPost: RedditPost?
     
     @State private var isLoaded = false
+    @State private var isBlurred = false
     
     var body: some View {
         Button(action: { selectedPost = post }) {
@@ -106,9 +110,11 @@ struct SimpleGifView: View {
                         }
                     }
                 }
+                .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
+        .nsfwBlurred(post: post, contentType: .gif, isBlurred: $isBlurred)
     }
 }
 
@@ -129,6 +135,7 @@ struct SimpleVideoView: View {
     @State private var isMuted: Bool = true
     @State private var isLoading: Bool = true
     @State private var showThumbnail: Bool = true
+    @State private var isBlurred = false
     
     private var displayHeight: CGFloat {
         MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
@@ -155,18 +162,24 @@ struct SimpleVideoView: View {
                     }
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .contentShape(Rectangle())
-            .onTapGesture { handleTap() }
-            .onAppear { setupVideo() }
-            .onDisappear { teardownVideo() }
-            .matchedTransitionSource(id: mediaId, in: namespace)
             .overlay(alignment: .center) {
-                if isLoading { loadingOverlay }
+                if isLoading {
+                    loadingOverlay
+                }
             }
             .overlay(alignment: .topTrailing) {
                 muteButton.padding(4)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { 
+                handleTap()
+            }
+            .onAppear { 
+                setupVideo()
+            }
+            .onDisappear { teardownVideo() }
+            .matchedTransitionSource(id: mediaId, in: namespace)
+            .nsfwBlurred(post: post, contentType: .video, isBlurred: $isBlurred)
             .onChange(of: resumeFromState) { _, newState in
                 if let state = newState {
                     resumeFromExplicitState(state)

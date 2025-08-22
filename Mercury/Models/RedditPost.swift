@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import Defaults
 
 struct RedditPost: Codable, Identifiable, Hashable {
     let id: String
@@ -214,6 +215,10 @@ struct RedditPost: Codable, Identifiable, Hashable {
             return .youtube
         }
         
+        if isRedGifsLink {
+            return .video
+        }
+        
         if isVideo || hasVideoURL {
             return .video
         } else if let hint = postHint {
@@ -254,6 +259,8 @@ struct RedditPost: Codable, Identifiable, Hashable {
         if let url = url {
             return url.contains("v.redd.it") || 
                    url.contains("vimeo.com") ||
+                   url.contains("redgifs.com") ||
+                   url.contains("v3.redgifs.com") ||
                    url.lowercased().contains(".mp4") ||
                    url.lowercased().contains(".mov") ||
                    url.lowercased().contains(".webm")
@@ -264,6 +271,11 @@ struct RedditPost: Codable, Identifiable, Hashable {
     var isYouTubeLink: Bool {
         guard let url = url else { return false }
         return url.contains("youtu.be") || url.contains("youtube.com")
+    }
+    
+    var isRedGifsLink: Bool {
+        guard let url = url else { return false }
+        return url.contains("redgifs.com") || url.contains("v3.redgifs.com")
     }
     
     var imageURL: String? {
@@ -307,13 +319,22 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var videoThumbnailDimensions: CGSize? {
-        if isVideo,
-           let preview = preview,
-           let firstImage = preview.images.first {
-            let allSources = [firstImage.source] + firstImage.resolutions
-            let goodSource = allSources.first { $0.width >= 640 && $0.width <= 1080 } ?? 
-                           allSources.last ?? firstImage.source
-            return CGSize(width: goodSource.width, height: goodSource.height)
+        if isVideo {
+            if isRedGifsLink,
+               let media = media ?? secureMedia,
+               let oembed = media.oembed,
+               let width = oembed.width,
+               let height = oembed.height {
+                return CGSize(width: width, height: height)
+            }
+            
+            if let preview = preview,
+               let firstImage = preview.images.first {
+                let allSources = [firstImage.source] + firstImage.resolutions
+                let goodSource = allSources.first { $0.width >= 640 && $0.width <= 1080 } ?? 
+                               allSources.last ?? firstImage.source
+                return CGSize(width: goodSource.width, height: goodSource.height)
+            }
         }
         return nil
     }
@@ -322,6 +343,25 @@ struct RedditPost: Codable, Identifiable, Hashable {
         if let media = media ?? secureMedia,
            let redditVideo = media.redditVideo {
             return redditVideo.hlsUrl ?? redditVideo.fallbackUrl
+        }
+        
+        if isRedGifsLink {
+            // Try to get video ID from oembed thumbnail URL first (most reliable), then fallback to main URL
+            var videoId = ""
+            
+            if let media = media ?? secureMedia,
+               let oembed = media.oembed,
+               let thumbnailUrl = oembed.thumbnailUrl {
+                videoId = extractRedGifsIdFromThumbnail(thumbnailUrl)
+            }
+            
+            if videoId.isEmpty, let url = url {
+                videoId = extractRedGifsVideoId(from: url)
+            }
+            
+            if !videoId.isEmpty {
+                return "https://files.redgifs.com/\(videoId).mp4"
+            }
         }
         
         if let url = url, url.contains("v.redd.it") {
@@ -335,6 +375,13 @@ struct RedditPost: Codable, Identifiable, Hashable {
     
     var videoThumbnailURL: String? {
         if isVideo {
+            if isRedGifsLink,
+               let media = media ?? secureMedia,
+               let oembed = media.oembed,
+               let thumbnailUrl = oembed.thumbnailUrl {
+                return thumbnailUrl.replacingOccurrences(of: "&amp;", with: "&")
+            }
+            
             if let preview = preview,
                let firstImage = preview.images.first {
                 let allSources = [firstImage.source] + firstImage.resolutions
@@ -532,6 +579,70 @@ struct RedditPost: Codable, Identifiable, Hashable {
         
         let imageHosts = ["i.imgur.com", "i.redd.it", "preview.redd.it", "external-preview.redd.it", "imgur.com"]
         return imageHosts.contains { lowercaseURL.contains($0) }
+    }
+    
+    private func extractRedGifsVideoId(from url: String) -> String {
+        // Extract video ID from RedGifs URLs
+        // Examples:
+        // https://redgifs.com/watch/anxiousrigidilladopsis -> anxiousrigidilladopsis
+        // https://v3.redgifs.com/watch/masculineimmensebluejay -> masculineimmensebluejay
+        
+        let patterns = [
+            #"redgifs\.com/watch/([a-zA-Z0-9]+)"#,
+            #"v3\.redgifs\.com/watch/([a-zA-Z0-9]+)"#
+        ]
+        
+        for pattern in patterns {
+            do {
+                let regex = try NSRegularExpression(pattern: pattern, options: [])
+                let nsString = url as NSString
+                if let match = regex.firstMatch(in: url, options: [], range: NSRange(location: 0, length: nsString.length)) {
+                    let videoId = nsString.substring(with: match.range(at: 1))
+                    // RedGifs uses capitalized IDs for file URLs
+                    return capitalizeRedGifsId(videoId)
+                }
+            } catch {
+                continue
+            }
+        }
+        
+        return ""
+    }
+    
+    private func capitalizeRedGifsId(_ id: String) -> String {
+        // RedGifs video IDs need to match the exact case used in the media URLs
+        // Based on examples: "immenserosybrownthoroughbred" -> "ImmenseRosybrownThoroughbred"
+        // The pattern seems to be: capitalize first letter and keep the rest as lowercase
+        
+        // Handle known patterns from the examples
+        let lowercaseId = id.lowercased()
+        
+        // Simple capitalization: just capitalize the first letter
+        if !lowercaseId.isEmpty {
+            return lowercaseId.prefix(1).uppercased() + lowercaseId.dropFirst()
+        }
+        
+        return id
+    }
+    
+    private func extractRedGifsIdFromThumbnail(_ thumbnailUrl: String) -> String {
+        // Extract video ID from thumbnail URLs like:
+        // https://media.redgifs.com/ImmenseRosybrownThoroughbred-poster.jpg
+        // https://media.redgifs.com/MasculineImmenseBluejay-poster.jpg
+        // https://media.redgifs.com/AnxiousRigidIlladopsis-poster.jpg
+        
+        do {
+            let pattern = #"media\.redgifs\.com/([A-Za-z0-9]+)-poster\.(jpg|png)"#
+            let regex = try NSRegularExpression(pattern: pattern, options: [])
+            let nsString = thumbnailUrl as NSString
+            if let match = regex.firstMatch(in: thumbnailUrl, options: [], range: NSRange(location: 0, length: nsString.length)) {
+                return nsString.substring(with: match.range(at: 1))
+            }
+        } catch {
+            // Ignore regex errors
+        }
+        
+        return ""
     }
 }
 

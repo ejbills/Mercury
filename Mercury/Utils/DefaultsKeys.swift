@@ -16,4 +16,6 @@ extension Defaults.Keys {
     static let keywordFilterEnabled = Key<Bool>("keywordFilterEnabled", default: true)
     static let userBlockingEnabled = Key<Bool>("userBlockingEnabled", default: true)
     static let subredditBlockingEnabled = Key<Bool>("subredditBlockingEnabled", default: true)
+    
+    static let blurNSFWContent = Key<Bool>("blurNSFWContent", default: true)
 }

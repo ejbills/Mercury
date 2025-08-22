@@ -47,6 +47,12 @@ struct SettingsView: View {
                 } label: {
                     Label("Content Filters", systemImage: "line.3.horizontal.decrease.circle")
                 }
+                
+                NavigationLink {
+                    MediaSettingsView()
+                } label: {
+                    Label("Media Settings", systemImage: "photo.on.rectangle.angled")
+                }
             }
 
             Section("Configuration") {
