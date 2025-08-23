@@ -26,22 +26,22 @@ struct PostCommentsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    PostRowView(
-                    post: post, 
-                    namespace: mediaNamespace, 
-                    selectedPost: $selectedPost,
-                    showLargeToolbar: true,
-                    showFullText: true,
-                    onRootReplyPosted: { newComment in
-                        threadManager.addRootComment(newComment)
-                    },
-                    onVideoHandoff: { handoffState in
-                        videoHandoffState = handoffState
+                        PostRowView(
+                        post: post, 
+                        namespace: mediaNamespace, 
+                        selectedPost: $selectedPost,
+                        showLargeToolbar: true,
+                        showFullText: true,
+                        onRootReplyPosted: { newComment in
+                            threadManager.addRootComment(newComment)
+                        },
+                        onVideoHandoff: { handoffState in
+                            videoHandoffState = handoffState
+                        }
+                    )
+                        if targetCommentId != nil { modePicker }
+                        commentsSection
                     }
-                )
-                    if targetCommentId != nil { modePicker }
-                    commentsSection
-                }
                 .padding(.top, 8)
                 .padding(.bottom, 20)
             }

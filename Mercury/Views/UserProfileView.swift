@@ -306,98 +306,98 @@ struct UserProfileView: View {
         
         // MARK: - Posts
     private var postsList: some View {
-            Group {
-                if isLoading && posts.isEmpty {
-                    loadingState(text: "Loading posts…")
-                } else if let errorMessage, posts.isEmpty {
-                    errorState(message: errorMessage) { Task { await refreshAll() } }
-                } else if posts.isEmpty {
-                    emptyState(title: "No Posts", message: "This user hasn't posted yet.")
-                } else {
-                    LazyVStack(spacing: 12) {
-                        ForEach(posts) { post in
-                            PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                        }
-                        if postsAfter != nil {
-                            HStack {
-                                Spacer(minLength: 0)
-                                Pill(action: { Task { await loadMorePostsIfNeeded() } }) {
-                                    HStack(spacing: 8) {
-                                        if isLoadingMorePosts { ProgressView().controlSize(.small) }
-                                        Image(systemName: "arrow.down.circle")
-                                            .font(.headline)
-                                        Text(isLoadingMorePosts ? "Loading more posts…" : "Load more posts")
-                                            .font(.headline)
-                                            .fontWeight(.semibold)
-                                    }
-                                }
-                                .disabled(isLoadingMorePosts)
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.vertical, 12)
-                        }
+        Group {
+            if isLoading && posts.isEmpty {
+                loadingState(text: "Loading posts…")
+            } else if let errorMessage, posts.isEmpty {
+                errorState(message: errorMessage) { Task { await refreshAll() } }
+            } else if posts.isEmpty {
+                emptyState(title: "No Posts", message: "This user hasn't posted yet.")
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(posts) { post in
+                        PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 24)
+                }
+                if postsAfter != nil {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Pill(action: { Task { await loadMorePostsIfNeeded() } }) {
+                            HStack(spacing: 8) {
+                                if isLoadingMorePosts { ProgressView().controlSize(.small) }
+                                Image(systemName: "arrow.down.circle")
+                                    .font(.headline)
+                                Text(isLoadingMorePosts ? "Loading more posts…" : "Load more posts")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .disabled(isLoadingMorePosts)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 12)
                 }
             }
-            .padding(.top, 12)
         }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 24)
+        .padding(.top, 12)
+    }
         
-        // MARK: - Comments
+    // MARK: - Comments
     private var commentsList: some View {
-            Group {
-                if isLoading && comments.isEmpty {
-                    loadingState(text: "Loading comments…")
-                } else if let errorMessage, comments.isEmpty {
-                    errorState(message: errorMessage) { Task { await refreshAll() } }
-                } else if comments.isEmpty {
-                    emptyState(title: "No Comments", message: "This user hasn't commented yet.")
-                } else if !commentsContextReady {
-                    loadingState(text: "Preparing comments…")
-                } else {
-                    LazyVStack(spacing: 8) {
-                        ForEach(comments, id: \.self) { comment in
-                            if let key = linkKey(for: comment), let post = commentPostMap[key] ?? commentPostMap[stripT3(key)] {
-                                CommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
-                                    .allowsHitTesting(false)
-                                    .environment(\.redditAPI, redditAPI)
-                                    .environment(\.navigationPathManager, navigationPath)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        navigationPath.navigate(to: .postComments(post: post))
-                                    }
-                            }
-                        }
-                        if commentsAfter != nil {
-                            HStack {
-                                Spacer(minLength: 0)
-                                Pill(action: { Task { await loadMoreCommentsIfNeeded() } }) {
-                                    HStack(spacing: 8) {
-                                        if isLoadingMoreComments { ProgressView().controlSize(.small) }
-                                        Image(systemName: "arrow.down.circle")
-                                            .font(.headline)
-                                        Text(isLoadingMoreComments ? "Loading more comments…" : "Load more comments")
-                                            .font(.headline)
-                                            .fontWeight(.semibold)
-                                    }
+        Group {
+            if isLoading && comments.isEmpty {
+                loadingState(text: "Loading comments…")
+            } else if let errorMessage, comments.isEmpty {
+                errorState(message: errorMessage) { Task { await refreshAll() } }
+            } else if comments.isEmpty {
+                emptyState(title: "No Comments", message: "This user hasn't commented yet.")
+            } else if !commentsContextReady {
+                loadingState(text: "Preparing comments…")
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(comments, id: \.self) { comment in
+                        if let key = linkKey(for: comment), let post = commentPostMap[key] ?? commentPostMap[stripT3(key)] {
+                            CommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
+                                .allowsHitTesting(false)
+                                .environment(\.redditAPI, redditAPI)
+                                .environment(\.navigationPathManager, navigationPath)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    navigationPath.navigate(to: .postComments(post: post))
                                 }
-                                .disabled(isLoadingMoreComments)
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.vertical, 12)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 24)
+                }
+                if commentsAfter != nil {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Pill(action: { Task { await loadMoreCommentsIfNeeded() } }) {
+                            HStack(spacing: 8) {
+                                if isLoadingMoreComments { ProgressView().controlSize(.small) }
+                                Image(systemName: "arrow.down.circle")
+                                    .font(.headline)
+                                Text(isLoadingMoreComments ? "Loading more comments…" : "Load more comments")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .disabled(isLoadingMoreComments)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 12)
                 }
             }
-            .padding(.top, 12)
         }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 24)
+        .padding(.top, 12)
+    }
         
-        // MARK: - About
+    // MARK: - About
     private var aboutSection: some View {
-            Group {
+        Group {
                 if let profile {
                     VStack(alignment: .leading, spacing: 16) {
                         sectionHeader("About")

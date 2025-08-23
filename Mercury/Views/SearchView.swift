@@ -182,9 +182,9 @@ struct SearchView: View {
                 .padding(.top, 40)
         } else {
             ForEach(searchResults) { post in
-                PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                .onAppear {
-                    if post.id == searchResults.last?.id && hasMore && !isLoading {
+                    PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                    .onAppear {
+                        if post.id == searchResults.last?.id && hasMore && !isLoading {
                         Task {
                             await loadMorePosts()
                         }

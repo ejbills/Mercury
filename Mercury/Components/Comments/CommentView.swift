@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct CommentView: View {
     let comment: RedditComment
@@ -11,6 +12,10 @@ struct CommentView: View {
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
+    @Default(.commentLeftShortSwipeAction) private var commentLeftShortSwipeAction
+    @Default(.commentLeftLongSwipeAction) private var commentLeftLongSwipeAction
+    @Default(.commentRightShortSwipeAction) private var commentRightShortSwipeAction
+    @Default(.commentRightLongSwipeAction) private var commentRightLongSwipeAction
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -33,19 +38,38 @@ struct CommentView: View {
     
     var body: some View {
         Card(
-            style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
-            highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
-        ) {
-            VStack(alignment: .leading, spacing: 8) {
-                commentHeader
-                
-                if !isCollapsed {
-                    commentBody
-                    commentActions
+                style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
+                highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
+            ) {
+                VStack(alignment: .leading, spacing: 8) {
+                    commentHeader
+                    
+                    if !isCollapsed {
+                        commentBody
+                        commentActions
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        .customSwipeGesture(
+            leftShort: commentLeftShortSwipeAction != .none ? SwipeAction(
+                type: commentLeftShortSwipeAction,
+                action: { handleSwipeAction(commentLeftShortSwipeAction) }
+            ) : nil,
+            leftLong: commentLeftLongSwipeAction != .none ? SwipeAction(
+                type: commentLeftLongSwipeAction,
+                action: { handleSwipeAction(commentLeftLongSwipeAction) }
+            ) : nil,
+            rightShort: commentRightShortSwipeAction != .none ? SwipeAction(
+                type: commentRightShortSwipeAction,
+                action: { handleSwipeAction(commentRightShortSwipeAction) }
+            ) : nil,
+            rightLong: commentRightLongSwipeAction != .none ? SwipeAction(
+                type: commentRightLongSwipeAction,
+                action: { handleSwipeAction(commentRightLongSwipeAction) }
+            ) : nil,
+            cornerRadius: depth == 0 ? 16 : 12
+        )
     }
     
     private var commentHeader: some View {
@@ -359,6 +383,29 @@ struct CommentView: View {
         let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
         await MainActor.run {
             onReplyPosted(created)
+        }
+    }
+    
+    private func handleSwipeAction(_ actionType: SwipeActionType) {
+        switch actionType {
+        case .upvote:
+            handleVote(.upvoted)
+        case .downvote:
+            handleVote(.downvoted)
+        case .save:
+            handleSave()
+        case .share:
+            break
+        case .reply:
+            showingReply = true
+        case .profile:
+            if !isDeletedUser {
+                navigationPath.navigate(to: .userProfile(username: comment.author))
+            }
+        case .copyLink:
+            break
+        case .none:
+            break
         }
     }
 }

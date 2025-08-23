@@ -1,5 +1,6 @@
 import Foundation
 import Defaults
+import SwiftUI
 
 extension Defaults.Keys {
     static let clientId = Key<String>("clientId", default: "")
@@ -18,4 +19,78 @@ extension Defaults.Keys {
     static let subredditBlockingEnabled = Key<Bool>("subredditBlockingEnabled", default: true)
     
     static let blurNSFWContent = Key<Bool>("blurNSFWContent", default: true)
+    
+    static let postLeftShortSwipeAction = Key<SwipeActionType>("postLeftShortSwipeAction", default: SwipeActionType.upvote)
+    static let postLeftLongSwipeAction = Key<SwipeActionType>("postLeftLongSwipeAction", default: SwipeActionType.save)
+    static let postRightShortSwipeAction = Key<SwipeActionType>("postRightShortSwipeAction", default: SwipeActionType.downvote)
+    static let postRightLongSwipeAction = Key<SwipeActionType>("postRightLongSwipeAction", default: SwipeActionType.share)
+    static let commentLeftShortSwipeAction = Key<SwipeActionType>("commentLeftShortSwipeAction", default: SwipeActionType.upvote)
+    static let commentLeftLongSwipeAction = Key<SwipeActionType>("commentLeftLongSwipeAction", default: SwipeActionType.save)
+    static let commentRightShortSwipeAction = Key<SwipeActionType>("commentRightShortSwipeAction", default: SwipeActionType.downvote)
+    static let commentRightLongSwipeAction = Key<SwipeActionType>("commentRightLongSwipeAction", default: SwipeActionType.reply)
+}
+
+enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
+    case upvote = "upvote"
+    case downvote = "downvote"
+    case save = "save"
+    case share = "share"
+    case reply = "reply"
+    case profile = "profile"
+    case copyLink = "copyLink"
+    case none = "none"
+    
+    var displayName: String {
+        switch self {
+        case .upvote: return "Upvote"
+        case .downvote: return "Downvote"
+        case .save: return "Save/Unsave"
+        case .share: return "Share"
+        case .reply: return "Reply"
+        case .profile: return "View Profile"
+        case .copyLink: return "Copy Link"
+        case .none: return "None"
+        }
+    }
+    
+    var systemImageName: String {
+        switch self {
+        case .upvote: return "arrow.up"
+        case .downvote: return "arrow.down"
+        case .save: return "bookmark"
+        case .share: return "square.and.arrow.up"
+        case .reply: return "arrowshape.turn.up.left"
+        case .profile: return "person.circle"
+        case .copyLink: return "link"
+        case .none: return "slash.circle"
+        }
+    }
+    
+    var color: SwiftUI.Color {
+        switch self {
+        case .upvote: return .orange
+        case .downvote: return .blue
+        case .save: return .green
+        case .share: return .indigo
+        case .reply: return .purple
+        case .profile: return .mint
+        case .copyLink: return .cyan
+        case .none: return .gray
+        }
+    }
+    
+    var availableForPosts: Bool {
+        switch self {
+        case .copyLink: return true
+        default: return true
+        }
+    }
+    
+    var availableForComments: Bool {
+        switch self {
+        case .copyLink: return false
+        case .share: return false
+        default: return true
+        }
+    }
 }

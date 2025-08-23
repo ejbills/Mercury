@@ -2,6 +2,7 @@ import SwiftUI
 import Nuke
 import NukeUI
 import AVKit
+import Defaults
 
 struct PostRowView: View {
     @State var post: RedditPost
@@ -23,6 +24,10 @@ struct PostRowView: View {
     @State private var displayScore: Int
     @State private var showingPostReply = false
     @State private var videoHandoffState: VideoHandoffState? = nil
+    @Default(.postLeftShortSwipeAction) private var postLeftShortSwipeAction
+    @Default(.postLeftLongSwipeAction) private var postLeftLongSwipeAction
+    @Default(.postRightShortSwipeAction) private var postRightShortSwipeAction
+    @Default(.postRightLongSwipeAction) private var postRightLongSwipeAction
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
@@ -161,6 +166,25 @@ struct PostRowView: View {
                 }
             }
         }
+        .customSwipeGesture(
+            leftShort: postLeftShortSwipeAction != .none ? SwipeAction(
+                type: postLeftShortSwipeAction,
+                action: { handleSwipeAction(postLeftShortSwipeAction) }
+            ) : nil,
+            leftLong: postLeftLongSwipeAction != .none ? SwipeAction(
+                type: postLeftLongSwipeAction,
+                action: { handleSwipeAction(postLeftLongSwipeAction) }
+            ) : nil,
+            rightShort: postRightShortSwipeAction != .none ? SwipeAction(
+                type: postRightShortSwipeAction,
+                action: { handleSwipeAction(postRightShortSwipeAction) }
+            ) : nil,
+            rightLong: postRightLongSwipeAction != .none ? SwipeAction(
+                type: postRightLongSwipeAction,
+                action: { handleSwipeAction(postRightLongSwipeAction) }
+            ) : nil,
+            cornerRadius: 16
+        )
         .containerRelativeFrame(.horizontal) { width, _ in
             width - 32 // 16pt margin on each side
         }
@@ -580,6 +604,27 @@ struct PostRowView: View {
         let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
         await MainActor.run {
             onRootReplyPosted?(created)
+        }
+    }
+    
+    private func handleSwipeAction(_ actionType: SwipeActionType) {
+        switch actionType {
+        case .upvote:
+            handleVote(.upvoted)
+        case .downvote:
+            handleVote(.downvoted)
+        case .save:
+            handleSave()
+        case .share:
+            handleShare()
+        case .reply:
+            showingPostReply = true
+        case .profile:
+            navigationPath.navigate(to: .userProfile(username: post.author))
+        case .copyLink:
+            handleCopyLink()
+        case .none:
+            break
         }
     }
     

@@ -35,23 +35,23 @@ struct SubredditFeedView: View {
                             .padding(.top, 100)
                     } else {
                         ForEach(posts) { post in
-                            PostRowView(
-                                post: post, 
-                                namespace: mediaNamespace, 
-                                selectedPost: $selectedPost,
-                                onVideoHandoff: { handoffState in
-                                    videoHandoffState = handoffState
-                                }
-                            )
-                                .id(post.id)
-                                .onAppear {
-                                    if post.id == posts.last?.id && hasMore && !isLoadingMore {
-                                        Task {
-                                            await loadMorePosts()
+                                PostRowView(
+                                    post: post, 
+                                    namespace: mediaNamespace, 
+                                    selectedPost: $selectedPost,
+                                    onVideoHandoff: { handoffState in
+                                        videoHandoffState = handoffState
+                                    }
+                                )
+                                    .id(post.id)
+                                    .onAppear {
+                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                            Task {
+                                                await loadMorePosts()
+                                            }
                                         }
                                     }
-                                }
-                        }
+                            }
                         
                         if hasMore {
                             loadMoreSection

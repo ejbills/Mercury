@@ -53,6 +53,12 @@ struct SettingsView: View {
                 } label: {
                     Label("Media Settings", systemImage: "photo.on.rectangle.angled")
                 }
+                
+                NavigationLink {
+                    SwipeActionsSettingsView()
+                } label: {
+                    Label("Swipe Actions", systemImage: "hand.point.up.left")
+                }
             }
 
             Section("Configuration") {
