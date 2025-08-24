@@ -11,6 +11,10 @@ struct PostRowView: View {
     let showLargeToolbar: Bool
     let showFullText: Bool
     let onVideoHandoff: ((VideoHandoffState) -> Void)?
+    var onSwipeBegin: (() -> Void)? = nil
+    var onSwipeEnd: (() -> Void)? = nil
+    var onHidePost: ((String) -> Void)? = nil
+    var onHidePostsAbove: ((String) -> Void)? = nil
     @State private var showingSafari = false
     @State private var isVoting = false
     @State private var showingCopiedToast = false
@@ -32,7 +36,7 @@ struct PostRowView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onSwipeBegin: (() -> Void)? = nil, onSwipeEnd: (() -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
@@ -40,6 +44,10 @@ struct PostRowView: View {
         self.showFullText = showFullText
         self.onRootReplyPosted = onRootReplyPosted
         self.onVideoHandoff = onVideoHandoff
+        self.onSwipeBegin = onSwipeBegin
+        self.onSwipeEnd = onSwipeEnd
+        self.onHidePost = onHidePost
+        self.onHidePostsAbove = onHidePostsAbove
         self.postType = post.postType
         let isRedditPostLink: Bool = {
             if let u = post.url?.lowercased() {
@@ -183,7 +191,9 @@ struct PostRowView: View {
                 type: postRightLongSwipeAction,
                 action: { handleSwipeAction(postRightLongSwipeAction) }
             ) : nil,
-            cornerRadius: 16
+            cornerRadius: 16,
+            onInteractionBegan: { onSwipeBegin?() },
+            onInteractionEnded: { onSwipeEnd?() }
         )
         .containerRelativeFrame(.horizontal) { width, _ in
             width - 32 // 16pt margin on each side
@@ -624,15 +634,12 @@ struct PostRowView: View {
         case .subreddit:
             navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
         case .hide:
-            Task { try? await redditAPI.hidePost(postId: post.id) }
-            NotificationCenter.default.post(name: .hidePost, object: nil, userInfo: [AppNotificationKey.postId: post.id])
+            onHidePost?(post.id)
         case .hideAbove:
-            NotificationCenter.default.post(name: .hidePostsAbove, object: nil, userInfo: [AppNotificationKey.postId: post.id])
+            onHidePostsAbove?(post.id)
         case .copyLink:
             handleCopyLink()
         case .none:
-            break
-        default:
             break
         }
     }

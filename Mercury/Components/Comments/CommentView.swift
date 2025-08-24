@@ -8,7 +8,11 @@ struct CommentView: View {
     let post: RedditPost
     let isCollapsed: Bool
     let onCollapseToggle: () -> Void
+    let onCollapseParent: () -> Void
+    let onScrollToParent: () -> Void
     let onReplyPosted: (RedditComment) -> Void
+    let onSwipeBegin: (() -> Void)?
+    let onSwipeEnd: (() -> Void)?
     
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
@@ -25,16 +29,18 @@ struct CommentView: View {
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var wasDeleted = false
-    @State private var showingShareSheet = false
-    @State private var shareURL: URL? = nil
 
-    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
+    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onCollapseParent: @escaping () -> Void = {}, onScrollToParent: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }, onSwipeBegin: (() -> Void)? = nil, onSwipeEnd: (() -> Void)? = nil) {
         self.comment = comment
         self.depth = depth
         self.post = post
         self.isCollapsed = isCollapsed
         self.onCollapseToggle = onCollapseToggle
+        self.onCollapseParent = onCollapseParent
+        self.onScrollToParent = onScrollToParent
         self.onReplyPosted = onReplyPosted
+        self.onSwipeBegin = onSwipeBegin
+        self.onSwipeEnd = onSwipeEnd
         self._voteState = State(initialValue: comment.currentVoteState)
         self._displayScore = State(initialValue: comment.displayScore)
     }
@@ -73,11 +79,6 @@ struct CommentView: View {
             ) : nil,
             cornerRadius: depth == 0 ? 16 : 12
         )
-        .sheet(isPresented: $showingShareSheet) {
-            if let shareURL = shareURL {
-                SimpleShareSheet(items: [shareURL])
-            }
-        }
     }
     
     private var commentHeader: some View {
@@ -202,6 +203,14 @@ struct CommentView: View {
                 Button(action: { handleSave() }) {
                     Label(comment.saved ? "Unsave" : "Save",
                           systemImage: comment.saved ? "bookmark.fill" : "bookmark")
+                }
+                if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                    ShareLink(item: url) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button(action: { UIPasteboard.general.string = url.absoluteString }) {
+                        Label("Copy Link", systemImage: "link")
+                    }
                 }
                 if canDeleteComment {
                     Button(role: .destructive, action: { showingDeleteConfirm = true }) {
@@ -404,8 +413,8 @@ struct CommentView: View {
             handleSave()
         case .share:
             if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
-                shareURL = url
-                showingShareSheet = true
+                UIPasteboard.general.string = url.absoluteString
+                let h = UINotificationFeedbackGenerator(); h.notificationOccurred(.success)
             }
         case .reply:
             showingReply = true
@@ -418,16 +427,11 @@ struct CommentView: View {
                 navigationPath.navigate(to: .subredditFeed(subreddit: sub))
             }
         case .parentComment:
-            if let parent = comment.parentId, parent.hasPrefix("t1_") {
-                let parentId = String(parent.dropFirst(3))
-                navigationPath.navigate(to: .postCommentsAnchor(post: post, commentId: parentId))
-            } else {
-                navigationPath.navigate(to: .postComments(post: post))
-            }
+            onScrollToParent()
         case .collapse:
             onCollapseToggle()
         case .collapseToTop:
-            NotificationCenter.default.post(name: .collapseAncestorsToRoot, object: nil, userInfo: [AppNotificationKey.commentId: comment.id])
+            onCollapseParent()
         case .selectText:
             let h = UIImpactFeedbackGenerator(style: .light)
             h.impactOccurred()

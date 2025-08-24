@@ -41,7 +41,7 @@ struct PostCommentsView: View {
                         }
                     )
                         if targetCommentId != nil { modePicker }
-                        commentsSection
+                        commentsSection(proxy: proxy)
                     }
                 .padding(.top, 8)
                 .padding(.bottom, 20)
@@ -101,7 +101,7 @@ struct PostCommentsView: View {
     }
     
     
-    private var commentsSection: some View {
+    private func commentsSection(proxy: ScrollViewProxy) -> some View {
         Group {
             if isLoading && threadManager.commentThreads.isEmpty {
                 loadingView
@@ -110,7 +110,7 @@ struct PostCommentsView: View {
             } else if threadManager.commentThreads.isEmpty {
                 emptyCommentsView
             } else {
-                commentsListView
+                commentsListView(proxy: proxy)
             }
         }
     }
@@ -149,14 +149,15 @@ struct PostCommentsView: View {
             .padding(.horizontal, 12)
         }
     
-    private var commentsListView: some View {
+    private func commentsListView(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
             
             CommentThreadView(
                 comments: allComments,
                 post: post,
-                sort: commentSort
+                sort: commentSort,
+                scrollProxy: proxy
             )
             
             if !threadManager.moreObjects.isEmpty {

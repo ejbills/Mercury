@@ -47,6 +47,8 @@ enum SwipeState: Equatable {
 struct SwipeGestureModifier: ViewModifier {
     let configuration: SwipeConfiguration
     let cornerRadius: CGFloat
+    let onInteractionBegan: (() -> Void)?
+    let onInteractionEnded: (() -> Void)?
     
     @State private var swipeState: SwipeState = .idle
     @State private var dragOffset: CGSize = .zero
@@ -108,7 +110,7 @@ struct SwipeGestureModifier: ViewModifier {
             }
             // Lock into swipe interaction once threshold crossed
             isSwiping = true
-            NotificationCenter.default.post(name: .swipeInteractionBegan, object: nil)
+            onInteractionBegan?()
         }
         
         // Update drag offset for visual feedback
@@ -139,7 +141,7 @@ struct SwipeGestureModifier: ViewModifier {
             hasTriggered = false
             lastThresholdLevel = 0
             if isSwiping {
-                NotificationCenter.default.post(name: .swipeInteractionEnded, object: nil)
+                onInteractionEnded?()
             }
             isSwiping = false
         }
@@ -336,7 +338,9 @@ extension View {
         leftLong: SwipeAction? = nil,  
         rightShort: SwipeAction? = nil,
         rightLong: SwipeAction? = nil,
-        cornerRadius: CGFloat = 16
+        cornerRadius: CGFloat = 16,
+        onInteractionBegan: (() -> Void)? = nil,
+        onInteractionEnded: (() -> Void)? = nil
     ) -> some View {
         let configuration = SwipeConfiguration(
             leftShort: leftShort,
@@ -345,6 +349,13 @@ extension View {
             rightLong: rightLong
         )
         
-        return self.modifier(SwipeGestureModifier(configuration: configuration, cornerRadius: cornerRadius))
+        return self.modifier(
+            SwipeGestureModifier(
+                configuration: configuration,
+                cornerRadius: cornerRadius,
+                onInteractionBegan: onInteractionBegan,
+                onInteractionEnded: onInteractionEnded
+            )
+        )
     }
 }

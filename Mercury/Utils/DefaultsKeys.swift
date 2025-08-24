@@ -28,6 +28,7 @@ extension Defaults.Keys {
     static let commentLeftLongSwipeAction = Key<SwipeActionType>("commentLeftLongSwipeAction", default: SwipeActionType.save)
     static let commentRightShortSwipeAction = Key<SwipeActionType>("commentRightShortSwipeAction", default: SwipeActionType.downvote)
     static let commentRightLongSwipeAction = Key<SwipeActionType>("commentRightLongSwipeAction", default: SwipeActionType.reply)
+    static let hiddenPostIds = Key<Set<String>>("hiddenPostIds", default: [])
 }
 
 enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {

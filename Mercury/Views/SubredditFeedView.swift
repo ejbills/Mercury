@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct SubredditFeedView: View {
     let subreddit: String
@@ -19,6 +20,7 @@ struct SubredditFeedView: View {
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
     @State private var swipeLockScroll: Bool = false
+    @Default(.hiddenPostIds) private var hiddenPostIds
     
     private let pageSize = 25
     
@@ -35,11 +37,22 @@ struct SubredditFeedView: View {
                         emptyStateView
                             .padding(.top, 100)
                     } else {
-                        ForEach(posts) { post in
+                        ForEach(posts.filter { !hiddenPostIds.contains($0.id) }) { post in
                                 PostRowView(
                                     post: post, 
                                     namespace: mediaNamespace, 
                                     selectedPost: $selectedPost,
+                                    onSwipeBegin: { swipeLockScroll = true },
+                                    onSwipeEnd: { swipeLockScroll = false },
+                                    onHidePost: { id in
+                                        hiddenPostIds.insert(id)
+                                    },
+                                    onHidePostsAbove: { id in
+                                        if let index = posts.firstIndex(where: { $0.id == id }) {
+                                            let ids = posts.prefix(index).map { $0.id }
+                                            hiddenPostIds.formUnion(ids)
+                                        }
+                                    },
                                     onVideoHandoff: { handoffState in
                                         videoHandoffState = handoffState
                                     }
@@ -66,25 +79,7 @@ struct SubredditFeedView: View {
             }
             .scrollPosition(id: $scrollPosition)
             .scrollDisabled(swipeLockScroll)
-            .onReceive(NotificationCenter.default.publisher(for: .hidePost)) { note in
-                guard let id = note.userInfo?[AppNotificationKey.postId] as? String else { return }
-                withAnimation(.snappy(duration: 0.2)) {
-                    posts.removeAll { $0.id == id }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionBegan)) { _ in
-                swipeLockScroll = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionEnded)) { _ in
-                swipeLockScroll = false
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .hidePostsAbove)) { note in
-                guard let id = note.userInfo?[AppNotificationKey.postId] as? String else { return }
-                guard let index = posts.firstIndex(where: { $0.id == id }) else { return }
-                withAnimation(.snappy(duration: 0.25)) {
-                    posts.removeFirst(index)
-                }
-            }
+            
             .onAppear {
                 if !hasAppeared && posts.isEmpty && !isLoading {
                     hasAppeared = true

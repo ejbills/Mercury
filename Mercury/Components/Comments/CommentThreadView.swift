@@ -10,6 +10,7 @@ struct CommentThreadView: View {
     let comments: [RedditComment]
     let post: RedditPost
     let sort: CommentSort
+    let scrollProxy: ScrollViewProxy?
     
     // Unified flat state management for entire thread
     @State private var flatItems: [FlatCommentItem] = []
@@ -20,10 +21,11 @@ struct CommentThreadView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comments: [RedditComment], post: RedditPost, sort: CommentSort) {
+    init(comments: [RedditComment], post: RedditPost, sort: CommentSort, scrollProxy: ScrollViewProxy? = nil) {
         self.comments = comments
         self.post = post
         self.sort = sort
+        self.scrollProxy = scrollProxy
         
         // Initialize flat structure from all comments
         let initialFlatItems = Self.flattenAllComments(comments: comments)
@@ -86,10 +88,27 @@ struct CommentThreadView: View {
                                 collapsedComments.insert(flatComment.comment.id)
                             }
                         },
+                        onCollapseParent: {
+                            if let pid = flatComment.comment.parentId, pid.hasPrefix("t1_") {
+                                let parentId = String(pid.dropFirst(3))
+                                withAnimation(.snappy(duration: 0.2)) {
+                                    collapsedComments.insert(parentId)
+                                }
+                            }
+                        },
+                        onScrollToParent: {
+                            if let pid = flatComment.comment.parentId, pid.hasPrefix("t1_") {
+                                let parentId = String(pid.dropFirst(3))
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    scrollProxy?.scrollTo(parentId, anchor: .center)
+                                }
+                            }
+                        },
                         onReplyPosted: { newComment in
                             insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
                         }
                     )
+                    .id(flatComment.comment.id)
                     .padding(.leading, CGFloat(flatComment.depth * 24))
                     .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
                     .padding(.vertical, 4)
