@@ -1,41 +1,57 @@
-//
-//  PostCommentsView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import SwiftUI
 
 struct PostCommentsView: View {
     let post: RedditPost
+    let targetCommentId: String?
+
     @State private var threadManager = CommentThreadManager()
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var commentSort: CommentSort = .best
     @State private var showingSortOptions = false
     @State private var loadingRootMoreIds: Set<String> = []
+    @State private var selectedPost: RedditPost?
+    @State private var videoHandoffState: VideoHandoffState?
     @Namespace private var mediaNamespace
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
+    @State private var singleThreadMode: Bool = false
+
+        init(post: RedditPost, targetCommentId: String? = nil) {
+            self.post = post
+            self.targetCommentId = targetCommentId
+        }
     
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                PostRowView(
-                    post: post, 
-                    namespace: mediaNamespace, 
-                    selectedPost: .constant(nil),
-                    showLargeToolbar: true,
-                    showFullText: true,
-                    onRootReplyPosted: { newComment in
-                        threadManager.addRootComment(newComment)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                        PostRowView(
+                        post: post, 
+                        namespace: mediaNamespace, 
+                        selectedPost: $selectedPost,
+                        showLargeToolbar: true,
+                        showFullText: true,
+                        onRootReplyPosted: { newComment in
+                            threadManager.addRootComment(newComment)
+                        },
+                        onVideoHandoff: { handoffState in
+                            videoHandoffState = handoffState
+                        },
+                    )
+                        if targetCommentId != nil { modePicker }
+                        commentsSection(proxy: proxy)
+
                     }
-                )
-                commentsSection
+                .padding(.top, 8)
+                .padding(.bottom, 20)
             }
-            .padding(.top, 8)
-            .padding(.bottom, 20)
+            .onChange(of: threadManager.commentThreads.count) { _, _ in
+                scrollToTargetIfNeeded(proxy: proxy)
+            }
+            .onAppear {
+                scrollToTargetIfNeeded(proxy: proxy)
+            }
         }
         .navigationTitle("Comments")
         .navigationBarTitleDisplayMode(.inline)
@@ -45,6 +61,11 @@ struct PostCommentsView: View {
             }
         }
         .refreshable {
+            await MainActor.run {
+                threadManager = CommentThreadManager()
+                isLoading = true
+                errorMessage = nil
+            }
             await loadComments()
         }
         .task {
@@ -60,31 +81,76 @@ struct PostCommentsView: View {
                 }
             }
         }
+        .fullScreenCover(item: $selectedPost) { post in
+            MediaDetailView(
+                post: post,
+                namespace: mediaNamespace,
+                videoHandoffState: videoHandoffState,
+                onVideoHandoffReturn: { handoffState in
+                    videoHandoffState = handoffState
+                }
+            )
+        }
     }
     
     
-    private var commentsSection: some View {
+    private func commentsSection(proxy: ScrollViewProxy) -> some View {
         Group {
             if isLoading && threadManager.commentThreads.isEmpty {
                 loadingView
-            } else if let errorMessage = errorMessage {
+            } else if let errorMessage = errorMessage, threadManager.commentThreads.isEmpty {
                 errorView(message: errorMessage)
             } else if threadManager.commentThreads.isEmpty {
                 emptyCommentsView
             } else {
-                commentsListView
+                commentsListView(proxy: proxy)
             }
         }
     }
     
-    private var commentsListView: some View {
+    private var modePicker: some View {
+            HStack(spacing: 8) {
+                Pill(action: {
+                    guard !singleThreadMode else { return }
+                    singleThreadMode = true
+                    Task { await loadComments() }
+                }, size: .regular) {
+                    HStack(spacing: 6) {
+                        Image(systemName: singleThreadMode ? "checkmark.circle.fill" : "text.bubble")
+                            .foregroundStyle(singleThreadMode ? .blue : .secondary)
+                        Text("Single comment thread")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                }
+                
+                Pill(action: {
+                    guard singleThreadMode else { return }
+                    singleThreadMode = false
+                    Task { await loadComments() }
+                }, size: .regular) {
+                    HStack(spacing: 6) {
+                        Image(systemName: !singleThreadMode ? "checkmark.circle.fill" : "text.bubble.fill")
+                            .foregroundStyle(!singleThreadMode ? .blue : .secondary)
+                        Text("See full discussion")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+        }
+    
+    private func commentsListView(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
             
             CommentThreadView(
                 comments: allComments,
                 post: post,
-                sort: commentSort
+                sort: commentSort,
+                scrollProxy: proxy,
             )
             
             if !threadManager.moreObjects.isEmpty {
@@ -215,7 +281,12 @@ struct PostCommentsView: View {
         errorMessage = nil
         
         do {
-            let response = try await redditAPI.fetchPostComments(postId: post.id, sort: commentSort)
+            let response = try await redditAPI.fetchPostComments(
+                            postId: post.id,
+                            sort: commentSort,
+                            focusCommentId: singleThreadMode ? targetCommentId : nil,
+                            context: singleThreadMode ? 3 : nil
+                        )
             
             if response.count > 1 {
                 let commentsResponse = response[1]
@@ -234,12 +305,11 @@ struct PostCommentsView: View {
             isLoading = false
         }
     }
-}
-
-#Preview {
-    NavigationStack {
-        PostCommentsView(post: RedditPost.samplePost)
-            .environment(\.redditAPI, RedditAPIManager())
-            .environment(\.navigationPathManager, NavigationPathManager())
+    
+    private func scrollToTargetIfNeeded(proxy: ScrollViewProxy) {
+        guard let targetId = targetCommentId, !targetId.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            proxy.animatedScrollTo(targetId, anchor: .center)
+        }
     }
 }

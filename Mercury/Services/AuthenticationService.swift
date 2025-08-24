@@ -1,10 +1,3 @@
-//
-//  AuthenticationService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 import AuthenticationServices
 import Combine
@@ -24,6 +17,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     private var authSession: ASWebAuthenticationSession?
     private var cancellables = Set<AnyCancellable>()
     private var tokenRefreshTimer: Timer?
+    private var isRefreshingToken = false
+    private var refreshRetryCount = 0
+    private let maxRefreshRetries = 3
     
     enum APIStatus {
         case unknown
@@ -60,7 +56,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         
         if !clientId.isEmpty && accessToken != nil && userInfo != nil {
             self.apiStatus = .valid
-            // If expired already, try to refresh immediately; otherwise schedule
             if isAccessTokenExpired(threshold: 0), refreshToken != nil {
                 Task { _ = await self.refreshAccessToken() }
             } else {
@@ -95,6 +90,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         self.userInfo = nil
         self.apiStatus = .unknown
         self.errorMessage = nil
+        self.refreshRetryCount = 0
+        self.isRefreshingToken = false
         tokenRefreshTimer?.invalidate()
         tokenRefreshTimer = nil
     }
@@ -119,7 +116,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         
         
         let state = UUID().uuidString
-        // Full Reddit API permissions
         let scope = "identity,edit,flair,history,modconfig,modflair,modlog,modposts,modwiki,mysubreddits,privatemessages,read,report,save,submit,subscribe,vote,wikiedit,wikiread"
         
         var components = URLComponents(string: "https://www.reddit.com/api/v1/authorize")!
@@ -223,11 +219,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
-                // Store refresh token if provided (first grant)
                 if let rt = tokenResponse.refreshToken {
                     self.refreshToken = rt
                 }
-                // Compute expiry if provided
                 if let expiresIn = tokenResponse.expiresIn {
                     self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
                 }
@@ -275,7 +269,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
         
-        // If token appears expired, attempt refresh before the request
         if isAccessTokenExpired(), let _ = refreshToken {
             _ = await refreshAccessToken()
         }
@@ -295,7 +288,6 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             }
             
             if httpResponse.statusCode == 401 {
-                // Try one token refresh and retry once
                 let refreshed = await refreshAccessToken()
                 if refreshed {
                     await fetchUserInfo()
@@ -347,14 +339,33 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         guard let expiry = accessTokenExpiry, refreshToken != nil else { return }
         let interval = max(5, expiry.timeIntervalSinceNow - 60) // refresh 60s early, min 5s
         tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            Task { _ = await self?.refreshAccessToken() }
+            Task {
+                let success = await self?.refreshAccessToken() ?? false
+                if !success {
+                    await self?.handleRefreshFailure(isScheduled: true)
+                }
+            }
         }
     }
     
     @discardableResult
     func refreshAccessToken() async -> Bool {
+        // Prevent concurrent refresh attempts
+        guard !isRefreshingToken else { return false }
         guard let refreshToken = refreshToken, !clientId.isEmpty else { return false }
         guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else { return false }
+        
+        await MainActor.run {
+            self.isRefreshingToken = true
+        }
+        
+        defer {
+            Task {
+                await MainActor.run {
+                    self.isRefreshingToken = false
+                }
+            }
+        }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -367,24 +378,97 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                await handleRefreshError("Network error during token refresh")
                 return false
             }
+            
+            guard httpResponse.statusCode == 200 else {
+                let errorMsg = "Token refresh failed with status \(httpResponse.statusCode)"
+                await handleRefreshError(errorMsg)
+                return false
+            }
+            
             let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+            
+            // Validate token response
+            guard !tokenResponse.accessToken.isEmpty,
+                  let expiresIn = tokenResponse.expiresIn,
+                  expiresIn > 0 else {
+                await handleRefreshError("Invalid token response from server")
+                return false
+            }
+            
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
-                if let newRT = tokenResponse.refreshToken { // Reddit may not return this on refresh
+                if let newRT = tokenResponse.refreshToken {
                     self.refreshToken = newRT
                 }
-                if let expiresIn = tokenResponse.expiresIn {
-                    self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
-                }
+                self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
+                self.refreshRetryCount = 0 // Reset retry count on success
+                self.apiStatus = .valid
+                self.errorMessage = nil
                 self.saveCredentials()
                 self.scheduleTokenRefreshIfNeeded()
             }
             return true
+            
         } catch {
+            await handleRefreshError("Token refresh error: \(error.localizedDescription)")
             return false
+        }
+    }
+    
+    // MARK: - Error Handling
+    
+    private func handleRefreshError(_ message: String) async {
+        await MainActor.run {
+            self.refreshRetryCount += 1
+            self.errorMessage = message
+            
+            if self.refreshRetryCount >= self.maxRefreshRetries {
+                // Max retries reached - mark as invalid and require re-authentication
+                self.apiStatus = .invalid
+                self.refreshRetryCount = 0
+            } else {
+                // Schedule a retry with exponential backoff
+                self.scheduleRefreshRetry()
+            }
+        }
+    }
+    
+    private func handleRefreshFailure(isScheduled: Bool) async {
+        await MainActor.run {
+            if isScheduled {
+                // Scheduled refresh failed - try manual refresh with retry logic
+                Task {
+                    let success = await self.refreshAccessToken()
+                    if !success {
+                        await self.handleRefreshError("Scheduled token refresh failed")
+                    }
+                }
+            } else {
+                self.apiStatus = .invalid
+                self.errorMessage = "Token refresh failed - please re-authenticate"
+            }
+        }
+    }
+    
+    private func scheduleRefreshRetry() {
+        tokenRefreshTimer?.invalidate()
+        
+        // Exponential backoff: 5s, 15s, 45s
+        let baseDelay: TimeInterval = 5
+        let retryDelay = baseDelay * pow(3.0, Double(refreshRetryCount - 1))
+        
+        tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: retryDelay, repeats: false) { [weak self] _ in
+            Task {
+                let success = await self?.refreshAccessToken() ?? false
+                if !success {
+                    await self?.handleRefreshError("Token refresh retry failed")
+                }
+            }
         }
     }
 }

@@ -1,10 +1,3 @@
-//
-//  OAuthSetupView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 
 struct OAuthSetupView: View {
@@ -22,7 +15,6 @@ struct OAuthSetupView: View {
             GeometryReader { geometry in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Modern Hero Section
                         heroSection(geometry: geometry)
                             .padding(.bottom, 60)
                         
@@ -36,7 +28,6 @@ struct OAuthSetupView: View {
                     }
                 }
                 .background {
-                    // Dynamic background with subtle animation
                     LinearGradient(
                         colors: [
                             Color(.systemBackground),
@@ -74,10 +65,8 @@ struct OAuthSetupView: View {
     
     private func heroSection(geometry: GeometryProxy) -> some View {
         VStack(spacing: 32) {
-            // App Icon with Mercury theme
             VStack(spacing: 24) {
                 ZStack {
-                    // Background glow effect
                     Circle()
                         .fill(
                             RadialGradient(
@@ -95,9 +84,7 @@ struct OAuthSetupView: View {
                         .blur(radius: animateIcon ? 0 : 20)
                         .scaleEffect(animateIcon ? 1.0 : 0.5)
                     
-                    // Main icon container
                     ZStack {
-                        // Mercury planet representation
                         Circle()
                             .fill(.orange.gradient)
                             .frame(width: 100, height: 100)
@@ -109,7 +96,6 @@ struct OAuthSetupView: View {
                             }
                             .shadow(color: .orange.opacity(0.3), radius: 20)
                         
-                        // Orbital ring
                         Circle()
                             .stroke(
                                 LinearGradient(
@@ -134,7 +120,6 @@ struct OAuthSetupView: View {
                 }
                 .matchedGeometryEffect(id: "appIcon", in: heroTransition)
                 
-                // App name and tagline with smooth entrance
                 VStack(spacing: 12) {
                     Text("Mercury")
                         .font(.system(size: 48, weight: .bold, design: .rounded))
@@ -176,7 +161,6 @@ struct OAuthSetupView: View {
     
     private var setupInstructions: some View {
         VStack(spacing: 28) {
-            // Section Title
             VStack(spacing: 8) {
                 Text("Get Started")
                     .font(.title)
@@ -190,7 +174,6 @@ struct OAuthSetupView: View {
             }
             .padding(.horizontal, 32)
             
-            // Modern Step Cards
             VStack(spacing: 20) {
                 setupStepWithAction(
                     number: "01",
@@ -242,7 +225,25 @@ struct OAuthSetupView: View {
                     title: "Enter Client ID",
                     description: "Copy your app's Client ID and paste it below"
                 ) {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 16) {
+                        // Help image showing where to find Client ID
+                        VStack(spacing: 8) {
+                            Image("APIHelp")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxHeight: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(.quaternary, lineWidth: 0.5)
+                                )
+                            
+                            Text("Find your Client ID in the app details (highlighted above)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        
                         PasteableTextField(
                             placeholder: "Enter your Reddit Client ID",
                             text: $clientId
@@ -264,7 +265,6 @@ struct OAuthSetupView: View {
             }
             .padding(.horizontal, 20)
             
-            // Action Button
             VStack(spacing: 16) {
                 PrimaryButton(
                     "Launch Mercury",
@@ -298,9 +298,7 @@ struct OAuthSetupView: View {
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         VStack(spacing: 0) {
-            // Step Header
             HStack(spacing: 16) {
-                // Step Number
                 Text(number)
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
@@ -329,7 +327,6 @@ struct OAuthSetupView: View {
                 Spacer()
             }
             
-            // Step Content
             content()
                 .padding(.top, 16)
                 .padding(.leading, 48)
@@ -350,9 +347,7 @@ struct OAuthSetupView: View {
         @ViewBuilder action: @escaping () -> some View
     ) -> some View {
         VStack(spacing: 0) {
-            // Step Header
             HStack(spacing: 16) {
-                // Step Number
                 Text(number)
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
@@ -381,7 +376,6 @@ struct OAuthSetupView: View {
                 Spacer()
             }
             
-            // Step Action
             HStack {
                 action()
                 Spacer()
@@ -397,7 +391,6 @@ struct OAuthSetupView: View {
         )
     }
 }
-
 
 #Preview {
     OAuthSetupView(

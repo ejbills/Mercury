@@ -1,10 +1,3 @@
-//
-//  MetadataService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 import SwiftUI
 
@@ -19,7 +12,6 @@ extension String {
         
         var documentAttributes: NSDictionary?
         guard let attributedString = try? NSAttributedString(data: data, options: options, documentAttributes: &documentAttributes) else {
-            // Fallback to manual replacement for common entities
             return self
                 .replacingOccurrences(of: "&quot;", with: "\"")
                 .replacingOccurrences(of: "&amp;", with: "&")
@@ -45,19 +37,16 @@ class MetadataService {
         config.timeoutIntervalForResource = 15
         self.session = URLSession(configuration: config)
         
-        // Set cache limits
         cache.countLimit = 100
         cache.totalCostLimit = 50 * 1024 * 1024 // 50MB
     }
     
     func fetchMetadata(for url: String) async -> ArticleMetadata? {
-        // Check cache first
         let cacheKey = NSString(string: url)
         if let cached = cache.object(forKey: cacheKey) {
             return cached.metadata
         }
         
-        // Cache miss - fetch from network
         return await fetchFromNetwork(url: url)
     }
     
@@ -66,7 +55,6 @@ class MetadataService {
         
         var request = URLRequest(url: requestURL)
         
-        // Spoof User-Agent to get better metadata (Facebook's crawler gets preferential treatment)
         request.setValue("facebookexternalhit/1.1", forHTTPHeaderField: "User-Agent")
         request.setValue("UTF-8", forHTTPHeaderField: "charset")
         request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
@@ -86,7 +74,6 @@ class MetadataService {
             
             let metadata = parseMetadata(from: html, originalURL: url)
             
-            // Cache the result
             let cacheKey = NSString(string: url)
             let cachedMetadata = CachedMetadata(metadata: metadata)
             cache.setObject(cachedMetadata, forKey: cacheKey)
@@ -94,7 +81,6 @@ class MetadataService {
             return metadata
             
         } catch {
-            // Failed to fetch metadata for URL
             return nil
         }
     }
@@ -105,7 +91,6 @@ class MetadataService {
         var imageURL: String?
         var siteName: String?
         
-        // Parse Open Graph and Twitter Card meta tags
         let metaTagPattern = #"<meta\s+(?:property|name|itemprop)=["\']([^"\']+)["\']\s+content=["\']([^"\']*)["\'][^>]*>"#
         let metaRegex = try? NSRegularExpression(pattern: metaTagPattern, options: [.caseInsensitive, .dotMatchesLineSeparators])
         
@@ -132,7 +117,6 @@ class MetadataService {
             }
         }
         
-        // Fallback to title tag if no og:title
         if title == nil {
             let titlePattern = #"<title[^>]*>([^<]+)</title>"#
             let titleRegex = try? NSRegularExpression(pattern: titlePattern, options: [.caseInsensitive])
@@ -142,7 +126,6 @@ class MetadataService {
             }
         }
         
-        // Resolve relative URLs
         if let relativeImageURL = imageURL, !relativeImageURL.hasPrefix("http") {
             if let baseURL = URL(string: originalURL) {
                 imageURL = URL(string: relativeImageURL, relativeTo: baseURL)?.absoluteString
@@ -159,7 +142,6 @@ class MetadataService {
     }
 }
 
-// Wrapper class for NSCache (which requires class types)
 private class CachedMetadata {
     let metadata: ArticleMetadata
     

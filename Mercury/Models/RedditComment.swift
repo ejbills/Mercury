@@ -1,16 +1,10 @@
-//
-//  RedditComment.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
 import Foundation
 
 struct RedditComment: Codable, Identifiable, Hashable {
     let id: String
     let subreddit: String?
     let author: String
+    let authorFullname: String?
     let body: String
     let bodyHtml: String?
     let score: Int
@@ -36,9 +30,9 @@ struct RedditComment: Codable, Identifiable, Hashable {
     let locked: Bool
     var replies: CommentReplies?
     
-    // Local state management
     var currentVoteState: VoteState = .neutral
     var displayScore: Int
+    var authorIconURL: URL? = nil
     var isCollapsed: Bool = false
     
     enum VoteState {
@@ -52,6 +46,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
         case bodyHtml = "body_html"
         case createdUtc = "created_utc"
         case edited
+        case authorFullname = "author_fullname"
         case parentId = "parent_id"
         case linkId = "link_id"
         case isSubmitter = "is_submitter"
@@ -67,6 +62,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
         id = try container.decode(String.self, forKey: .id)
         subreddit = try container.decodeIfPresent(String.self, forKey: .subreddit)
         author = try container.decode(String.self, forKey: .author)
+        authorFullname = try container.decodeIfPresent(String.self, forKey: .authorFullname)
         body = try container.decode(String.self, forKey: .body)
         bodyHtml = try container.decodeIfPresent(String.self, forKey: .bodyHtml)
         score = try container.decodeIfPresent(Int.self, forKey: .score) ?? 0
@@ -79,8 +75,12 @@ struct RedditComment: Codable, Identifiable, Hashable {
         saved = try container.decodeIfPresent(Bool.self, forKey: .saved) ?? false
         likes = try container.decodeIfPresent(Bool.self, forKey: .likes)
         permalink = try container.decode(String.self, forKey: .permalink)
-        parentId = try container.decodeIfPresent(String.self, forKey: .parentId)
-        linkId = try container.decodeIfPresent(String.self, forKey: .linkId)
+        // Normalize parent and link IDs by removing Reddit prefixes
+        let rawParentId = try container.decodeIfPresent(String.self, forKey: .parentId)
+        parentId = Self.normalizeRedditId(rawParentId)
+        
+        let rawLinkId = try container.decodeIfPresent(String.self, forKey: .linkId)
+        linkId = Self.normalizeRedditId(rawLinkId)
         isSubmitter = try container.decodeIfPresent(Bool.self, forKey: .isSubmitter) ?? false
         scoreHidden = try container.decodeIfPresent(Bool.self, forKey: .scoreHidden) ?? false
         controversiality = try container.decodeIfPresent(Int.self, forKey: .controversiality) ?? 0
@@ -92,13 +92,13 @@ struct RedditComment: Codable, Identifiable, Hashable {
         locked = try container.decodeIfPresent(Bool.self, forKey: .locked) ?? false
         replies = try container.decodeIfPresent(CommentReplies.self, forKey: .replies)
         
-        // Initialize local state
         displayScore = score
         if let likes = likes {
             currentVoteState = likes ? .upvoted : .downvoted
         } else {
             currentVoteState = .neutral
         }
+
     }
     
     var createdDate: Date {
@@ -166,7 +166,6 @@ struct RedditComment: Codable, Identifiable, Hashable {
         let oldState = currentVoteState
         currentVoteState = voteState
         
-        // Update display score based on vote change
         switch (oldState, voteState) {
         case (.neutral, .upvoted):
             displayScore += 1
@@ -198,6 +197,39 @@ struct RedditComment: Codable, Identifiable, Hashable {
     
     static func == (lhs: RedditComment, rhs: RedditComment) -> Bool {
         return lhs.id == rhs.id
+    }
+    
+    
+    /// Normalizes Reddit IDs by removing type prefixes (t1_, t3_, etc.)
+    /// Returns clean ID or nil if input is nil
+    static func normalizeRedditId(_ id: String?) -> String? {
+        guard let id = id else { 
+            return nil 
+        }
+        
+        // Remove Reddit type prefixes: t1_ (comment), t3_ (post), etc.
+        if id.contains("_"), id.count > 3 {
+            let components = id.split(separator: "_", maxSplits: 1)
+            if components.count == 2 && components[0].hasPrefix("t") {
+                let normalized = String(components[1])
+                return normalized
+            }
+        }
+        
+        return id
+    }
+    
+    /// Converts a clean comment ID back to Reddit API format (t1_commentId)
+    /// Used when making API calls that require the prefixed format
+    var commentFullname: String { fullname }
+
+    /// Unified fullname for this comment (e.g., "t1_<id>")
+    var fullname: String { Fullname.comment(id) }
+    
+    /// Converts a clean parent comment ID back to Reddit API format if needed
+    var parentFullname: String? {
+        guard let parentId = parentId else { return nil }
+        return Fullname.comment(parentId)
     }
 }
 
@@ -277,10 +309,11 @@ struct CommentResponse: Codable {
                             collectComments(from: commentResponse.data.children)
                         }
                     }
+                case .post:
+                    // Ignore post items in the first listing
+                    break
                 case .more(let more):
-                    // Filter out dummy entries (t3 posts)
                     if !more.name.isEmpty {
-                        // Don't add MoreComments to the flattened list
                     }
                 }
             }
@@ -291,14 +324,12 @@ struct CommentResponse: Codable {
     }
     
     var moreComments: [MoreComments] {
-        // Recursively collect MoreComments from the entire comment tree
         var allMoreComments: [MoreComments] = []
         
         func collectMoreComments(from children: [CommentChild]) {
             for child in children {
                 switch child.data {
                 case .comment(let comment):
-                    // Recursively check this comment's replies
                     if let replies = comment.replies {
                         switch replies {
                         case .empty:
@@ -307,8 +338,10 @@ struct CommentResponse: Codable {
                             collectMoreComments(from: response.data.children)
                         }
                     }
+                case .post:
+                    // Ignore post items in the first listing
+                    break
                 case .more(let more):
-                    // Only filter out completely empty entries (t3 posts)
                     if more.name.isEmpty && more.children.isEmpty && more.count == 0 {
                     } else {
                         allMoreComments.append(more)
@@ -335,6 +368,7 @@ struct CommentChild: Codable {
     enum CommentData: Codable {
         case comment(RedditComment)
         case more(MoreComments)
+        case post(RedditPost)
         
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -344,11 +378,12 @@ struct CommentChild: Codable {
             case "t1": // Comment
                 let comment = try container.decode(RedditComment.self, forKey: .data)
                 self = .comment(comment)
+            case "t3": // Post (first element of /comments response)
+                let post = try container.decode(RedditPost.self, forKey: .data)
+                self = .post(post)
             case "more": // More comments
                 let more = try container.decode(MoreComments.self, forKey: .data)
                 self = .more(more)
-            case "t3": // Post - skip this by creating a dummy more object
-                self = .more(MoreComments(count: 0, name: "", rawId: "", parentId: nil, depth: 0, children: []))
             default:
                 throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown comment kind: \(kind)")
             }
@@ -361,6 +396,9 @@ struct CommentChild: Codable {
             case .comment(let comment):
                 try container.encode("t1", forKey: .kind)
                 try container.encode(comment, forKey: .data)
+            case .post(let post):
+                try container.encode("t3", forKey: .kind)
+                try container.encode(post, forKey: .data)
             case .more(let more):
                 try container.encode("more", forKey: .kind)
                 try container.encode(more, forKey: .data)
@@ -372,7 +410,6 @@ struct CommentChild: Codable {
         }
     }
     
-    // Simple memberwise initializer
     init(kind: String, data: CommentData) {
         self.kind = kind
         self.data = data
@@ -386,11 +423,12 @@ struct CommentChild: Codable {
         case "t1": // Comment
             let comment = try container.decode(RedditComment.self, forKey: .data)
             data = .comment(comment)
+        case "t3": // Post (first element of /comments response)
+            let post = try container.decode(RedditPost.self, forKey: .data)
+            data = .post(post)
         case "more": // More comments
             let more = try container.decode(MoreComments.self, forKey: .data)
             data = .more(more)
-        case "t3": // Post - skip this by creating a dummy more object
-            data = .more(MoreComments(count: 0, name: "", rawId: "", parentId: nil, depth: 0, children: []))
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown comment kind: \(kind)")
         }
@@ -409,7 +447,6 @@ struct MoreComments: Codable {
     let depth: Int
     let children: [String]
     
-    // Computed property to get the actual ID - use name if id is empty/underscore
     var id: String {
         if rawId.isEmpty || rawId == "_" {
             return name.isEmpty ? "_" : name
@@ -421,5 +458,37 @@ struct MoreComments: Codable {
         case count, name, depth, children
         case rawId = "id"
         case parentId = "parent_id"
+    }
+
+    /// Explicit memberwise initializer to support constructing placeholder "more" objects
+    init(count: Int, name: String, rawId: String, parentId: String?, depth: Int, children: [String]) {
+        self.count = count
+        self.name = name
+        self.rawId = rawId
+        self.parentId = RedditComment.normalizeRedditId(parentId)
+        self.depth = depth
+        self.children = children
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let count = try container.decodeIfPresent(Int.self, forKey: .count) ?? 0
+        let rawName = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        let rawId = try container.decodeIfPresent(String.self, forKey: .rawId) ?? ""
+        let parentId = try container.decodeIfPresent(String.self, forKey: .parentId)
+        let depth = try container.decodeIfPresent(Int.self, forKey: .depth) ?? 0
+        let children = try container.decodeIfPresent([String].self, forKey: .children) ?? []
+
+        // Normalize sentinel values the API sometimes returns
+        // Replace "t1__" and "_" with empty strings so callers can just check for emptiness
+        let normalizedName = (rawName == "t1__") ? "" : rawName
+        let normalizedRawId = (rawId == "_") ? "" : rawId
+
+        self.count = count
+        self.name = normalizedName
+        self.rawId = normalizedRawId
+        self.parentId = RedditComment.normalizeRedditId(parentId)
+        self.depth = depth
+        self.children = children
     }
 }

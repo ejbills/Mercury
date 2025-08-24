@@ -1,10 +1,3 @@
-//
-//  SubredditFeedView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import Defaults
 
@@ -17,28 +10,41 @@ struct SubredditFeedView: View {
     @State private var errorMessage: String?
     @State private var after: String?
     @State private var hasMore = true
+    @State private var postSort: PostSort = .hot
+    @State private var topTimeFrame: TopTimeFrame = .day
+    @State private var showingSortOptions = false
+    @State private var showingTimeFrameOptions = false
     @Namespace private var mediaNamespace
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
     @State private var selectedPost: RedditPost?
+    @State private var videoHandoffState: VideoHandoffState?
     @Default(.compactMode) private var compactMode
+    @Default(.hiddenPostIds) private var hiddenPostIds
     
     private let pageSize = 25
     
     var body: some View {
-        ScrollViewReader { proxy in
+        let visiblePosts = posts.filter { !hiddenPostIds.contains($0.id) }
+        
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 8) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id("top")
+                    
                     if posts.isEmpty && isLoading {
                         skeletonLoadingView
-                    } else if posts.isEmpty && errorMessage != nil {
+                    } else if posts.isEmpty && errorMessage != nil && !isLoading {
                         errorView
                             .padding(.top, 100)
                     } else if posts.isEmpty {
                         emptyStateView
                             .padding(.top, 100)
                     } else {
-                        ForEach(posts) { post in
+                        ForEach(visiblePosts) { post in
+                            Group {
                             if compactMode {
                                 CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                                     .id(post.id) // Important for scroll position tracking
@@ -50,8 +56,27 @@ struct SubredditFeedView: View {
                                         }
                                     }
                             } else {
-                                PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                                    .id(post.id) // Important for scroll position tracking
+                                PostRowView(
+                                    post: post,
+                                    namespace: mediaNamespace,
+                                    selectedPost: $selectedPost,
+                                    onVideoHandoff: { handoffState in
+                                        videoHandoffState = handoffState
+                                    },
+                                    onHidePost: { id in
+                                        hiddenPostIds.insert(id)
+                                    },
+                                    onHidePostsAbove: { id in
+                                        if let index = posts.firstIndex(where: { $0.id == id }) {
+                                            let ids = posts.prefix(index).map { $0.id }
+                                            hiddenPostIds.formUnion(ids)
+                                            proxy.animatedScrollTo("top", anchor: .top)
+                                        }
+                                    }
+                                )
+                            }
+                            }
+                            .id(post.id)
                                     .onAppear {
                                         if post.id == posts.last?.id && hasMore && !isLoadingMore {
                                             Task {
@@ -60,7 +85,6 @@ struct SubredditFeedView: View {
                                         }
                                     }
                             }
-                        }
                         
                         if hasMore {
                             loadMoreSection
@@ -73,8 +97,8 @@ struct SubredditFeedView: View {
                 .padding(.top, 6)
             }
             .scrollPosition(id: $scrollPosition)
+            
             .onAppear {
-                // Only load initial posts if we haven't appeared before and have no posts
                 if !hasAppeared && posts.isEmpty && !isLoading {
                     hasAppeared = true
                     Task {
@@ -96,13 +120,49 @@ struct SubredditFeedView: View {
                         .font(.callout)
                         .foregroundStyle(.primary)
                 }
+                sortButton
             }
         }
         .fullScreenCover(item: $selectedPost) { post in
-            PostDetailRouter(post: post, namespace: mediaNamespace)
+            PostDetailContainer(
+                post: post,
+                namespace: mediaNamespace,
+                videoHandoffState: $videoHandoffState,
+                onDismiss: {
+                    selectedPost = nil
+                }
+            )
         }
         .refreshable {
             await refreshFeed()
+        }
+        .confirmationDialog("Sort Posts", isPresented: $showingSortOptions) {
+            ForEach(PostSort.allCases, id: \.self) { sort in
+                Button(sort.displayName) {
+                    postSort = sort
+                    if sort.supportsTimeFrame {
+                        showingTimeFrameOptions = true
+                    } else {
+                        Task {
+                            await loadInitialPosts()
+                        }
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Top Posts Time Frame", isPresented: $showingTimeFrameOptions) {
+            ForEach(TopTimeFrame.allCases, id: \.self) { timeFrame in
+                Button(timeFrame.displayName) {
+                    topTimeFrame = timeFrame
+                    Task {
+                        await loadInitialPosts()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                // Reset to previous sort if cancelled
+                postSort = .hot
+            }
         }
     }
     
@@ -111,6 +171,8 @@ struct SubredditFeedView: View {
             return "Popular"
         } else if subreddit == "all" {
             return "All"
+        } else if subreddit == "user/saved" || subreddit == "saved" {
+            return "Saved"
         } else if subreddit.hasPrefix("r/") {
             return subreddit
         } else {
@@ -223,6 +285,28 @@ struct SubredditFeedView: View {
         .padding(.horizontal, 32)
     }
     
+    private var sortButton: some View {
+        Button(action: {
+            showingSortOptions = true
+        }) {
+            HStack(spacing: 4) {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(postSort.displayName)
+                        .font(.callout)
+                        .fontWeight(.medium)
+                    
+                    if postSort.supportsTimeFrame {
+                        Text(topTimeFrame.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
+        }
+    }
+    
     private func loadInitialPosts() async {
         await MainActor.run {
             isLoading = true
@@ -235,7 +319,6 @@ struct SubredditFeedView: View {
         do {
             let response = try await fetchPosts(after: nil)
             await MainActor.run {
-                // Remove animation for initial load to prevent layout jumping
                 self.posts = response.data.children.compactMap { $0.data }
                 self.after = response.data.after
                 self.hasMore = response.data.after != nil && !response.data.children.isEmpty
@@ -276,13 +359,30 @@ struct SubredditFeedView: View {
             await MainActor.run {
                 self.isLoadingMore = false
             }
-            // Failed to load more posts
         }
     }
     
     private func refreshFeed() async {
-        // Don't restore position on refresh - user expects to go to top
-        await loadInitialPosts()
+        await MainActor.run { 
+            errorMessage = nil
+            after = nil
+            hasMore = true
+        }
+        
+        do {
+            let response = try await fetchPosts(after: nil)
+            await MainActor.run {
+                let newPosts = response.data.children.compactMap { $0.data }
+                self.posts = newPosts
+                self.after = response.data.after
+                self.hasMore = response.data.after != nil && !newPosts.isEmpty
+                self.errorMessage = nil // Clear any previous error on success
+            }
+        } catch {
+            await MainActor.run { 
+                self.errorMessage = error.localizedDescription
+            }
+        }
     }
     
     private func fetchPosts(after: String?) async throws -> PostResponse {
@@ -291,9 +391,13 @@ struct SubredditFeedView: View {
             return try await apiService.fetchPopularFeed(after: after, limit: pageSize)
         case "home", "hot":
             return try await apiService.fetchHomeFeed(after: after, limit: pageSize)
+        case "user/saved", "saved":
+            return try await apiService.fetchSavedPosts(after: after, limit: pageSize)
         default:
             let cleanSubreddit = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
-            return try await apiService.fetchSubredditPosts(subreddit: cleanSubreddit, after: after, limit: pageSize)
+            let timeFrame = postSort.supportsTimeFrame ? topTimeFrame : nil
+            return try await apiService.fetchSubredditPosts(subreddit: cleanSubreddit, sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)
         }
     }
+    
 }

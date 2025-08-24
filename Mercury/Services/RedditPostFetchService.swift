@@ -2,7 +2,6 @@
 //  RedditPostFetchService.swift
 //  Mercury
 //
-//  Created by AI Assistant on 8/18/25.
 //
 
 import Foundation
@@ -47,7 +46,7 @@ class RedditPostFetchService {
             }
         } else if let postId = postInfo.postId {
             // Short URL format - try to get from Reddit's API
-            apiURL = "https://www.reddit.com/api/info.json?id=t3_\(postId)"
+            apiURL = "https://www.reddit.com/api/info.json?id=\(Fullname.post(postId))"
         } else {
             return nil
         }

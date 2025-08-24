@@ -1,11 +1,3 @@
-//
-//  NotchHeaderPill.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/15/25.
-//
-
-
 import SwiftUI
 
 struct Pill<Content: View>: View {

@@ -1,10 +1,3 @@
-//
-//  SafariView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import SwiftUI
 import SafariServices
 
@@ -24,7 +17,6 @@ struct SafariView: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {
-        // No updates needed
     }
 }
 

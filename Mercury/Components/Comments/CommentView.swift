@@ -1,11 +1,6 @@
-//
-//  CommentView.swift
-//  Mercury
-//
-//  Created by AI Assistant on 1/20/25.
-//
-
 import SwiftUI
+import UIKit
+import Defaults
 
 struct CommentView: View {
     let comment: RedditComment
@@ -13,11 +8,17 @@ struct CommentView: View {
     let post: RedditPost
     let isCollapsed: Bool
     let onCollapseToggle: () -> Void
+    let onCollapseParent: () -> Void
+    let onScrollToParent: () -> Void
     let onReplyPosted: (RedditComment) -> Void
     
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
+    @Default(.commentLeftShortSwipeAction) private var commentLeftShortSwipeAction
+    @Default(.commentLeftLongSwipeAction) private var commentLeftLongSwipeAction
+    @Default(.commentRightShortSwipeAction) private var commentRightShortSwipeAction
+    @Default(.commentRightLongSwipeAction) private var commentRightLongSwipeAction
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -26,43 +27,63 @@ struct CommentView: View {
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var wasDeleted = false
+    @State private var shareItem: ShareItem?
+    @State private var savedState: Bool
 
-    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
+    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onCollapseParent: @escaping () -> Void = {}, onScrollToParent: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
         self.depth = depth
         self.post = post
         self.isCollapsed = isCollapsed
         self.onCollapseToggle = onCollapseToggle
+        self.onCollapseParent = onCollapseParent
+        self.onScrollToParent = onScrollToParent
         self.onReplyPosted = onReplyPosted
         self._voteState = State(initialValue: comment.currentVoteState)
         self._displayScore = State(initialValue: comment.displayScore)
+        self._savedState = State(initialValue: comment.saved)
     }
     
     var body: some View {
         Card(
-            style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
-            highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
-        ) {
-            VStack(alignment: .leading, spacing: 8) {
-                commentHeader
-                
-                if !isCollapsed {
-                    commentBody
-                    commentActions
+                style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
+                highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
+            ) {
+                VStack(alignment: .leading, spacing: 8) {
+                    commentHeader
+                    
+                    if !isCollapsed {
+                        commentBody
+                        commentActions
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        .customSwipeGesture(
+            leftShort: commentLeftShortSwipeAction != .none ? SwipeAction(
+                type: commentLeftShortSwipeAction,
+                action: { await handleSwipeAction(commentLeftShortSwipeAction) }
+            ) : nil,
+            leftLong: commentLeftLongSwipeAction != .none ? SwipeAction(
+                type: commentLeftLongSwipeAction,
+                action: { await handleSwipeAction(commentLeftLongSwipeAction) }
+            ) : nil,
+            rightShort: commentRightShortSwipeAction != .none ? SwipeAction(
+                type: commentRightShortSwipeAction,
+                action: { await handleSwipeAction(commentRightShortSwipeAction) }
+            ) : nil,
+            rightLong: commentRightLongSwipeAction != .none ? SwipeAction(
+                type: commentRightLongSwipeAction,
+                action: { await handleSwipeAction(commentRightLongSwipeAction) }
+            ) : nil
+        )
     }
     
     private var commentHeader: some View {
         HStack(spacing: 8) {
-            // Author section with profile picture and pill
             HStack(spacing: 6) {
-                // Small profile picture
-                UserAvatar(username: comment.author, size: 20, disableAPIFetch: true)
+                UserAvatar(username: comment.author, size: 20, iconURL: comment.authorIconURL)
                 
-                // Author pill with badges - matches post design pattern
                 Pill(action: {
                     if !isDeletedUser {
                         navigationPath.navigate(to: .userProfile(username: comment.author))
@@ -85,14 +106,12 @@ struct CommentView: View {
                                 .background(.blue, in: Capsule())
                         }
                         
-                        // Moderator badge removed; moderator username is styled green via authorColor
                     }
                 }
             }
             
             Spacer()
             
-            // Meta info pills - clean and minimal
             HStack(spacing: 4) {
                 if !comment.scoreHidden {
                     Pill(size: .small) {
@@ -149,7 +168,6 @@ struct CommentView: View {
     
     private var commentActions: some View {
         HStack(spacing: 8) {
-            // Mini vote controls styled after post voting
             HStack(spacing: 4) {
                 VoteButton(
                     direction: .up,
@@ -179,11 +197,18 @@ struct CommentView: View {
             }
             .buttonStyle(.plain)
 
-            // Action menu (save, delete)
             Menu {
                 Button(action: { handleSave() }) {
-                    Label(comment.saved ? "Unsave" : "Save",
-                          systemImage: comment.saved ? "bookmark.fill" : "bookmark")
+                    Label(savedState ? "Unsave" : "Save",
+                          systemImage: savedState ? "bookmark.fill" : "bookmark")
+                }
+                if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                    ShareLink(item: url) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button(action: { UIPasteboard.general.string = url.absoluteString }) {
+                        Label("Copy Link", systemImage: "link")
+                    }
                 }
                 if canDeleteComment {
                     Button(role: .destructive, action: { showingDeleteConfirm = true }) {
@@ -201,6 +226,9 @@ struct CommentView: View {
             Spacer()
         }
         .padding(.top, 4)
+        .sheet(item: $shareItem) { item in
+            ShareSheet(shareItem: item)
+        }
         .sheet(isPresented: $showingReply) {
             MarkdownComposerView(
                 title: "Reply",
@@ -210,13 +238,22 @@ struct CommentView: View {
                 }
             )
         }
-        .alert("Delete Comment?", isPresented: $showingDeleteConfirm) {
-            Button("Delete", role: .destructive) {
-                Task { await deleteComment() }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This cannot be undone.")
+        .sheet(isPresented: $showingDeleteConfirm) {
+            ConfirmSheet(
+                title: "Delete Comment?",
+                message: "This cannot be undone.",
+                confirmTitle: "Delete",
+                confirmRole: .destructive,
+                onConfirm: {
+                    Task { await deleteComment() }
+                    showingDeleteConfirm = false
+                },
+                onCancel: {
+                    showingDeleteConfirm = false
+                }
+            )
+            .presentationDetents([.fraction(0.25)])
+            .presentationDragIndicator(.visible)
         }
     }
     
@@ -277,7 +314,6 @@ struct CommentView: View {
         let originalState = voteState
         let originalScore = displayScore
         
-        // Optimistic update
         voteState = newState == voteState ? .neutral : newState
         updateDisplayScore(from: originalState, to: voteState)
         
@@ -327,14 +363,22 @@ struct CommentView: View {
     
     private func handleSave() {
         Task {
+            let originalState = savedState
+            await MainActor.run {
+                savedState.toggle()
+            }
+            
             do {
-                if comment.saved {
+                if originalState {
                     try await redditAPI.unsaveComment(commentId: comment.id)
                 } else {
                     try await redditAPI.saveComment(commentId: comment.id)
                 }
             } catch {
                 print("Failed to save/unsave comment: \(error)")
+                await MainActor.run {
+                    savedState = originalState // Revert on error
+                }
             }
         }
     }
@@ -361,10 +405,59 @@ struct CommentView: View {
     }
 
     private func postReply(text: String) async throws {
-        let parent = "t1_\(comment.id)"
+        let parent = comment.fullname
         let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
         await MainActor.run {
             onReplyPosted(created)
+        }
+    }
+    
+    private func handleSwipeAction(_ actionType: SwipeActionType) async {
+        await MainActor.run {
+            switch actionType {
+            case .upvote:
+                handleVote(.upvoted)
+            case .downvote:
+                handleVote(.downvoted)
+            case .save:
+                handleSave()
+            case .share:
+                var items: [Any] = []
+                if !comment.body.isEmpty && comment.body != "[deleted]" {
+                    items.append(comment.body)
+                }
+                if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                    items.append(url)
+                }
+                let contextText = "Comment by u/\(comment.author) on \"\(post.title)\""
+                items.append(contextText)
+                shareItem = ShareItem(items: items)
+            case .reply:
+                showingReply = true
+            case .profile:
+                if !isDeletedUser {
+                    navigationPath.navigate(to: .userProfile(username: comment.author))
+                }
+            case .subreddit:
+                if let sub = comment.subreddit, !sub.isEmpty {
+                    navigationPath.navigate(to: .subredditFeed(subreddit: sub))
+                }
+            case .parentComment:
+                onScrollToParent()
+            case .collapse:
+                onCollapseToggle()
+            case .collapseToTop:
+                onCollapseParent()
+                onScrollToParent()
+            case .copyLink:
+                UIPasteboard.general.string = "https://www.reddit.com\(comment.permalink)"
+                let h = UINotificationFeedbackGenerator()
+                h.notificationOccurred(.success)
+            case .hide, .hideAbove:
+                break
+            case .none:
+                break
+            }
         }
     }
 }

@@ -1,12 +1,10 @@
-//
-//  MediaDetailView.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
+// MediaDetailView.swift
+// Mercury
 
 import SwiftUI
 import AVKit
+import AVFoundation
+
 import Nuke
 import NukeUI
 import UIKit
@@ -15,6 +13,8 @@ import Zoomable
 struct MediaDetailView: View {
     @State var post: RedditPost
     let namespace: Namespace.ID
+    let videoHandoffState: VideoHandoffState?
+    let onVideoHandoffReturn: ((VideoHandoffState) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -25,17 +25,22 @@ struct MediaDetailView: View {
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
+    @State private var savedState: Bool
+    @State private var originalMuteState: Bool = true
     @State private var shareItem: URL?
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
     @State private var showShareSheet = false
     @State private var showingPostReply = false
 
-    init(post: RedditPost, namespace: Namespace.ID) {
+    init(post: RedditPost, namespace: Namespace.ID, videoHandoffState: VideoHandoffState? = nil, onVideoHandoffReturn: ((VideoHandoffState) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
+        self.videoHandoffState = videoHandoffState
+        self.onVideoHandoffReturn = onVideoHandoffReturn
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
+        self._savedState = State(initialValue: post.saved)
     }
     
     private var currentPost: RedditPost {
@@ -79,15 +84,23 @@ struct MediaDetailView: View {
         .navigationBarHidden(true)
         .statusBarHidden(!isContentVisible)
 
-        .onAppear {
-            hasAppeared = true
-        }
+        .onAppear { hasAppeared = true }
         .onDisappear {
-            if let player = player {
-                player.pause()
-                player.seek(to: .zero)
-                self.player = nil
+            // Return handoff state to parent if we have video
+            if let player = player,
+               let handoffState = videoHandoffState,
+               let onReturn = onVideoHandoffReturn {
+                
+                // Restore original mute immediately before returning
+                player.applyMuteState(muted: originalMuteState)
+
+                let currentTime = player.currentTime().seconds
+                let updatedState = handoffState.updated(time: currentTime, muted: originalMuteState)
+                
+                onReturn(updatedState)
             }
+            // Clear our reference (but don't destroy the player)
+            self.player = nil
         }
     }
     
@@ -112,6 +125,7 @@ struct MediaDetailView: View {
                 voteState: $voteState,
                 displayScore: $displayScore,
                 isVoting: $isVoting,
+                savedState: $savedState,
                 onVote: handleVote,
                 onReply: { showingPostReply = true },
                 onShare: handleShare,
@@ -127,13 +141,16 @@ struct MediaDetailView: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
         .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.6)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 120)
-            .clipped()
+            GeometryReader { geometry in
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.8)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 250)
+                .offset(y: geometry.safeAreaInsets.bottom)
+            }
+            .ignoresSafeArea(edges: .bottom)
         )
         .sheet(isPresented: $showShareSheet) {
             MediaShareSheet(post: post, mediaURL: shareItem)
@@ -154,7 +171,7 @@ struct MediaDetailView: View {
     }
 
     private func submitRootReply(text: String) async throws {
-        let parent = "t3_\(post.id)"
+        let parent = post.fullname
         _ = try await redditAPI.submitComment(parentFullname: parent, text: text)
     }
     
@@ -185,6 +202,7 @@ struct MediaDetailView: View {
                             .scaleEffect(1.5)
                     }
                 }
+                .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
             }
             
         case .gif:
@@ -192,22 +210,40 @@ struct MediaDetailView: View {
                 AnimatedGifView(url: url, contentMode: .scaleAspectFit, cornerRadius: 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .zoomable()
+                    .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
             }
             
         case .video:
             if let videoURL = post.videoURL, let url = URL(string: videoURL) {
-                VideoPlayer(player: player ?? AVPlayer(url: url))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear {
-                        if player == nil {
-                            player = AVPlayer(url: url)
-                        }
-                        // Auto-play when appearing
+                ZStack {
+                    if let p = player {
+                        SimpleVideoPlayer(
+                            player: p,
+                            showControls: true,
+                            shouldLoop: false,
+                            autoPlay: true,
+                            gravity: .resizeAspect
+                        )
+                    } else {
+                        Color.clear
+                    }
+                }
+                .onAppear {
+                    
+                    if let handoffState = videoHandoffState {
+                        // Use handoff player and state
+                        player = handoffState.player
+                        originalMuteState = handoffState.isMuted  // Remember original state
+                        handoffState.applyTo(handoffState.player)
+                        // Temporarily unmute for detail view (will be restored on dismiss)
+                        player?.applyMuteState(muted: false)
+                        player?.play()
+                    } else {
+                        // Fallback: create new player
+                        player = AVPlayer(url: url)
                         player?.play()
                     }
-                    .onTapGesture {
-                        // Let video player handle its own controls
-                    }
+                }
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "video")
@@ -228,7 +264,8 @@ struct MediaDetailView: View {
                     .font(.title3)
                     .foregroundStyle(.white)
             }
-        case .text, .link:
+            .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+        case .text, .link, .youtube:
             // These shouldn't appear in media detail view
             VStack(spacing: 16) {
                 Image(systemName: "doc.text")
@@ -305,14 +342,22 @@ struct MediaDetailView: View {
     
     private func handleSave() {
         Task {
+            let originalState = savedState
+            await MainActor.run {
+                savedState.toggle()
+            }
+            
             do {
-                if post.saved {
+                if originalState {
                     try await redditAPI.unsavePost(postId: post.id)
                 } else {
                     try await redditAPI.savePost(postId: post.id)
                 }
             } catch {
                 print("Save/Unsave error: \(error)")
+                await MainActor.run {
+                    savedState = originalState // Revert on error
+                }
             }
         }
     }

@@ -2,13 +2,13 @@
 //  GalleryView.swift
 //  Mercury
 //
-//  Created by AI Assistant on 1/20/25.
 //
 
 import SwiftUI
 import Nuke
 import NukeUI
 import Zoomable
+import Defaults
 
 // MARK: - Gallery View for Feed
 struct SimpleGalleryView: View {
@@ -18,6 +18,7 @@ struct SimpleGalleryView: View {
     @Binding var selectedPost: RedditPost?
     
     @State private var isLoaded = false
+    @State private var isBlurred = false
     
     private var galleryImages: [GalleryImage] {
         return post.galleryImages
@@ -93,14 +94,15 @@ struct SimpleGalleryView: View {
                     }
                 }
                 .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .bottomTrailing) {
                     // Gallery badge with count
                     galleryBadge
                 }
+                .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
+        .nsfwBlurred(post: post, contentType: .gallery, isBlurred: $isBlurred)
     }
     
     private var galleryBadge: some View {
@@ -129,6 +131,7 @@ struct GalleryDetailView: View {
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
+    @State private var savedState: Bool
     @State private var shareItem: URL?
     @State private var shareItems: [URL]?
     @State private var showShareSheet = false
@@ -153,6 +156,7 @@ struct GalleryDetailView: View {
         self.namespace = namespace
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
+        self._savedState = State(initialValue: post.saved)
     }
     
     var body: some View {
@@ -263,6 +267,7 @@ struct GalleryDetailView: View {
                 voteState: $voteState,
                 displayScore: $displayScore,
                 isVoting: $isVoting,
+                savedState: $savedState,
                 onVote: handleVote,
                 onReply: { showingPostReply = true },
                 onShare: handleShare,
@@ -374,15 +379,22 @@ struct GalleryDetailView: View {
     
     private func handleSave() {
         Task {
+            let originalState = savedState
+            await MainActor.run {
+                savedState.toggle()
+            }
+            
             do {
-                if post.saved {
+                if originalState {
                     try await redditAPI.unsavePost(postId: post.id)
                 } else {
                     try await redditAPI.savePost(postId: post.id)
                 }
             } catch {
                 print("Save/Unsave error: \(error)")
-                
+                await MainActor.run {
+                    savedState = originalState // Revert on error
+                }
             }
         }
     }
@@ -421,7 +433,7 @@ struct GalleryDetailView: View {
     }
 
     private func submitRootReply(text: String) async throws {
-        let parent = "t3_\(post.id)"
+        let parent = post.fullname
         _ = try await redditAPI.submitComment(parentFullname: parent, text: text)
     }
 }

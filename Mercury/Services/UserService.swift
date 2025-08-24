@@ -1,14 +1,11 @@
-//
-//  UserService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 
 /// Service responsible for user profile operations
 class UserService: BaseRedditService {
+    private lazy var avatarManager: AvatarManager = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return AvatarManager(authService: auth)
+    }()
     
     // MARK: - User Profiles
     
@@ -51,6 +48,11 @@ class UserService: BaseRedditService {
             throw error
         }
     }
+
+    func fetchAvatarURL(username: String) async -> URL? {
+        let map = await avatarManager.fetchAvatars(for: [username])
+        return map[username]
+    }
     
     func fetchUserPosts(username: String, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try validateAccessToken()
@@ -70,6 +72,78 @@ class UserService: BaseRedditService {
         
         let request = createRequest(url: url)
         return try await performPostRequest(request: request, endpoint: "user/\(username)")
+    }
+
+    func fetchUserComments(username: String, after: String? = nil, limit: Int = 25) async throws -> UserCommentsResponse {
+        try validateAccessToken()
+
+        var components = URLComponents(string: "\(baseURL)/user/\(username)/comments.json")!
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if let after = after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        components.queryItems = queryItems
+
+        guard let url = components.url else {
+            throw APIError.parseError
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.networkError
+            }
+
+            try validateResponse(httpResponse)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let commentsResponse = try decoder.decode(UserCommentsResponse.self, from: data)
+
+            let filteredChildren: [CommentChild] = commentsResponse.data.children.compactMap { child in
+                switch child.data {
+                case .comment(let comment):
+                    return FilterService.shared.shouldFilterComment(comment) ? nil : CommentChild(kind: child.kind, data: .comment(comment))
+                case .post:
+                    // Ignore post items in user comments listing
+                    return nil
+                case .more:
+                    return nil
+                }
+            }
+
+            let usernames = Array(Set(filteredChildren.compactMap { child -> String? in
+                if case .comment(let c) = child.data { return c.author } else { return nil }
+            }))
+            let avatarMap = await avatarManager.fetchAvatars(for: usernames)
+
+            let enrichedChildren: [CommentChild] = filteredChildren.map { child in
+                switch child.data {
+                case .comment(var c):
+                    if let url = avatarMap[c.author] { c.authorIconURL = url }
+                    return CommentChild(kind: child.kind, data: .comment(c))
+                case .post(let p):
+                    return CommentChild(kind: child.kind, data: .post(p))
+                case .more(let m):
+                    return CommentChild(kind: child.kind, data: .more(m))
+                }
+            }
+
+            let filteredData = CommentListData(
+                children: enrichedChildren,
+                after: commentsResponse.data.after,
+                before: commentsResponse.data.before
+            )
+
+            return UserCommentsResponse(data: filteredData)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
     }
     
     // MARK: - Helper Methods
@@ -96,12 +170,31 @@ class UserService: BaseRedditService {
             }
             
             let decoder = JSONDecoder()
-            // Note: We use explicit CodingKeys mappings instead of .convertFromSnakeCase
-            // to avoid conflicts with field decoding
-            
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
-                return postResponse
+
+                let filteredChildren = postResponse.data.children.compactMap { child -> PostChild? in
+                    guard let post = child.data else { return nil }
+                    if FilterService.shared.shouldFilterPost(post) { return nil }
+                    return PostChild(kind: child.kind, data: post)
+                }
+
+                let usernames = Array(Set(filteredChildren.compactMap { $0.data?.author }))
+                let avatarMap = await avatarManager.fetchAvatars(for: usernames)
+
+                let enrichedChildren = filteredChildren.map { child in
+                    var post = child.data!
+                    if let url = avatarMap[post.author] { post.authorIconURL = url }
+                    return PostChild(kind: child.kind, data: post)
+                }
+
+                return PostResponse(data: PostListData(
+                    children: enrichedChildren,
+                    after: postResponse.data.after,
+                    before: postResponse.data.before,
+                    dist: postResponse.data.dist,
+                    modhash: postResponse.data.modhash
+                ))
             } catch {
                 throw APIError.parseError
             }
@@ -111,6 +204,7 @@ class UserService: BaseRedditService {
             throw error
         }
     }
+
 }
 
 // MARK: - User Profile Models
@@ -139,21 +233,13 @@ struct UserProfile: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case idRaw = "id"
         case name, verified, subreddit
-        case linkKarma = "link_karma"
-        case commentKarma = "comment_karma"
+        case linkKarma, commentKarma
         case created = "created_utc"
-        case hasVerifiedEmail = "has_verified_email"
-        case iconImg = "icon_img"
-        case isEmployee = "is_employee"
-        case isMod = "is_mod"
-        case isPremium = "is_premium"
-        case isGold = "is_gold"
-        case hasPaypalSubscription = "has_paypal_subscription"
-        case hasSubscribedToPremium = "has_subscribed_to_premium"
-        case isBlocked = "is_blocked"
-        case isFriend = "is_friend"
-        case acceptFollowers = "accept_followers"
-        case hideFromRobots = "hide_from_robots"
+        case hasVerifiedEmail
+        case iconImg
+        case isEmployee, isMod, isPremium, isGold
+        case hasPaypalSubscription, hasSubscribedToPremium
+        case isBlocked, isFriend, acceptFollowers, hideFromRobots
     }
     
     var id: String {
@@ -170,7 +256,6 @@ struct UserProfile: Codable, Identifiable {
         return link + comment
     }
     
-    // Use subreddit icon if main iconImg is not available
     var effectiveIconImg: String? {
         if let iconImg = iconImg, !iconImg.isEmpty {
             return iconImg
@@ -215,4 +300,8 @@ struct ProfileSubreddit: Codable {
 
 struct UserProfileResponse: Codable {
     let data: UserProfile
+}
+
+struct UserCommentsResponse: Codable {
+    let data: CommentListData
 }

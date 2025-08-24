@@ -1,10 +1,3 @@
-//
-//  SearchService.swift
-//  Mercury
-//
-//  Created by Ethan Bills on 8/14/25.
-//
-
 import Foundation
 
 /// Service responsible for search functionality
@@ -48,7 +41,14 @@ class SearchService: BaseRedditService {
         }
     }
     
-    func searchPosts(query: String, subreddit: String? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+    func searchPosts(
+        query: String,
+        subreddit: String? = nil,
+        after: String? = nil,
+        limit: Int = 25,
+        sort: String = "relevance",
+        timeFrame: String? = nil
+    ) async throws -> PostResponse {
         try validateAccessToken()
         
         let baseURLString = subreddit != nil ? "\(baseURL)/r/\(subreddit!)/search.json" : "\(baseURL)/search.json"
@@ -57,12 +57,15 @@ class SearchService: BaseRedditService {
         var queryItems = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "sort", value: "relevance"),
+            URLQueryItem(name: "sort", value: sort),
             URLQueryItem(name: "type", value: "link")
         ]
         
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
+        }
+        if let timeFrame = timeFrame, !timeFrame.isEmpty {
+            queryItems.append(URLQueryItem(name: "t", value: timeFrame))
         }
         
         if subreddit != nil {
@@ -92,8 +95,6 @@ class SearchService: BaseRedditService {
             try validateResponse(httpResponse)
             
             let decoder = JSONDecoder()
-            // Note: We use explicit CodingKeys mappings instead of .convertFromSnakeCase
-            // to avoid conflicts with field decoding
             
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)

@@ -2,7 +2,6 @@
 //  MediaDownloadService.swift
 //  Mercury
 //
-//  Created by AI Assistant on 1/20/25.
 //
 
 import Foundation
@@ -58,7 +57,7 @@ final class MediaDownloadService {
             return try await downloadGif(post: post, options: downloadOptions)
         case .video:
             return try await downloadVideo(post: post, options: downloadOptions)
-        case .text, .link:
+        case .text, .link, .youtube:
             throw Error.unsupported
         case .gallery:
             return try await downloadGallery(post: post, options: downloadOptions)

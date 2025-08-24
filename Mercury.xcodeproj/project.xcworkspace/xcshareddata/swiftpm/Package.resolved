@@ -1,5 +1,5 @@
 {
-  "originHash" : "2012a8f72c6af87c2cc500167866e54fceff3ec35d43e40bfedaf8d58c83f5f7",
+  "originHash" : "e3e1e118042a3753099bf70074437e51e91313c63c53aa64e5c44cb90bcd2713",
   "pins" : [
     {
       "identity" : "defaults",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "00c82eff4550c87cf9c547d7e5493a6a97837061",
         "version" : "9.0.3"
+      }
+    },
+    {
+      "identity" : "glur",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/joogps/Glur.git",
+      "state" : {
+        "revision" : "9e00ff79da318f2c78b749b1027e54a9d4de2e33",
+        "version" : "1.0.4"
       }
     },
     {
@@ -62,6 +71,15 @@
       "state" : {
         "revision" : "4430cbc148baa3907651d40562d96325426f409a",
         "version" : "5.4.5"
+      }
+    },
+    {
+      "identity" : "youtubeplayerkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SvenTiigi/YouTubePlayerKit.git",
+      "state" : {
+        "branch" : "feature/xcode-26",
+        "revision" : "b2ca1f17d212f7fb83e4c34da6e8e3e727df1825"
       }
     },
     {
