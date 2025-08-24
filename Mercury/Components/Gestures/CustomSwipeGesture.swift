@@ -98,7 +98,6 @@ struct SwipeGestureModifier: ViewModifier {
         
         // Only engage when horizontal dominates sufficiently; allow scroll otherwise
         if !isSwiping {
-            print(verticalMovement)
             guard horizontalMovement >= configuration.minimumHorizontalMovement,
                   horizontalMovement > verticalMovement + 8,
                   verticalMovement <= configuration.maximumVerticalMovement else {
