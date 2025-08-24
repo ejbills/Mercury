@@ -338,16 +338,24 @@ struct PostRowView: View {
                 textPostContent
             }
         case .image:
-            if let imageURL = post.imageURL {
-                SimpleImageView(
-                    url: imageURL,
-                    mediaId: "\(post.id)-image",
-                    title: post.title,
-                    namespace: namespace,
-                    apiDimensions: post.imageDimensions,
-                    post: post,
-                    selectedPost: $selectedPost
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                if let imageURL = post.imageURL {
+                    SimpleImageView(
+                        url: imageURL,
+                        mediaId: "\(post.id)-image",
+                        title: post.title,
+                        namespace: namespace,
+                        apiDimensions: post.imageDimensions,
+                        post: post,
+                        selectedPost: $selectedPost
+                    )
+                }
+                
+                if showFullText && post.hasContent, let content = post.selftext, !content.isEmpty {
+                    MarkdownRenderer(content: content, compactMode: !showFullText, showEmbeddedContent: showFullText)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                }
             }
         case .gif:
             if let gifURL = post.gifURL, let url = URL(string: gifURL) {
