@@ -647,9 +647,10 @@ struct RedditPost: Codable, Identifiable, Hashable {
     
     /// Converts a clean post ID back to Reddit API format (t3_postId)
     /// Used when making API calls that require the prefixed format
-    var postFullname: String {
-        return "t3_\(id)"
-    }
+    var postFullname: String { fullname }
+
+    /// Unified fullname for this post (e.g., "t3_<id>")
+    var fullname: String { Fullname.post(id) }
 }
 
 enum PostType {

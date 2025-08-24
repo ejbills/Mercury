@@ -156,7 +156,7 @@ class ContentService: BaseRedditService {
 
         let names = fullnames
             .filter { !$0.isEmpty }
-            .map { $0.hasPrefix("t3_") ? $0 : "t3_\($0)" }
+            .map { Fullname.post($0) }
             .joined(separator: ",")
 
         guard !names.isEmpty else { return [] }
@@ -194,7 +194,7 @@ class ContentService: BaseRedditService {
         
         var request = createPOSTRequest(url: url)
         
-        let fullPostId = postId.hasPrefix("t3_") ? postId : "t3_\(postId)"
+        let fullPostId = Fullname.post(postId)
         let bodyString = "id=\(fullPostId)&dir=\(voteDirection.rawValue)"
         request.httpBody = bodyString.data(using: .utf8)
         
@@ -233,7 +233,7 @@ class ContentService: BaseRedditService {
         
         var request = createPOSTRequest(url: url)
         
-        let fullPostId = postId.hasPrefix("t3_") ? postId : "t3_\(postId)"
+        let fullPostId = Fullname.post(postId)
         let bodyString = "id=\(fullPostId)"
         request.httpBody = bodyString.data(using: .utf8)
         
@@ -272,7 +272,7 @@ class ContentService: BaseRedditService {
 
         var request = createPOSTRequest(url: url)
 
-        let fullPostId = postId.hasPrefix("t3_") ? postId : "t3_\(postId)"
+        let fullPostId = Fullname.post(postId)
         let bodyString = "id=\(fullPostId)"
         request.httpBody = bodyString.data(using: .utf8)
 

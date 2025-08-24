@@ -171,7 +171,7 @@ struct MediaDetailView: View {
     }
 
     private func submitRootReply(text: String) async throws {
-        let parent = "t3_\(post.id)"
+        let parent = post.fullname
         _ = try await redditAPI.submitComment(parentFullname: parent, text: text)
     }
     

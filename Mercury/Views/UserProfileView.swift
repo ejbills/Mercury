@@ -660,7 +660,7 @@ struct UserProfileView: View {
                 let posts = try await redditAPI.fetchPostsByFullnames(Array(needed))
                 var map = commentPostMap
                 for p in posts {
-                    map["t3_\(p.id)"] = p
+                    map[p.fullname] = p
                     map[p.id] = p
                 }
                 await MainActor.run { self.commentPostMap = map }
@@ -672,7 +672,7 @@ struct UserProfileView: View {
             let parts = comment.permalink.split(separator: "/")
             if let idx = parts.firstIndex(of: Substring("comments")), parts.count > idx + 1 {
                 let postId = String(parts[idx + 1])
-                return "t3_\(postId)"
+                return Fullname.post(postId)
             }
             return nil
         }
@@ -795,4 +795,3 @@ struct UserProfileView: View {
             }
         }
     }
-

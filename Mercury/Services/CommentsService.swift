@@ -91,7 +91,7 @@ class CommentsService: BaseRedditService {
         
         let parameters = [
             "api_type": "json",
-            "link_id": "t3_\(postId)",
+            "link_id": Fullname.post(postId),
             "children": commentIds.joined(separator: ","),
             "sort": sort.rawValue,
             "limit_children": "true"
@@ -158,7 +158,7 @@ class CommentsService: BaseRedditService {
         var request = createPOSTRequest(url: url)
         
         let parameters = [
-            "id": "t1_\(commentId)",
+            "id": Fullname.comment(commentId),
             "dir": String(voteDirection.rawValue)
         ]
         
@@ -193,7 +193,7 @@ class CommentsService: BaseRedditService {
         var request = createPOSTRequest(url: url)
         
         let parameters = [
-            "id": "t1_\(commentId)"
+            "id": Fullname.comment(commentId)
         ]
         
         let postData = parameters.map { "\($0.key)=\($0.value)" }
@@ -227,7 +227,7 @@ class CommentsService: BaseRedditService {
         var request = createPOSTRequest(url: url)
         
         let parameters = [
-            "id": "t1_\(commentId)"
+            "id": Fullname.comment(commentId)
         ]
         
         let postData = parameters.map { "\($0.key)=\($0.value)" }
@@ -261,7 +261,7 @@ class CommentsService: BaseRedditService {
         var request = createPOSTRequest(url: url)
 
         let parameters = [
-            "id": "t1_\(commentId)"
+            "id": Fullname.comment(commentId)
         ]
 
         let postData = parameters.map { "\($0.key)=\($0.value)" }

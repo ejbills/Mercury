@@ -219,14 +219,15 @@ struct RedditComment: Codable, Identifiable, Hashable {
     
     /// Converts a clean comment ID back to Reddit API format (t1_commentId)
     /// Used when making API calls that require the prefixed format
-    var commentFullname: String {
-        return "t1_\(id)"
-    }
+    var commentFullname: String { fullname }
+
+    /// Unified fullname for this comment (e.g., "t1_<id>")
+    var fullname: String { Fullname.comment(id) }
     
     /// Converts a clean parent comment ID back to Reddit API format if needed
     var parentFullname: String? {
         guard let parentId = parentId else { return nil }
-        return "t1_\(parentId)"
+        return Fullname.comment(parentId)
     }
 }
 
@@ -412,8 +413,6 @@ struct CommentChild: Codable {
         case "more": // More comments
             let more = try container.decode(MoreComments.self, forKey: .data)
             data = .more(more)
-        case "t3": // Post - skip this by creating a dummy more object
-            data = .more(MoreComments(count: 0, name: "", rawId: "", parentId: nil, depth: 0, children: []))
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown comment kind: \(kind)")
         }
@@ -443,5 +442,37 @@ struct MoreComments: Codable {
         case count, name, depth, children
         case rawId = "id"
         case parentId = "parent_id"
+    }
+
+    /// Explicit memberwise initializer to support constructing placeholder "more" objects
+    init(count: Int, name: String, rawId: String, parentId: String?, depth: Int, children: [String]) {
+        self.count = count
+        self.name = name
+        self.rawId = rawId
+        self.parentId = RedditComment.normalizeRedditId(parentId)
+        self.depth = depth
+        self.children = children
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let count = try container.decodeIfPresent(Int.self, forKey: .count) ?? 0
+        let rawName = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        let rawId = try container.decodeIfPresent(String.self, forKey: .rawId) ?? ""
+        let parentId = try container.decodeIfPresent(String.self, forKey: .parentId)
+        let depth = try container.decodeIfPresent(Int.self, forKey: .depth) ?? 0
+        let children = try container.decodeIfPresent([String].self, forKey: .children) ?? []
+
+        // Normalize sentinel values the API sometimes returns
+        // Replace "t1__" and "_" with empty strings so callers can just check for emptiness
+        let normalizedName = (rawName == "t1__") ? "" : rawName
+        let normalizedRawId = (rawId == "_") ? "" : rawId
+
+        self.count = count
+        self.name = normalizedName
+        self.rawId = normalizedRawId
+        self.parentId = RedditComment.normalizeRedditId(parentId)
+        self.depth = depth
+        self.children = children
     }
 }

@@ -266,7 +266,7 @@ struct CommentThreadView: View {
             var baseVisible = true
             if case .loadMore(let flatMore) = flatItems[i] {
                 let more = flatMore.moreComments
-                if (more.children.isEmpty && more.count == 0) || more.name == "t1__" || more.rawId == "_" {
+                if (more.children.isEmpty && more.count == 0) || more.name.isEmpty || more.rawId.isEmpty {
                     baseVisible = false
                 }
             }

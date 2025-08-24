@@ -617,7 +617,7 @@ struct PostRowView: View {
     }
 
     private func submitRootReply(text: String) async throws {
-        let parent = "t3_\(post.id)"
+        let parent = post.fullname
         let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
         await MainActor.run {
             onRootReplyPosted?(created)

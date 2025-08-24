@@ -412,7 +412,7 @@ struct CommentView: View {
     }
 
     private func postReply(text: String) async throws {
-        let parent = "t1_\(comment.id)"
+        let parent = comment.fullname
         let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
         await MainActor.run {
             onReplyPosted(created)
