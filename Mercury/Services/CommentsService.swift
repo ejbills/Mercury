@@ -53,6 +53,9 @@ class CommentsService: BaseRedditService {
                         if FilterService.shared.shouldFilterComment(comment) { return nil }
                         collectUsernames(from: comment, into: &usernames)
                         return CommentChild(kind: child.kind, data: .comment(comment))
+                    case .post(let post):
+                        // Pass through post entries (first listing); they are ignored by the UI later
+                        return CommentChild(kind: child.kind, data: .post(post))
                     case .more(let more):
                         return CommentChild(kind: child.kind, data: .more(more))
                     }
@@ -385,6 +388,9 @@ class CommentsService: BaseRedditService {
                 }
                 c.replies = newReplies
                 return CommentChild(kind: child.kind, data: .comment(c))
+            case .post(let p):
+                // Posts don't require enrichment here
+                return CommentChild(kind: child.kind, data: .post(p))
             case .more(let m):
                 return CommentChild(kind: child.kind, data: .more(m))
             }

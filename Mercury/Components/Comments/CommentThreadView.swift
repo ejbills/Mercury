@@ -183,6 +183,9 @@ struct CommentThreadView: View {
                     case .comment(let nestedComment):
                         // Set this comment's ID as the parent for its replies
                         items.append(contentsOf: flattenCommentTree(comment: nestedComment, parentId: comment.id))
+                    case .post:
+                        // Replies should not include posts; ignore defensively
+                        break
                     case .more(let moreComments):
                         let flatMore = FlatMoreComments(
                             id: moreComments.id,

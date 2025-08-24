@@ -98,6 +98,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
         } else {
             currentVoteState = .neutral
         }
+
     }
     
     var createdDate: Date {
@@ -197,6 +198,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
     static func == (lhs: RedditComment, rhs: RedditComment) -> Bool {
         return lhs.id == rhs.id
     }
+    
     
     /// Normalizes Reddit IDs by removing type prefixes (t1_, t3_, etc.)
     /// Returns clean ID or nil if input is nil
@@ -307,6 +309,9 @@ struct CommentResponse: Codable {
                             collectComments(from: commentResponse.data.children)
                         }
                     }
+                case .post:
+                    // Ignore post items in the first listing
+                    break
                 case .more(let more):
                     if !more.name.isEmpty {
                     }
@@ -333,6 +338,9 @@ struct CommentResponse: Codable {
                             collectMoreComments(from: response.data.children)
                         }
                     }
+                case .post:
+                    // Ignore post items in the first listing
+                    break
                 case .more(let more):
                     if more.name.isEmpty && more.children.isEmpty && more.count == 0 {
                     } else {
@@ -360,6 +368,7 @@ struct CommentChild: Codable {
     enum CommentData: Codable {
         case comment(RedditComment)
         case more(MoreComments)
+        case post(RedditPost)
         
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -369,11 +378,12 @@ struct CommentChild: Codable {
             case "t1": // Comment
                 let comment = try container.decode(RedditComment.self, forKey: .data)
                 self = .comment(comment)
+            case "t3": // Post (first element of /comments response)
+                let post = try container.decode(RedditPost.self, forKey: .data)
+                self = .post(post)
             case "more": // More comments
                 let more = try container.decode(MoreComments.self, forKey: .data)
                 self = .more(more)
-            case "t3": // Post - skip this by creating a dummy more object
-                self = .more(MoreComments(count: 0, name: "", rawId: "", parentId: nil, depth: 0, children: []))
             default:
                 throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown comment kind: \(kind)")
             }
@@ -386,6 +396,9 @@ struct CommentChild: Codable {
             case .comment(let comment):
                 try container.encode("t1", forKey: .kind)
                 try container.encode(comment, forKey: .data)
+            case .post(let post):
+                try container.encode("t3", forKey: .kind)
+                try container.encode(post, forKey: .data)
             case .more(let more):
                 try container.encode("more", forKey: .kind)
                 try container.encode(more, forKey: .data)
@@ -410,6 +423,9 @@ struct CommentChild: Codable {
         case "t1": // Comment
             let comment = try container.decode(RedditComment.self, forKey: .data)
             data = .comment(comment)
+        case "t3": // Post (first element of /comments response)
+            let post = try container.decode(RedditPost.self, forKey: .data)
+            data = .post(post)
         case "more": // More comments
             let more = try container.decode(MoreComments.self, forKey: .data)
             data = .more(more)

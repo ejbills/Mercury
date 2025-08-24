@@ -107,6 +107,9 @@ class UserService: BaseRedditService {
                 switch child.data {
                 case .comment(let comment):
                     return FilterService.shared.shouldFilterComment(comment) ? nil : CommentChild(kind: child.kind, data: .comment(comment))
+                case .post:
+                    // Ignore post items in user comments listing
+                    return nil
                 case .more:
                     return nil
                 }
@@ -122,6 +125,8 @@ class UserService: BaseRedditService {
                 case .comment(var c):
                     if let url = avatarMap[c.author] { c.authorIconURL = url }
                     return CommentChild(kind: child.kind, data: .comment(c))
+                case .post(let p):
+                    return CommentChild(kind: child.kind, data: .post(p))
                 case .more(let m):
                     return CommentChild(kind: child.kind, data: .more(m))
                 }
