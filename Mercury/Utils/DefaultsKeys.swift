@@ -79,7 +79,7 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .profile: return "person.circle"
         case .subreddit: return "rectangle.grid.2x2"
         case .hide: return "eye.slash"
-        case .hideAbove: return "chevron.up.to.line"
+        case .hideAbove: return "dock.arrow.up.rectangle"
         case .collapse: return "rectangle.compress.vertical"
         case .collapseToTop: return "arrow.up.to.line"
         case .parentComment: return "arrow.uturn.up"
@@ -118,7 +118,7 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
     
     var availableForComments: Bool {
         switch self {
-        case .subreddit, .hide, .hideAbove: return false
+        case .subreddit, .hide, .hideAbove, .selectText: return false
         default: return true
         }
     }

@@ -316,9 +316,7 @@ struct PostCommentsView: View {
     private func scrollToTargetIfNeeded(proxy: ScrollViewProxy) {
         guard let targetId = targetCommentId, !targetId.isEmpty else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                proxy.scrollTo(targetId, anchor: .center)
-            }
+            proxy.animatedScrollTo(targetId, anchor: .center)
         }
     }
 }

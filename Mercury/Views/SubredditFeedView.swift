@@ -25,9 +25,15 @@ struct SubredditFeedView: View {
     private let pageSize = 25
     
     var body: some View {
-        ScrollViewReader { proxy in
+        let visiblePosts = posts.filter { !hiddenPostIds.contains($0.id) }
+        
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 8) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id("top")
+                    
                     if posts.isEmpty && isLoading {
                         skeletonLoadingView
                     } else if posts.isEmpty && errorMessage != nil && !isLoading {
@@ -37,27 +43,27 @@ struct SubredditFeedView: View {
                         emptyStateView
                             .padding(.top, 100)
                     } else {
-                        ForEach(posts.filter { !hiddenPostIds.contains($0.id) }) { post in
-                                PostRowView(
-                                    post: post, 
-                                    namespace: mediaNamespace, 
-                                    selectedPost: $selectedPost,
-                                    onSwipeBegin: { swipeLockScroll = true },
-                                    onSwipeEnd: { swipeLockScroll = false },
-                                    onHidePost: { id in
-                                        hiddenPostIds.insert(id)
-                                    },
-                                    onHidePostsAbove: { id in
-                                        if let index = posts.firstIndex(where: { $0.id == id }) {
-                                            let ids = posts.prefix(index).map { $0.id }
-                                            hiddenPostIds.formUnion(ids)
-                                        }
-                                    },
-                                    onVideoHandoff: { handoffState in
-                                        videoHandoffState = handoffState
+                        ForEach(visiblePosts) { post in
+                            PostRowView(
+                                post: post,
+                                namespace: mediaNamespace,
+                                selectedPost: $selectedPost,
+                                onVideoHandoff: { handoffState in
+                                    videoHandoffState = handoffState
+                                }, onSwipeBegin: { swipeLockScroll = true },
+                                onSwipeEnd: { swipeLockScroll = false },
+                                onHidePost: { id in
+                                    hiddenPostIds.insert(id)
+                                },
+                                onHidePostsAbove: { id in
+                                    if let index = posts.firstIndex(where: { $0.id == id }) {
+                                        let ids = posts.prefix(index).map { $0.id }
+                                        hiddenPostIds.formUnion(ids)
+                                        proxy.animatedScrollTo("top", anchor: .top)
                                     }
-                                )
-                                    .id(post.id)
+                                }
+                            )
+                            .id(post.id)
                                     .onAppear {
                                         if post.id == posts.last?.id && hasMore && !isLoadingMore {
                                             Task {
@@ -372,4 +378,5 @@ struct SubredditFeedView: View {
             return try await apiService.fetchSubredditPosts(subreddit: cleanSubreddit, sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)
         }
     }
+    
 }

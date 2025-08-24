@@ -75,8 +75,12 @@ struct RedditComment: Codable, Identifiable, Hashable {
         saved = try container.decodeIfPresent(Bool.self, forKey: .saved) ?? false
         likes = try container.decodeIfPresent(Bool.self, forKey: .likes)
         permalink = try container.decode(String.self, forKey: .permalink)
-        parentId = try container.decodeIfPresent(String.self, forKey: .parentId)
-        linkId = try container.decodeIfPresent(String.self, forKey: .linkId)
+        // Normalize parent and link IDs by removing Reddit prefixes
+        let rawParentId = try container.decodeIfPresent(String.self, forKey: .parentId)
+        parentId = Self.normalizeRedditId(rawParentId)
+        
+        let rawLinkId = try container.decodeIfPresent(String.self, forKey: .linkId)
+        linkId = Self.normalizeRedditId(rawLinkId)
         isSubmitter = try container.decodeIfPresent(Bool.self, forKey: .isSubmitter) ?? false
         scoreHidden = try container.decodeIfPresent(Bool.self, forKey: .scoreHidden) ?? false
         controversiality = try container.decodeIfPresent(Int.self, forKey: .controversiality) ?? 0
@@ -192,6 +196,37 @@ struct RedditComment: Codable, Identifiable, Hashable {
     
     static func == (lhs: RedditComment, rhs: RedditComment) -> Bool {
         return lhs.id == rhs.id
+    }
+    
+    /// Normalizes Reddit IDs by removing type prefixes (t1_, t3_, etc.)
+    /// Returns clean ID or nil if input is nil
+    static func normalizeRedditId(_ id: String?) -> String? {
+        guard let id = id else { 
+            return nil 
+        }
+        
+        // Remove Reddit type prefixes: t1_ (comment), t3_ (post), etc.
+        if id.contains("_"), id.count > 3 {
+            let components = id.split(separator: "_", maxSplits: 1)
+            if components.count == 2 && components[0].hasPrefix("t") {
+                let normalized = String(components[1])
+                return normalized
+            }
+        }
+        
+        return id
+    }
+    
+    /// Converts a clean comment ID back to Reddit API format (t1_commentId)
+    /// Used when making API calls that require the prefixed format
+    var commentFullname: String {
+        return "t1_\(id)"
+    }
+    
+    /// Converts a clean parent comment ID back to Reddit API format if needed
+    var parentFullname: String? {
+        guard let parentId = parentId else { return nil }
+        return "t1_\(parentId)"
     }
 }
 

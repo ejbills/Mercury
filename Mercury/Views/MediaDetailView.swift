@@ -25,6 +25,7 @@ struct MediaDetailView: View {
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
+    @State private var savedState: Bool
     @State private var originalMuteState: Bool = true
     @State private var shareItem: URL?
     @State private var isDownloading = false
@@ -39,6 +40,7 @@ struct MediaDetailView: View {
         self.onVideoHandoffReturn = onVideoHandoffReturn
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
+        self._savedState = State(initialValue: post.saved)
     }
     
     private var currentPost: RedditPost {
@@ -123,6 +125,7 @@ struct MediaDetailView: View {
                 voteState: $voteState,
                 displayScore: $displayScore,
                 isVoting: $isVoting,
+                savedState: $savedState,
                 onVote: handleVote,
                 onReply: { showingPostReply = true },
                 onShare: handleShare,
@@ -138,13 +141,16 @@ struct MediaDetailView: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
         .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.6)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 120)
-            .clipped()
+            GeometryReader { geometry in
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.8)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 250)
+                .offset(y: geometry.safeAreaInsets.bottom)
+            }
+            .ignoresSafeArea(edges: .bottom)
         )
         .sheet(isPresented: $showShareSheet) {
             MediaShareSheet(post: post, mediaURL: shareItem)
@@ -336,14 +342,22 @@ struct MediaDetailView: View {
     
     private func handleSave() {
         Task {
+            let originalState = savedState
+            await MainActor.run {
+                savedState.toggle()
+            }
+            
             do {
-                if post.saved {
+                if originalState {
                     try await redditAPI.unsavePost(postId: post.id)
                 } else {
                     try await redditAPI.savePost(postId: post.id)
                 }
             } catch {
                 print("Save/Unsave error: \(error)")
+                await MainActor.run {
+                    savedState = originalState // Revert on error
+                }
             }
         }
     }

@@ -128,9 +128,7 @@ struct SectionIndexTitles: View {
                 VStack(spacing: 2) {
                     ForEach(titles, id: \.self) { title in
                         Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                proxy.scrollTo(title, anchor: UnitPoint.top)
-                            }
+                            proxy.animatedScrollTo(title, anchor: UnitPoint.top)
                         }) {
                             Text(title)
                                 .font(.caption2)

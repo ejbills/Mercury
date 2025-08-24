@@ -29,6 +29,8 @@ struct CommentView: View {
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var wasDeleted = false
+    @State private var shareItem: ShareItem?
+    @State private var savedState: Bool
 
     init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onCollapseParent: @escaping () -> Void = {}, onScrollToParent: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }, onSwipeBegin: (() -> Void)? = nil, onSwipeEnd: (() -> Void)? = nil) {
         self.comment = comment
@@ -43,6 +45,7 @@ struct CommentView: View {
         self.onSwipeEnd = onSwipeEnd
         self._voteState = State(initialValue: comment.currentVoteState)
         self._displayScore = State(initialValue: comment.displayScore)
+        self._savedState = State(initialValue: comment.saved)
     }
     
     var body: some View {
@@ -201,8 +204,8 @@ struct CommentView: View {
 
             Menu {
                 Button(action: { handleSave() }) {
-                    Label(comment.saved ? "Unsave" : "Save",
-                          systemImage: comment.saved ? "bookmark.fill" : "bookmark")
+                    Label(savedState ? "Unsave" : "Save",
+                          systemImage: savedState ? "bookmark.fill" : "bookmark")
                 }
                 if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
                     ShareLink(item: url) {
@@ -228,6 +231,9 @@ struct CommentView: View {
             Spacer()
         }
         .padding(.top, 4)
+        .sheet(item: $shareItem) { item in
+            ShareSheet(shareItem: item)
+        }
         .sheet(isPresented: $showingReply) {
             MarkdownComposerView(
                 title: "Reply",
@@ -362,14 +368,22 @@ struct CommentView: View {
     
     private func handleSave() {
         Task {
+            let originalState = savedState
+            await MainActor.run {
+                savedState.toggle()
+            }
+            
             do {
-                if comment.saved {
+                if originalState {
                     try await redditAPI.unsaveComment(commentId: comment.id)
                 } else {
                     try await redditAPI.saveComment(commentId: comment.id)
                 }
             } catch {
                 print("Failed to save/unsave comment: \(error)")
+                await MainActor.run {
+                    savedState = originalState // Revert on error
+                }
             }
         }
     }
@@ -412,10 +426,16 @@ struct CommentView: View {
         case .save:
             handleSave()
         case .share:
-            if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
-                UIPasteboard.general.string = url.absoluteString
-                let h = UINotificationFeedbackGenerator(); h.notificationOccurred(.success)
+            var items: [Any] = []
+            if !comment.body.isEmpty && comment.body != "[deleted]" {
+                items.append(comment.body)
             }
+            if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                items.append(url)
+            }
+            let contextText = "Comment by u/\(comment.author) on \"\(post.title)\""
+            items.append(contextText)
+            shareItem = ShareItem(items: items)
         case .reply:
             showingReply = true
         case .profile:
@@ -432,6 +452,7 @@ struct CommentView: View {
             onCollapseToggle()
         case .collapseToTop:
             onCollapseParent()
+            onScrollToParent()
         case .selectText:
             let h = UIImpactFeedbackGenerator(style: .light)
             h.impactOccurred()

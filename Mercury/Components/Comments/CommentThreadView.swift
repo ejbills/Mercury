@@ -89,19 +89,19 @@ struct CommentThreadView: View {
                             }
                         },
                         onCollapseParent: {
-                            if let pid = flatComment.comment.parentId, pid.hasPrefix("t1_") {
-                                let parentId = String(pid.dropFirst(3))
-                                withAnimation(.snappy(duration: 0.2)) {
-                                    collapsedComments.insert(parentId)
+                            let rootCommentId = findRootComment(for: flatComment)
+                            
+                            if let rootCommentId = rootCommentId {
+                                _ = withAnimation(.snappy(duration: 0.2)) {
+                                    collapsedComments.insert(rootCommentId)
                                 }
                             }
                         },
                         onScrollToParent: {
-                            if let pid = flatComment.comment.parentId, pid.hasPrefix("t1_") {
-                                let parentId = String(pid.dropFirst(3))
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    scrollProxy?.scrollTo(parentId, anchor: .center)
-                                }
+                            let rootCommentId = findRootComment(for: flatComment)
+                            
+                            if let rootCommentId = rootCommentId {
+                                scrollProxy?.animatedScrollTo(rootCommentId, anchor: .center)
                             }
                         },
                         onReplyPosted: { newComment in
@@ -154,37 +154,39 @@ struct CommentThreadView: View {
         var items: [FlatCommentItem] = []
         // Flatten all comment trees (including nested MoreComments)
         for comment in comments {
-            items.append(contentsOf: flattenCommentTree(comment: comment))
+            // Top-level comments have no parent (parentId = nil)
+            items.append(contentsOf: flattenCommentTree(comment: comment, parentId: nil))
         }
         return items
     }
     
-    private static func flattenCommentTree(comment: RedditComment) -> [FlatCommentItem] {
+    private static func flattenCommentTree(comment: RedditComment, parentId: String? = nil) -> [FlatCommentItem] {
         var items: [FlatCommentItem] = []
         
-        // Add the current comment
+        // Add the current comment with the properly set parent ID
         let flatComment = FlatComment(
             id: comment.id,
             comment: comment,
             depth: comment.depth,
-            parentId: comment.parentId
+            parentId: parentId
         )
         items.append(.comment(flatComment))
         
-        // Recursively add replies
+        // Recursively add replies, setting this comment as their parent
         if let replies = comment.replies {
             switch replies {
             case .listing(let commentResponse):
                 for child in commentResponse.data.children {
                     switch child.data {
                     case .comment(let nestedComment):
-                        items.append(contentsOf: flattenCommentTree(comment: nestedComment))
+                        // Set this comment's ID as the parent for its replies
+                        items.append(contentsOf: flattenCommentTree(comment: nestedComment, parentId: comment.id))
                     case .more(let moreComments):
                         let flatMore = FlatMoreComments(
                             id: moreComments.id,
                             moreComments: moreComments,
                             depth: moreComments.depth,
-                            parentId: moreComments.parentId
+                            parentId: comment.id  // Set this comment as parent for "more" items too
                         )
                         items.append(.loadMore(flatMore))
                     }
@@ -216,20 +218,20 @@ struct CommentThreadView: View {
         var newFlatItems: [FlatCommentItem] = []
         
         if isRootLevel {
-            // For root-level, flatten each comment tree completely
+            // For root-level, flatten each comment tree completely (no parent)
             for comment in newComments {
-                newFlatItems.append(contentsOf: Self.flattenCommentTree(comment: comment))
+                newFlatItems.append(contentsOf: Self.flattenCommentTree(comment: comment, parentId: nil))
             }
         } else {
-            // For nested comments, just add as flat comments
+            // For nested comments, use the parent ID from the "more" item being replaced
+            let parentId: String?
+            if case .loadMore(let flatMore) = moreItem {
+                parentId = flatMore.parentId
+            } else {
+                parentId = nil
+            }
             for comment in newComments {
-                let flatComment = FlatComment(
-                    id: comment.id,
-                    comment: comment,
-                    depth: comment.depth,
-                    parentId: comment.parentId
-                )
-                newFlatItems.append(.comment(flatComment))
+                newFlatItems.append(contentsOf: Self.flattenCommentTree(comment: comment, parentId: parentId))
             }
         }
         
@@ -324,11 +326,11 @@ struct CommentThreadView: View {
 extension CommentThreadView {
     private func collapseAncestors(of commentId: String) {
         // Build parent map from current flatItems
-        var parentMap: [String: String] = [:] // childId -> parentId (comment-only, no t3_)
+        var parentMap: [String: String] = [:] // childId -> parentId
         for item in flatItems {
             if case .comment(let fc) = item {
-                if let p = fc.parentId, p.hasPrefix("t1_") {
-                    parentMap[fc.comment.id] = String(p.dropFirst(3))
+                if let parentId = fc.parentId {
+                    parentMap[fc.comment.id] = parentId
                 }
             }
         }
@@ -341,6 +343,35 @@ extension CommentThreadView {
         withAnimation(.snappy(duration: 0.2)) {
             collapsedComments.formUnion(toCollapse)
         }
+    }
+    
+    /// Finds the root (top-level) comment for a given flat comment by traversing up the parent chain
+    private func findRootComment(for flatComment: FlatComment) -> String? {
+        // If this comment has no parent, it's already the root
+        guard flatComment.parentId != nil else {
+            return nil // Top-level comments don't have a root to collapse/scroll to
+        }
+        
+        // Build parent map from current flatItems
+        var parentMap: [String: String] = [:] // childId -> parentId
+        for item in flatItems {
+            if case .comment(let fc) = item {
+                if let pid = fc.parentId {
+                    parentMap[fc.comment.id] = pid
+                }
+            }
+        }
+        
+        // Traverse up to find the root comment (the one with no parent)
+        var current = flatComment.comment.id
+        var rootCandidate: String? = nil
+        
+        while let parent = parentMap[current] {
+            rootCandidate = parent
+            current = parent
+        }
+        
+        return rootCandidate
     }
 }
 

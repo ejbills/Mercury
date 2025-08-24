@@ -8,6 +8,7 @@ struct FilterSettingsView: View {
     @Default(.blockedKeywords) private var blockedKeywords
     @Default(.blockedUsers) private var blockedUsers
     @Default(.blockedSubreddits) private var blockedSubreddits
+    @Default(.hiddenPostIds) private var hiddenPostIds
     
     @State private var newKeyword = ""
     @State private var newUser = ""
@@ -101,6 +102,29 @@ struct FilterSettingsView: View {
                         Text("(\(blockedSubreddits.count))")
                             .foregroundColor(.secondary)
                     }
+                }
+                
+                Section {
+                    if hiddenPostIds.isEmpty {
+                        Text("No hidden posts")
+                            .foregroundColor(.secondary)
+                    } else {
+                        Button("Clear All Hidden Posts") {
+                            hiddenPostIds.removeAll()
+                        }
+                        .foregroundColor(.red)
+                    }
+                } header: {
+                    HStack {
+                        Text("Hidden Posts")
+                        Spacer()
+                        Text("(\(hiddenPostIds.count))")
+                            .foregroundColor(.secondary)
+                    }
+                } footer: {
+                    Text("Posts hidden using the 'Hide' and 'Hide Posts Above' swipe actions")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
             .navigationTitle("Content Filters")

@@ -131,6 +131,7 @@ struct GalleryDetailView: View {
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
+    @State private var savedState: Bool
     @State private var shareItem: URL?
     @State private var shareItems: [URL]?
     @State private var showShareSheet = false
@@ -155,6 +156,7 @@ struct GalleryDetailView: View {
         self.namespace = namespace
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
+        self._savedState = State(initialValue: post.saved)
     }
     
     var body: some View {
@@ -265,6 +267,7 @@ struct GalleryDetailView: View {
                 voteState: $voteState,
                 displayScore: $displayScore,
                 isVoting: $isVoting,
+                savedState: $savedState,
                 onVote: handleVote,
                 onReply: { showingPostReply = true },
                 onShare: handleShare,
@@ -376,15 +379,22 @@ struct GalleryDetailView: View {
     
     private func handleSave() {
         Task {
+            let originalState = savedState
+            await MainActor.run {
+                savedState.toggle()
+            }
+            
             do {
-                if post.saved {
+                if originalState {
                     try await redditAPI.unsavePost(postId: post.id)
                 } else {
                     try await redditAPI.savePost(postId: post.id)
                 }
             } catch {
                 print("Save/Unsave error: \(error)")
-                
+                await MainActor.run {
+                    savedState = originalState // Revert on error
+                }
             }
         }
     }

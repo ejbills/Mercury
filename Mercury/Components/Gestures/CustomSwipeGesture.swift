@@ -18,11 +18,9 @@ struct SwipeConfiguration {
     let rightShort: SwipeAction?
     let rightLong: SwipeAction?
     
-    // Configurable distances
-    // Increased to reduce accidental activation while scrolling
-    let shortTriggerDistance: CGFloat = 100
-    let longTriggerDistance: CGFloat = 180
-    let minimumHorizontalMovement: CGFloat = 50
+    let shortTriggerDistance: CGFloat = 75
+    let longTriggerDistance: CGFloat = 150
+    let minimumHorizontalMovement: CGFloat = 75
     let maximumVerticalMovement: CGFloat = 40
 }
 

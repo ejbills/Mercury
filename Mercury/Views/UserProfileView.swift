@@ -358,7 +358,7 @@ struct UserProfileView: View {
             } else {
                 LazyVStack(spacing: 8) {
                     ForEach(comments, id: \.self) { comment in
-                        if let key = linkKey(for: comment), let post = commentPostMap[key] ?? commentPostMap[stripT3(key)] {
+                        if let key = linkKey(for: comment), let post = commentPostMap[key] {
                             CommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
                                 .allowsHitTesting(false)
                                 .environment(\.redditAPI, redditAPI)
@@ -645,7 +645,7 @@ struct UserProfileView: View {
         
     private func ensurePostsForComments(_ comments: [RedditComment]) async {
             let needed = Set(comments.compactMap { linkKey(for: $0) }).filter { key in
-                commentPostMap[key] == nil && commentPostMap[stripT3(key)] == nil
+                commentPostMap[key] == nil
             }
             guard !needed.isEmpty else { return }
             do {
@@ -669,7 +669,6 @@ struct UserProfileView: View {
             return nil
         }
         
-    private func stripT3(_ key: String) -> String { key.hasPrefix("t3_") ? String(key.dropFirst(3)) : key }
         
     private func shareProfile() {
             let profileURL = URL(string: "https://reddit.com/u/\(username)")!

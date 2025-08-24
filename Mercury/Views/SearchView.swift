@@ -504,21 +504,10 @@ struct SearchView: View {
             }
         }
         
-        do {
-            if isCurrentlySubscribed {
-                print("Unsubscribing from \(subreddit.displayName)")
-            } else {
-                print("Subscribing to \(subreddit.displayName)")
-            }
-        } catch {
-            await MainActor.run {
-                if isCurrentlySubscribed {
-                    subscribedSubreddits.insert(subreddit.displayName)
-                } else {
-                    subscribedSubreddits.remove(subreddit.displayName)
-                }
-            }
-            print("Failed to toggle subscription: \(error)")
+        if isCurrentlySubscribed {
+            print("Unsubscribing from \(subreddit.displayName)")
+        } else {
+            print("Subscribing to \(subreddit.displayName)")
         }
     }
 }

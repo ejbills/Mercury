@@ -26,6 +26,7 @@ struct PostRowView: View {
     @State private var showShareSheet = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
+    @State private var savedState: Bool
     @State private var showingPostReply = false
     @State private var videoHandoffState: VideoHandoffState? = nil
     @Default(.postLeftShortSwipeAction) private var postLeftShortSwipeAction
@@ -71,6 +72,7 @@ struct PostRowView: View {
         )) || isRedditPostLink
         self._voteState = State(initialValue: post.currentVoteState)
         self._displayScore = State(initialValue: post.displayScore)
+        self._savedState = State(initialValue: post.saved)
     }
     
     private let postType: PostType
@@ -140,6 +142,7 @@ struct PostRowView: View {
                             voteState: $voteState,
                             displayScore: $displayScore,
                             isVoting: $isVoting,
+                            savedState: $savedState,
                             onVote: handleVote,
                             onReply: { showingPostReply = true },
                             onShare: handleShare,
@@ -158,6 +161,7 @@ struct PostRowView: View {
                         voteState: $voteState,
                         displayScore: $displayScore,
                         isVoting: $isVoting,
+                        savedState: $savedState,
                         onVote: handleVote,
                         onReply: { showingPostReply = true },
                         onShare: handleShare,
@@ -542,19 +546,22 @@ struct PostRowView: View {
     
     private func handleSave() {
         Task {
+            let originalState = savedState
+            await MainActor.run {
+                savedState.toggle()
+            }
+            
             do {
-                if post.saved {
+                if originalState {
                     try await redditAPI.unsavePost(postId: post.id)
-                    await MainActor.run {
-                    }
                 } else {
                     try await redditAPI.savePost(postId: post.id)
-                    await MainActor.run {
-                    }
                 }
             } catch {
                 print("Save/Unsave error: \(error)")
-                
+                await MainActor.run {
+                    savedState = originalState // Revert on error
+                }
             }
         }
     }
@@ -639,6 +646,9 @@ struct PostRowView: View {
             onHidePostsAbove?(post.id)
         case .copyLink:
             handleCopyLink()
+        case .collapse, .collapseToTop, .parentComment, .selectText:
+            // Comment-specific actions not applicable to posts
+            break
         case .none:
             break
         }

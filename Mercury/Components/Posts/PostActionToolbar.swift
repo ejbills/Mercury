@@ -11,6 +11,7 @@ struct PostActionToolbar: View {
     @Binding var voteState: RedditPost.VoteState
     @Binding var displayScore: Int
     @Binding var isVoting: Bool
+    @Binding var savedState: Bool
     let onVote: (RedditPost.VoteState) -> Void
     let onReply: (() -> Void)?
     let onShare: () -> Void
@@ -61,7 +62,7 @@ struct PostActionToolbar: View {
                     }
                     
                     Button(action: onSave) {
-                        Label(post.saved ? "Unsave" : "Save", systemImage: post.saved ? "bookmark.fill" : "bookmark")
+                        Label(savedState ? "Unsave" : "Save", systemImage: savedState ? "bookmark.fill" : "bookmark")
                     }
                     
                     if let onCopyLink = onCopyLink {
@@ -116,10 +117,10 @@ struct PostActionToolbar: View {
                     }
 
                     Button(action: onSave) {
-                        Image(systemName: post.saved ? "bookmark.fill" : "bookmark")
+                        Image(systemName: savedState ? "bookmark.fill" : "bookmark")
                             .font(.title2)
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(post.saved ? accentColor : secondaryColor)
+                            .foregroundStyle(savedState ? accentColor : secondaryColor)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -192,45 +193,4 @@ struct PostActionToolbar: View {
     private var accentColor: Color {
         colorScheme == .dark ? .white : .accentColor
     }
-}
-
-#Preview {
-    VStack(spacing: 20) {
-        PostActionToolbar(
-            post: RedditPost.samplePost,
-            voteState: .constant(.neutral),
-            displayScore: .constant(42),
-            isVoting: .constant(false),
-            onVote: { _ in },
-            onReply: {},
-            onShare: {},
-            onSave: {},
-            onCopyLink: {},
-            onOpenOriginal: {},
-            onCommentsAction: {},
-            onDownload: {},
-            colorScheme: .light,
-            size: .compact
-        )
-        
-        PostActionToolbar(
-            post: RedditPost.samplePost,
-            voteState: .constant(.upvoted),
-            displayScore: .constant(1205),
-            isVoting: .constant(false),
-            onVote: { _ in },
-            onReply: {},
-            onShare: {},
-            onSave: {},
-            onCopyLink: nil,
-            onOpenOriginal: nil,
-            onCommentsAction: {},
-            onDownload: {},
-            colorScheme: .dark,
-            size: .large
-        )
-        .background(.black)
-    }
-    .padding()
-    .environment(\.navigationPathManager, NavigationPathManager())
 }
