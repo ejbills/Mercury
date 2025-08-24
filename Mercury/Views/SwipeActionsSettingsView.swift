@@ -2,6 +2,7 @@ import SwiftUI
 import Defaults
 
 struct SwipeActionsSettingsView: View {
+    @Default(.swipeActionsEnabled) private var swipeActionsEnabled
     @Default(.postLeftShortSwipeAction) private var postLeftShortSwipeAction
     @Default(.postLeftLongSwipeAction) private var postLeftLongSwipeAction
     @Default(.postRightShortSwipeAction) private var postRightShortSwipeAction
@@ -13,6 +14,18 @@ struct SwipeActionsSettingsView: View {
     
     var body: some View {
         List {
+            Section {
+                Toggle(isOn: $swipeActionsEnabled) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Enable Swipe Actions")
+                            .font(.headline)
+                        Text("Turn off to disable all swipe gestures on posts and comments.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Swipe Actions")
@@ -41,6 +54,7 @@ struct SwipeActionsSettingsView: View {
                     availableActions: SwipeActionType.allCases.filter { $0.availableForPosts }
                 )
             }
+            .disabled(!swipeActionsEnabled)
             
             Section("Comments") {
                 SwipeActionGroup(
@@ -59,6 +73,7 @@ struct SwipeActionsSettingsView: View {
                     availableActions: SwipeActionType.allCases.filter { $0.availableForComments }
                 )
             }
+            .disabled(!swipeActionsEnabled)
             
             Section {
                 VStack(alignment: .leading, spacing: 8) {

@@ -19,6 +19,8 @@ extension Defaults.Keys {
     static let subredditBlockingEnabled = Key<Bool>("subredditBlockingEnabled", default: true)
     
     static let blurNSFWContent = Key<Bool>("blurNSFWContent", default: true)
+    // Global toggle for enabling/disabling swipe actions across the app
+    static let swipeActionsEnabled = Key<Bool>("swipeActionsEnabled", default: true)
     
     static let postLeftShortSwipeAction = Key<SwipeActionType>("postLeftShortSwipeAction", default: SwipeActionType.upvote)
     static let postLeftLongSwipeAction = Key<SwipeActionType>("postLeftLongSwipeAction", default: SwipeActionType.save)

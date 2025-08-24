@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Defaults
 
 // MARK: - Swipe Action Models
 
@@ -331,6 +332,7 @@ private struct ActionBadge: View {
 }
 
 extension View {
+    @ViewBuilder
     func customSwipeGesture(
         leftShort: SwipeAction? = nil,
         leftLong: SwipeAction? = nil,  
@@ -340,20 +342,24 @@ extension View {
         onInteractionBegan: (() -> Void)? = nil,
         onInteractionEnded: (() -> Void)? = nil
     ) -> some View {
-        let configuration = SwipeConfiguration(
-            leftShort: leftShort,
-            leftLong: leftLong,
-            rightShort: rightShort, 
-            rightLong: rightLong
-        )
-        
-        return self.modifier(
-            SwipeGestureModifier(
-                configuration: configuration,
-                cornerRadius: cornerRadius,
-                onInteractionBegan: onInteractionBegan,
-                onInteractionEnded: onInteractionEnded
+        let hasAnyAction = leftShort != nil || leftLong != nil || rightShort != nil || rightLong != nil
+        if Defaults[.swipeActionsEnabled] && hasAnyAction {
+            let configuration = SwipeConfiguration(
+                leftShort: leftShort,
+                leftLong: leftLong,
+                rightShort: rightShort,
+                rightLong: rightLong
             )
-        )
+            self.modifier(
+                SwipeGestureModifier(
+                    configuration: configuration,
+                    cornerRadius: cornerRadius,
+                    onInteractionBegan: onInteractionBegan,
+                    onInteractionEnded: onInteractionEnded
+                )
+            )
+        } else {
+            self
+        }
     }
 }

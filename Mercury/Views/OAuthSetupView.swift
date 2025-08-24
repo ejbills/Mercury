@@ -225,7 +225,25 @@ struct OAuthSetupView: View {
                     title: "Enter Client ID",
                     description: "Copy your app's Client ID and paste it below"
                 ) {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 16) {
+                        // Help image showing where to find Client ID
+                        VStack(spacing: 8) {
+                            Image("APIHelp")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxHeight: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(.quaternary, lineWidth: 0.5)
+                                )
+                            
+                            Text("Find your Client ID in the app details (highlighted above)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        
                         PasteableTextField(
                             placeholder: "Enter your Reddit Client ID",
                             text: $clientId
