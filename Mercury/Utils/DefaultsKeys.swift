@@ -36,7 +36,15 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
     case save = "save"
     case share = "share"
     case reply = "reply"
-    case profile = "profile"
+    case profile = "profile" // Author profile
+    case subreddit = "subreddit"
+    case hide = "hide"
+    case hideAbove = "hideAbove"
+    // Comment-specific utilities
+    case collapse = "collapse"
+    case collapseToTop = "collapseToTop"
+    case parentComment = "parentComment"
+    case selectText = "selectText"
     case copyLink = "copyLink"
     case none = "none"
     
@@ -47,7 +55,14 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .save: return "Save/Unsave"
         case .share: return "Share"
         case .reply: return "Reply"
-        case .profile: return "View Profile"
+        case .profile: return "Author"
+        case .subreddit: return "Subreddit"
+        case .hide: return "Hide"
+        case .hideAbove: return "Hide Posts Above"
+        case .collapse: return "Collapse"
+        case .collapseToTop: return "Collapse to Top"
+        case .parentComment: return "Parent Comment"
+        case .selectText: return "Select Text"
         case .copyLink: return "Copy Link"
         case .none: return "None"
         }
@@ -61,6 +76,13 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .share: return "square.and.arrow.up"
         case .reply: return "arrowshape.turn.up.left"
         case .profile: return "person.circle"
+        case .subreddit: return "rectangle.grid.2x2"
+        case .hide: return "eye.slash"
+        case .hideAbove: return "chevron.up.to.line"
+        case .collapse: return "rectangle.compress.vertical"
+        case .collapseToTop: return "arrow.up.to.line"
+        case .parentComment: return "arrow.uturn.up"
+        case .selectText: return "text.cursor"
         case .copyLink: return "link"
         case .none: return "slash.circle"
         }
@@ -74,6 +96,13 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .share: return .indigo
         case .reply: return .purple
         case .profile: return .mint
+        case .subreddit: return .teal
+        case .hide: return .gray
+        case .hideAbove: return .brown
+        case .collapse: return .cyan
+        case .collapseToTop: return .cyan
+        case .parentComment: return .pink
+        case .selectText: return .yellow
         case .copyLink: return .cyan
         case .none: return .gray
         }
@@ -81,15 +110,14 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
     
     var availableForPosts: Bool {
         switch self {
-        case .copyLink: return true
+        case .collapse, .collapseToTop, .parentComment, .selectText: return false
         default: return true
         }
     }
     
     var availableForComments: Bool {
         switch self {
-        case .copyLink: return false
-        case .share: return false
+        case .subreddit, .hide, .hideAbove: return false
         default: return true
         }
     }

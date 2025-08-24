@@ -251,6 +251,41 @@ class ContentService: BaseRedditService {
             throw error
         }
     }
+
+    // MARK: - Hide/Unhide Posts
+
+    func hidePost(postId: String) async throws {
+        try await performHideAction(postId: postId, hide: true)
+    }
+
+    func unhidePost(postId: String) async throws {
+        try await performHideAction(postId: postId, hide: false)
+    }
+
+    private func performHideAction(postId: String, hide: Bool) async throws {
+        try validateAccessToken()
+
+        let endpoint = hide ? "hide" : "unhide"
+        guard let url = URL(string: "\(baseURL)/api/\(endpoint)") else {
+            throw APIError.parseError
+        }
+
+        var request = createPOSTRequest(url: url)
+
+        let fullPostId = postId.hasPrefix("t3_") ? postId : "t3_\(postId)"
+        let bodyString = "id=\(fullPostId)"
+        request.httpBody = bodyString.data(using: .utf8)
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(httpResponse)
+        } catch _ as URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
     
     // MARK: - Helper Methods
     

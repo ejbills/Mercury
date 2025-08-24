@@ -16,6 +16,7 @@ struct PostCommentsView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var singleThreadMode: Bool = false
+    @State private var swipeLockScroll: Bool = false
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
@@ -45,11 +46,18 @@ struct PostCommentsView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 20)
             }
+            .scrollDisabled(swipeLockScroll)
             .onChange(of: threadManager.commentThreads.count) { _, _ in
                 scrollToTargetIfNeeded(proxy: proxy)
             }
             .onAppear {
                 scrollToTargetIfNeeded(proxy: proxy)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionBegan)) { _ in
+                swipeLockScroll = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionEnded)) { _ in
+                swipeLockScroll = false
             }
         }
         .navigationTitle("Comments")

@@ -19,9 +19,10 @@ struct SwipeConfiguration {
     let rightLong: SwipeAction?
     
     // Configurable distances
-    let shortTriggerDistance: CGFloat = 60
-    let longTriggerDistance: CGFloat = 120
-    let minimumHorizontalMovement: CGFloat = 30
+    // Increased to reduce accidental activation while scrolling
+    let shortTriggerDistance: CGFloat = 100
+    let longTriggerDistance: CGFloat = 180
+    let minimumHorizontalMovement: CGFloat = 50
     let maximumVerticalMovement: CGFloat = 40
 }
 
@@ -98,7 +99,8 @@ struct SwipeGestureModifier: ViewModifier {
         // Only engage when horizontal dominates sufficiently; allow scroll otherwise
         if !isSwiping {
             guard horizontalMovement >= configuration.minimumHorizontalMovement,
-                  horizontalMovement > verticalMovement + 8 else {
+                  horizontalMovement > verticalMovement + 8,
+                  verticalMovement <= configuration.maximumVerticalMovement else {
                 swipeState = .idle
                 dragOffset = .zero
                 lastThresholdLevel = 0
@@ -106,6 +108,7 @@ struct SwipeGestureModifier: ViewModifier {
             }
             // Lock into swipe interaction once threshold crossed
             isSwiping = true
+            NotificationCenter.default.post(name: .swipeInteractionBegan, object: nil)
         }
         
         // Update drag offset for visual feedback
@@ -135,6 +138,9 @@ struct SwipeGestureModifier: ViewModifier {
             }
             hasTriggered = false
             lastThresholdLevel = 0
+            if isSwiping {
+                NotificationCenter.default.post(name: .swipeInteractionEnded, object: nil)
+            }
             isSwiping = false
         }
         

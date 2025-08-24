@@ -39,6 +39,10 @@ struct CommentThreadView: View {
                 row(at: index)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .collapseAncestorsToRoot)) { note in
+            guard let targetId = note.userInfo?[AppNotificationKey.commentId] as? String else { return }
+            collapseAncestors(of: targetId)
+        }
         .onChange(of: topLevelCommentIDs) {
             let rebuilt = Self.flattenAllComments(comments: comments)
             flatItems = rebuilt
@@ -293,6 +297,30 @@ struct CommentThreadView: View {
 
         withAnimation(.easeInOut(duration: 0.2)) {
             flatItems.insert(.comment(newFlat), at: parentIndex + 1)
+        }
+    }
+}
+
+// MARK: - Ancestor Collapsing
+extension CommentThreadView {
+    private func collapseAncestors(of commentId: String) {
+        // Build parent map from current flatItems
+        var parentMap: [String: String] = [:] // childId -> parentId (comment-only, no t3_)
+        for item in flatItems {
+            if case .comment(let fc) = item {
+                if let p = fc.parentId, p.hasPrefix("t1_") {
+                    parentMap[fc.comment.id] = String(p.dropFirst(3))
+                }
+            }
+        }
+        var toCollapse: Set<String> = []
+        var current: String? = commentId
+        while let cid = current {
+            toCollapse.insert(cid)
+            current = parentMap[cid]
+        }
+        withAnimation(.snappy(duration: 0.2)) {
+            collapsedComments.formUnion(toCollapse)
         }
     }
 }

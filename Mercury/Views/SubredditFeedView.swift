@@ -18,6 +18,7 @@ struct SubredditFeedView: View {
     @State private var hasAppeared = false
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
+    @State private var swipeLockScroll: Bool = false
     
     private let pageSize = 25
     
@@ -64,6 +65,26 @@ struct SubredditFeedView: View {
                 .padding(.top, 6)
             }
             .scrollPosition(id: $scrollPosition)
+            .scrollDisabled(swipeLockScroll)
+            .onReceive(NotificationCenter.default.publisher(for: .hidePost)) { note in
+                guard let id = note.userInfo?[AppNotificationKey.postId] as? String else { return }
+                withAnimation(.snappy(duration: 0.2)) {
+                    posts.removeAll { $0.id == id }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionBegan)) { _ in
+                swipeLockScroll = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionEnded)) { _ in
+                swipeLockScroll = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .hidePostsAbove)) { note in
+                guard let id = note.userInfo?[AppNotificationKey.postId] as? String else { return }
+                guard let index = posts.firstIndex(where: { $0.id == id }) else { return }
+                withAnimation(.snappy(duration: 0.25)) {
+                    posts.removeFirst(index)
+                }
+            }
             .onAppear {
                 if !hasAppeared && posts.isEmpty && !isLoading {
                     hasAppeared = true

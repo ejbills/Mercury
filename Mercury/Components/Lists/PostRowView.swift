@@ -621,9 +621,18 @@ struct PostRowView: View {
             showingPostReply = true
         case .profile:
             navigationPath.navigate(to: .userProfile(username: post.author))
+        case .subreddit:
+            navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
+        case .hide:
+            Task { try? await redditAPI.hidePost(postId: post.id) }
+            NotificationCenter.default.post(name: .hidePost, object: nil, userInfo: [AppNotificationKey.postId: post.id])
+        case .hideAbove:
+            NotificationCenter.default.post(name: .hidePostsAbove, object: nil, userInfo: [AppNotificationKey.postId: post.id])
         case .copyLink:
             handleCopyLink()
         case .none:
+            break
+        default:
             break
         }
     }

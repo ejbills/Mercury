@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Defaults
 
 struct CommentView: View {
@@ -24,6 +25,8 @@ struct CommentView: View {
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var wasDeleted = false
+    @State private var showingShareSheet = false
+    @State private var shareURL: URL? = nil
 
     init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
@@ -70,6 +73,11 @@ struct CommentView: View {
             ) : nil,
             cornerRadius: depth == 0 ? 16 : 12
         )
+        .sheet(isPresented: $showingShareSheet) {
+            if let shareURL = shareURL {
+                SimpleShareSheet(items: [shareURL])
+            }
+        }
     }
     
     private var commentHeader: some View {
@@ -395,14 +403,39 @@ struct CommentView: View {
         case .save:
             handleSave()
         case .share:
-            break
+            if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                shareURL = url
+                showingShareSheet = true
+            }
         case .reply:
             showingReply = true
         case .profile:
             if !isDeletedUser {
                 navigationPath.navigate(to: .userProfile(username: comment.author))
             }
+        case .subreddit:
+            if let sub = comment.subreddit, !sub.isEmpty {
+                navigationPath.navigate(to: .subredditFeed(subreddit: sub))
+            }
+        case .parentComment:
+            if let parent = comment.parentId, parent.hasPrefix("t1_") {
+                let parentId = String(parent.dropFirst(3))
+                navigationPath.navigate(to: .postCommentsAnchor(post: post, commentId: parentId))
+            } else {
+                navigationPath.navigate(to: .postComments(post: post))
+            }
+        case .collapse:
+            onCollapseToggle()
+        case .collapseToTop:
+            NotificationCenter.default.post(name: .collapseAncestorsToRoot, object: nil, userInfo: [AppNotificationKey.commentId: comment.id])
+        case .selectText:
+            let h = UIImpactFeedbackGenerator(style: .light)
+            h.impactOccurred()
         case .copyLink:
+            UIPasteboard.general.string = "https://www.reddit.com\(comment.permalink)"
+            let h = UINotificationFeedbackGenerator()
+            h.notificationOccurred(.success)
+        case .hide, .hideAbove:
             break
         case .none:
             break

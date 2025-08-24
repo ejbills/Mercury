@@ -102,6 +102,14 @@ class RedditAPIManager {
     func unsavePost(postId: String) async throws {
         try await contentService.unsavePost(postId: postId)
     }
+
+    func hidePost(postId: String) async throws {
+        try await contentService.hidePost(postId: postId)
+    }
+
+    func unhidePost(postId: String) async throws {
+        try await contentService.unhidePost(postId: postId)
+    }
     
     // MARK: - User Methods (Delegated)
     
