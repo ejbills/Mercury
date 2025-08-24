@@ -26,6 +26,7 @@ struct UserProfileView: View {
     
     @State private var videoHandoffState: VideoHandoffState?
     @State private var selectedSection: ProfileSection = .posts
+    @State private var swipeLockScroll: Bool = false
     @State private var showProfileWeb = false
     @State private var showingCopiedToast = false
     @State private var animateHeader = false
@@ -63,6 +64,7 @@ struct UserProfileView: View {
                     }
                 }
             }
+            .scrollDisabled(swipeLockScroll)
             .refreshable { await refreshAll() }
         }
         .task { await initialLoad() }
@@ -316,7 +318,13 @@ struct UserProfileView: View {
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(posts) { post in
-                        PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                        PostRowView(
+                            post: post, 
+                            namespace: mediaNamespace, 
+                            selectedPost: $selectedPost,
+                            onSwipeBegin: { swipeLockScroll = true },
+                            onSwipeEnd: { swipeLockScroll = false }
+                        )
                     }
                 }
                 if postsAfter != nil {

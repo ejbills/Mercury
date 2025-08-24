@@ -38,10 +38,13 @@ struct PostCommentsView: View {
                         },
                         onVideoHandoff: { handoffState in
                             videoHandoffState = handoffState
-                        }
+                        },
+                        onSwipeBegin: { swipeLockScroll = true },
+                        onSwipeEnd: { swipeLockScroll = false }
                     )
                         if targetCommentId != nil { modePicker }
                         commentsSection(proxy: proxy)
+
                     }
                 .padding(.top, 8)
                 .padding(.bottom, 20)
@@ -52,12 +55,6 @@ struct PostCommentsView: View {
             }
             .onAppear {
                 scrollToTargetIfNeeded(proxy: proxy)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionBegan)) { _ in
-                swipeLockScroll = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .swipeInteractionEnded)) { _ in
-                swipeLockScroll = false
             }
         }
         .navigationTitle("Comments")
@@ -157,7 +154,9 @@ struct PostCommentsView: View {
                 comments: allComments,
                 post: post,
                 sort: commentSort,
-                scrollProxy: proxy
+                scrollProxy: proxy,
+                onSwipeBegin: { swipeLockScroll = true },
+                onSwipeEnd: { swipeLockScroll = false }
             )
             
             if !threadManager.moreObjects.isEmpty {

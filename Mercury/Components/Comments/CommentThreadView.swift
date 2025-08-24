@@ -11,6 +11,8 @@ struct CommentThreadView: View {
     let post: RedditPost
     let sort: CommentSort
     let scrollProxy: ScrollViewProxy?
+    let onSwipeBegin: (() -> Void)?
+    let onSwipeEnd: (() -> Void)?
     
     // Unified flat state management for entire thread
     @State private var flatItems: [FlatCommentItem] = []
@@ -21,11 +23,13 @@ struct CommentThreadView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comments: [RedditComment], post: RedditPost, sort: CommentSort, scrollProxy: ScrollViewProxy? = nil) {
+    init(comments: [RedditComment], post: RedditPost, sort: CommentSort, scrollProxy: ScrollViewProxy? = nil, onSwipeBegin: (() -> Void)? = nil, onSwipeEnd: (() -> Void)? = nil) {
         self.comments = comments
         self.post = post
         self.sort = sort
         self.scrollProxy = scrollProxy
+        self.onSwipeBegin = onSwipeBegin
+        self.onSwipeEnd = onSwipeEnd
         
         // Initialize flat structure from all comments
         let initialFlatItems = Self.flattenAllComments(comments: comments)
@@ -40,10 +44,6 @@ struct CommentThreadView: View {
             ForEach(Array(flatItems.enumerated()), id: \.element.id) { index, _ in
                 row(at: index)
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .collapseAncestorsToRoot)) { note in
-            guard let targetId = note.userInfo?[AppNotificationKey.commentId] as? String else { return }
-            collapseAncestors(of: targetId)
         }
         .onChange(of: topLevelCommentIDs) {
             let rebuilt = Self.flattenAllComments(comments: comments)
@@ -106,7 +106,9 @@ struct CommentThreadView: View {
                         },
                         onReplyPosted: { newComment in
                             insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
-                        }
+                        },
+                        onSwipeBegin: onSwipeBegin,
+                        onSwipeEnd: onSwipeEnd
                     )
                     .id(flatComment.comment.id)
                     .padding(.leading, CGFloat(flatComment.depth * 24))

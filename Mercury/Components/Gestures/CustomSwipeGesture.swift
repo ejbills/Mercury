@@ -18,10 +18,10 @@ struct SwipeConfiguration {
     let rightShort: SwipeAction?
     let rightLong: SwipeAction?
     
-    let shortTriggerDistance: CGFloat = 75
-    let longTriggerDistance: CGFloat = 150
-    let minimumHorizontalMovement: CGFloat = 75
-    let maximumVerticalMovement: CGFloat = 40
+    let shortTriggerDistance: CGFloat = 100
+    let longTriggerDistance: CGFloat = 140
+    let minimumHorizontalMovement: CGFloat = 100
+    let maximumVerticalMovement: CGFloat = 20
 }
 
 // MARK: - Swipe State
@@ -98,6 +98,7 @@ struct SwipeGestureModifier: ViewModifier {
         
         // Only engage when horizontal dominates sufficiently; allow scroll otherwise
         if !isSwiping {
+            print(verticalMovement)
             guard horizontalMovement >= configuration.minimumHorizontalMovement,
                   horizontalMovement > verticalMovement + 8,
                   verticalMovement <= configuration.maximumVerticalMovement else {

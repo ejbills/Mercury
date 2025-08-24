@@ -80,7 +80,9 @@ struct CommentView: View {
                 type: commentRightLongSwipeAction,
                 action: { handleSwipeAction(commentRightLongSwipeAction) }
             ) : nil,
-            cornerRadius: depth == 0 ? 16 : 12
+            cornerRadius: depth == 0 ? 16 : 12,
+            onInteractionBegan: onSwipeBegin,
+            onInteractionEnded: onSwipeEnd
         )
     }
     
