@@ -57,6 +57,8 @@ struct SwipeGestureModifier: ViewModifier {
     @State private var lastThresholdLevel: Int = 0 // 0: none, 1: short, 2: long
     @State private var isSwiping = false
     
+    @Default(.swipeActionsEnabled) var swipeActionsEnabled
+    
     // Helpers kept in case we want to expose current action state later
     private var currentLeftAction: SwipeAction? {
         if case .swipingLeft(let distance) = swipeState {
@@ -74,23 +76,29 @@ struct SwipeGestureModifier: ViewModifier {
     }
     
     func body(content: Content) -> some View {
-        content
-            // Move content with the finger so hints appear behind, not over
-            .offset(x: swipeState.isActive ? dragOffset.width : 0)
-            .background {
-                swipeActionHints
+        Group {
+            if swipeActionsEnabled {
+                content
+                    // Move content with the finger so hints appear behind, not over
+                    .offset(x: swipeState.isActive ? dragOffset.width : 0)
+                    .background {
+                        swipeActionHints
+                    }
+                    .simultaneousGesture(
+                        DragGesture(coordinateSpace: .local)
+                            .onChanged { value in
+                                handleDragChanged(value)
+                            }
+                            .onEnded { value in
+                                handleDragEnded(value)
+                            }
+                    )
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: swipeState)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
+            } else {
+                content
             }
-            .simultaneousGesture(
-                DragGesture(coordinateSpace: .local)
-                    .onChanged { value in
-                        handleDragChanged(value)
-                    }
-                    .onEnded { value in
-                        handleDragEnded(value)
-                    }
-            )
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: swipeState)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
+        }
     }
     
     private func handleDragChanged(_ value: DragGesture.Value) {
@@ -343,7 +351,7 @@ extension View {
         onInteractionEnded: (() -> Void)? = nil
     ) -> some View {
         let hasAnyAction = leftShort != nil || leftLong != nil || rightShort != nil || rightLong != nil
-        if Defaults[.swipeActionsEnabled] && hasAnyAction {
+        if hasAnyAction {
             let configuration = SwipeConfiguration(
                 leftShort: leftShort,
                 leftLong: leftLong,

@@ -24,11 +24,10 @@ struct SimpleImageView: View {
     }
     
     var body: some View {
-        Button(action: { selectedPost = post }) {
-            Rectangle()
-                .fill(.clear)
-                .frame(maxWidth: .infinity)
-                .frame(height: displayHeight) // FIXED HEIGHT FROM API
+        Rectangle()
+            .fill(.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: displayHeight) // FIXED HEIGHT FROM API
                 .overlay(alignment: .center) {
                     LazyImage(url: URL(string: url)) { state in
                         if let image = state.image {
@@ -78,10 +77,11 @@ struct SimpleImageView: View {
             }
             .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
             .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-        .matchedTransitionSource(id: mediaId, in: namespace)
-        .nsfwBlurred(post: post, contentType: .image, isBlurred: $isBlurred)
+            .onTapGesture {
+                selectedPost = post
+            }
+            .matchedTransitionSource(id: mediaId, in: namespace)
+            .nsfwBlurred(post: post, contentType: .image, isBlurred: $isBlurred)
     }
 }
 
@@ -98,8 +98,7 @@ struct SimpleGifView: View {
     @State private var isBlurred = false
     
     var body: some View {
-        Button(action: { selectedPost = post }) {
-            AnimatedGifCard(url: url, cornerRadius: 12)
+        AnimatedGifCard(url: url, cornerRadius: 12)
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: 600)
                 .opacity(isLoaded ? 1 : 0)
@@ -110,11 +109,12 @@ struct SimpleGifView: View {
                         }
                     }
                 }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-        .matchedTransitionSource(id: mediaId, in: namespace)
-        .nsfwBlurred(post: post, contentType: .gif, isBlurred: $isBlurred)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                selectedPost = post
+            }
+            .matchedTransitionSource(id: mediaId, in: namespace)
+            .nsfwBlurred(post: post, contentType: .gif, isBlurred: $isBlurred)
     }
 }
 
