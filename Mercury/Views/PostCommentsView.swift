@@ -16,7 +16,6 @@ struct PostCommentsView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var singleThreadMode: Bool = false
-    @State private var swipeLockScroll: Bool = false
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
@@ -39,8 +38,6 @@ struct PostCommentsView: View {
                         onVideoHandoff: { handoffState in
                             videoHandoffState = handoffState
                         },
-                        onSwipeBegin: { swipeLockScroll = true },
-                        onSwipeEnd: { swipeLockScroll = false }
                     )
                         if targetCommentId != nil { modePicker }
                         commentsSection(proxy: proxy)
@@ -49,7 +46,6 @@ struct PostCommentsView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 20)
             }
-            .scrollDisabled(swipeLockScroll)
             .onChange(of: threadManager.commentThreads.count) { _, _ in
                 scrollToTargetIfNeeded(proxy: proxy)
             }
@@ -155,8 +151,6 @@ struct PostCommentsView: View {
                 post: post,
                 sort: commentSort,
                 scrollProxy: proxy,
-                onSwipeBegin: { swipeLockScroll = true },
-                onSwipeEnd: { swipeLockScroll = false }
             )
             
             if !threadManager.moreObjects.isEmpty {

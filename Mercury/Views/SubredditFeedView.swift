@@ -19,7 +19,6 @@ struct SubredditFeedView: View {
     @State private var hasAppeared = false
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
-    @State private var swipeLockScroll: Bool = false
     @Default(.hiddenPostIds) private var hiddenPostIds
     
     private let pageSize = 25
@@ -50,8 +49,7 @@ struct SubredditFeedView: View {
                                 selectedPost: $selectedPost,
                                 onVideoHandoff: { handoffState in
                                     videoHandoffState = handoffState
-                                }, onSwipeBegin: { swipeLockScroll = true },
-                                onSwipeEnd: { swipeLockScroll = false },
+                                },
                                 onHidePost: { id in
                                     hiddenPostIds.insert(id)
                                 },
@@ -84,7 +82,6 @@ struct SubredditFeedView: View {
                 .padding(.top, 6)
             }
             .scrollPosition(id: $scrollPosition)
-            .scrollDisabled(swipeLockScroll)
             
             .onAppear {
                 if !hasAppeared && posts.isEmpty && !isLoading {

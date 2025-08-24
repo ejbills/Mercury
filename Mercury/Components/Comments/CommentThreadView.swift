@@ -11,8 +11,6 @@ struct CommentThreadView: View {
     let post: RedditPost
     let sort: CommentSort
     let scrollProxy: ScrollViewProxy?
-    let onSwipeBegin: (() -> Void)?
-    let onSwipeEnd: (() -> Void)?
     
     // Unified flat state management for entire thread
     @State private var flatItems: [FlatCommentItem] = []
@@ -23,13 +21,11 @@ struct CommentThreadView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     
-    init(comments: [RedditComment], post: RedditPost, sort: CommentSort, scrollProxy: ScrollViewProxy? = nil, onSwipeBegin: (() -> Void)? = nil, onSwipeEnd: (() -> Void)? = nil) {
+    init(comments: [RedditComment], post: RedditPost, sort: CommentSort, scrollProxy: ScrollViewProxy? = nil) {
         self.comments = comments
         self.post = post
         self.sort = sort
         self.scrollProxy = scrollProxy
-        self.onSwipeBegin = onSwipeBegin
-        self.onSwipeEnd = onSwipeEnd
         
         // Initialize flat structure from all comments
         let initialFlatItems = Self.flattenAllComments(comments: comments)
@@ -107,8 +103,6 @@ struct CommentThreadView: View {
                         onReplyPosted: { newComment in
                             insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
                         },
-                        onSwipeBegin: onSwipeBegin,
-                        onSwipeEnd: onSwipeEnd
                     )
                     .id(flatComment.comment.id)
                     .padding(.leading, CGFloat(flatComment.depth * 24))

@@ -47,7 +47,6 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
     case collapse = "collapse"
     case collapseToTop = "collapseToTop"
     case parentComment = "parentComment"
-    case selectText = "selectText"
     case copyLink = "copyLink"
     case none = "none"
     
@@ -65,7 +64,6 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .collapse: return "Collapse"
         case .collapseToTop: return "Collapse to Top"
         case .parentComment: return "Parent Comment"
-        case .selectText: return "Select Text"
         case .copyLink: return "Copy Link"
         case .none: return "None"
         }
@@ -81,11 +79,10 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .profile: return "person.circle"
         case .subreddit: return "rectangle.grid.2x2"
         case .hide: return "eye.slash"
-        case .hideAbove: return "dock.arrow.up.rectangle"
+        case .hideAbove: return "arrow.up.doc"
         case .collapse: return "rectangle.compress.vertical"
         case .collapseToTop: return "arrow.up.to.line"
         case .parentComment: return "arrow.uturn.up"
-        case .selectText: return "text.cursor"
         case .copyLink: return "link"
         case .none: return "slash.circle"
         }
@@ -105,7 +102,6 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .collapse: return .cyan
         case .collapseToTop: return .cyan
         case .parentComment: return .pink
-        case .selectText: return .yellow
         case .copyLink: return .cyan
         case .none: return .gray
         }
@@ -113,14 +109,14 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
     
     var availableForPosts: Bool {
         switch self {
-        case .collapse, .collapseToTop, .parentComment, .selectText: return false
+        case .collapse, .collapseToTop, .parentComment: return false
         default: return true
         }
     }
     
     var availableForComments: Bool {
         switch self {
-        case .subreddit, .hide, .hideAbove, .selectText: return false
+        case .subreddit, .hide, .hideAbove: return false
         default: return true
         }
     }

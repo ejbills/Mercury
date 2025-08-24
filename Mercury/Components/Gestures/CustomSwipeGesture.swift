@@ -1,341 +1,228 @@
 import SwiftUI
-import UIKit
 import Defaults
 
-// MARK: - Swipe Action Models
-
-struct SwipeAction {
-    let type: SwipeActionType
-    let action: () -> Void
-    
-    var systemImage: String { type.systemImageName }
-    var color: Color { type.color }
-    var displayName: String { type.displayName }
+private enum SwipeConstants {
+    static let shortSwipeDragMin: CGFloat = 100
+    static let longSwipeDragMin: CGFloat = 140
 }
-
-struct SwipeConfiguration {
-    let leftShort: SwipeAction?
-    let leftLong: SwipeAction?
-    let rightShort: SwipeAction?
-    let rightLong: SwipeAction?
-    
-    let shortTriggerDistance: CGFloat = 100
-    let longTriggerDistance: CGFloat = 140
-    let minimumHorizontalMovement: CGFloat = 100
-    let maximumVerticalMovement: CGFloat = 20
-}
-
-// MARK: - Swipe State
-
-enum SwipeState: Equatable {
-    case idle
-    case swipingLeft(distance: CGFloat)
-    case swipingRight(distance: CGFloat)
-    case triggered
-    
-    var isActive: Bool {
-        switch self {
-        case .idle, .triggered: return false
-        default: return true
-        }
-    }
-}
-
-// MARK: - Custom Swipe Gesture Modifier
 
 struct SwipeGestureModifier: ViewModifier {
-    let configuration: SwipeConfiguration
-    let cornerRadius: CGFloat
-    let onInteractionBegan: (() -> Void)?
-    let onInteractionEnded: (() -> Void)?
+    @GestureState private var dragState: CGFloat = .zero
+    @State private var dragPosition: CGFloat = .zero
+    @State private var prevDragPosition: CGFloat = .zero
+    @State private var dragBackground: Color?
+    @State private var leadingSwipeSymbol: String?
+    @State private var trailingSwipeSymbol: String?
     
-    @State private var swipeState: SwipeState = .idle
-    @State private var dragOffset: CGSize = .zero
-    @State private var initialTouchLocation: CGPoint = .zero
-    @State private var hasTriggered = false
-    @State private var feedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
-    @State private var lastThresholdLevel: Int = 0 // 0: none, 1: short, 2: long
-    @State private var isSwiping = false
+    private let primaryLeadingAction: SwipeAction?
+    private let secondaryLeadingAction: SwipeAction?
+    private let primaryTrailingAction: SwipeAction?
+    private let secondaryTrailingAction: SwipeAction?
     
-    @Default(.swipeActionsEnabled) var swipeActionsEnabled
+    @Default(.swipeActionsEnabled) private var swipeActionsEnabled
     
-    // Helpers kept in case we want to expose current action state later
-    private var currentLeftAction: SwipeAction? {
-        if case .swipingLeft(let distance) = swipeState {
-            if distance >= configuration.longTriggerDistance { return configuration.leftLong }
-            if distance >= configuration.shortTriggerDistance { return configuration.leftShort }
-        }
-        return nil
-    }
-    private var currentRightAction: SwipeAction? {
-        if case .swipingRight(let distance) = swipeState {
-            if distance >= configuration.longTriggerDistance { return configuration.rightLong }
-            if distance >= configuration.shortTriggerDistance { return configuration.rightShort }
-        }
-        return nil
+    init(primaryLeadingAction: SwipeAction?,
+         secondaryLeadingAction: SwipeAction?,
+         primaryTrailingAction: SwipeAction?,
+         secondaryTrailingAction: SwipeAction?
+    ) {
+        assert(primaryLeadingAction != nil || secondaryLeadingAction == nil,
+               "Secondary leading action requires primary leading action")
+        assert(primaryTrailingAction != nil || secondaryTrailingAction == nil, 
+               "Secondary trailing action requires primary trailing action")
+        
+        self.primaryLeadingAction = primaryLeadingAction
+        self.secondaryLeadingAction = secondaryLeadingAction
+        self.primaryTrailingAction = primaryTrailingAction
+        self.secondaryTrailingAction = secondaryTrailingAction
+        
+        _leadingSwipeSymbol = State(initialValue: primaryLeadingAction?.symbol.emptyName)
+        _trailingSwipeSymbol = State(initialValue: primaryTrailingAction?.symbol.emptyName)
     }
     
     func body(content: Content) -> some View {
-        Group {
-            if swipeActionsEnabled {
-                content
-                    // Move content with the finger so hints appear behind, not over
-                    .offset(x: swipeState.isActive ? dragOffset.width : 0)
+        if swipeActionsEnabled {
+            content
                     .background {
-                        swipeActionHints
+                        GeometryReader { proxy in
+                            Rectangle()
+                                .foregroundColor(.clear)
+                        }
                     }
-                    .simultaneousGesture(
-                        DragGesture(coordinateSpace: .local)
-                            .onChanged { value in
-                                handleDragChanged(value)
-                            }
-                            .onEnded { value in
-                                handleDragEnded(value)
+                    .offset(x: dragPosition)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 40, coordinateSpace: .global)
+                            .updating($dragState) { value, state, _ in
+                                if dragState != .zero || value.location.x > 70 {
+                                    state = value.translation.width
+                                }
                             }
                     )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: swipeState)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
-            } else {
-                content
-            }
-        }
-    }
-    
-    private func handleDragChanged(_ value: DragGesture.Value) {
-        let horizontalMovement = abs(value.translation.width)
-        let verticalMovement = abs(value.translation.height)
-        
-        // Only engage when horizontal dominates sufficiently; allow scroll otherwise
-        if !isSwiping {
-            guard horizontalMovement >= configuration.minimumHorizontalMovement,
-                  horizontalMovement > verticalMovement + 8,
-                  verticalMovement <= configuration.maximumVerticalMovement else {
-                swipeState = .idle
-                dragOffset = .zero
-                lastThresholdLevel = 0
-                return
-            }
-            // Lock into swipe interaction once threshold crossed
-            isSwiping = true
-            onInteractionBegan?()
-        }
-        
-        // Update drag offset for visual feedback
-        dragOffset = value.translation
-        if swipeState == .idle { feedbackGenerator.prepare() }
-        
-        // Determine swipe direction and distance; update state and highlight feedback
-        if value.translation.width > 0 {
-            let distance = value.translation.width
-            swipeState = .swipingRight(distance: distance)
-            provideThresholdFeedback(for: distance)
-        } else if value.translation.width < 0 {
-            let distance = abs(value.translation.width)
-            swipeState = .swipingLeft(distance: distance)
-            provideThresholdFeedback(for: distance)
+                    .onChange(of: dragState) { _, newDragState in
+                        if newDragState == .zero {
+                            draggingDidEnd()
+                        } else {
+                            guard shouldRespondToDragPosition(newDragState) else { return }
+                            
+                            dragPosition = newDragState
+                            updateSwipeState(for: dragPosition)
+                        }
+                    }
+                    .background {
+                        GeometryReader { proxy in
+                            let verticalInset: CGFloat = 16
+                            let horizontalInset: CGFloat = 2
+                            let cardWidth = proxy.size.width - (horizontalInset * 2)
+                            let cardHeight = proxy.size.height - (verticalInset * 2)
+                            
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(dragBackground ?? .clear)
+                                    .frame(width: cardWidth, height: cardHeight)
+                                    .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+                                ZStack {
+                                    if let symbol = leadingSwipeSymbol, dragPosition > 0,
+                                       let action = dragPosition >= SwipeConstants.longSwipeDragMin ? secondaryLeadingAction ?? primaryLeadingAction : primaryLeadingAction {
+                                        ActionWidget(
+                                            systemImage: symbol,
+                                            color: action.color,
+                                            progress: min(dragPosition / SwipeConstants.shortSwipeDragMin, 1.0),
+                                            isActive: dragPosition >= SwipeConstants.shortSwipeDragMin
+                                        )
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                                        .padding(.leading, horizontalInset + 20)
+                                    }
+                                    
+                                    if let symbol = trailingSwipeSymbol, dragPosition < 0,
+                                       let action = abs(dragPosition) >= SwipeConstants.longSwipeDragMin ? secondaryTrailingAction ?? primaryTrailingAction : primaryTrailingAction {
+                                        ActionWidget(
+                                            systemImage: symbol,
+                                            color: action.color,
+                                            progress: min(abs(dragPosition) / SwipeConstants.shortSwipeDragMin, 1.0),
+                                            isActive: abs(dragPosition) >= SwipeConstants.shortSwipeDragMin
+                                        )
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                                        .padding(.trailing, horizontalInset + 20)
+                                    }
+                                }
+                            }
+                        }
+                        .accessibilityHidden(true)
+                    }
+                    .transaction { transaction in
+                        transaction.disablesAnimations = true
+                    }
+                    .buttonStyle(EmptyButtonStyle())
         } else {
-            swipeState = .idle
+            content
         }
     }
     
-    private func handleDragEnded(_ value: DragGesture.Value) {
-        defer {
-            // Reset state
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) {
-                swipeState = .idle
-                dragOffset = .zero
-            }
-            hasTriggered = false
-            lastThresholdLevel = 0
-            if isSwiping {
-                onInteractionEnded?()
-            }
-            isSwiping = false
-        }
-        
-        let horizontal = value.translation.width
-        let distance = abs(horizontal)
-        guard distance >= configuration.shortTriggerDistance else { return }
-        
-        if horizontal > 0 {
-            // Swiped right: prefer long if beyond long threshold; else short
-            if distance >= configuration.longTriggerDistance, let action = configuration.rightLong {
-                triggerAction(action)
-            } else if let action = configuration.rightShort {
-                triggerAction(action)
-            }
-        } else if horizontal < 0 {
-            // Swiped left
-            if distance >= configuration.longTriggerDistance, let action = configuration.leftLong {
-                triggerAction(action)
-            } else if let action = configuration.leftShort {
-                triggerAction(action)
-            }
-        }
-    }
-
-    private func provideThresholdFeedback(for distance: CGFloat) {
-        let level: Int
-        if distance >= configuration.longTriggerDistance {
-            level = 2
-        } else if distance >= configuration.shortTriggerDistance {
-            level = 1
-        } else {
-            level = 0
-        }
-        if level > lastThresholdLevel {
-            feedbackGenerator.impactOccurred(intensity: level == 2 ? 1.0 : 0.5)
-            lastThresholdLevel = level
-        } else if level < lastThresholdLevel {
-            // Went back below a threshold; allow feedback again if re-crossed
-            lastThresholdLevel = level
-        }
-    }
-    
-    private func triggerAction(_ action: SwipeAction) {
-        guard !hasTriggered else { return }
-        
-        hasTriggered = true
-        feedbackGenerator.impactOccurred()
-        
-        // Execute action with slight delay for better UX
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            action.action()
-        }
-        
-        // Visual feedback
-        withAnimation(.easeOut(duration: 0.2)) {
-            swipeState = .triggered
-        }
-    }
-    
-    @ViewBuilder
-    private var swipeActionHints: some View {
-        GeometryReader { proxy in
-            ZStack {
-                // Badge for selected action (icon with its own compact background)
-                if let selected = selectedAction {
-                    ActionBadge(action: selected.action,
-                                progress: selected.progress,
-                                availableHeight: proxy.size.height)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
-                        .padding(alignment == .leading ? .leading : .trailing, 4)
-                        .transition(.move(edge: alignment == .leading ? .leading : .trailing).combined(with: .opacity))
-                }
-            }
-            .animation(.spring(response: 0.25, dampingFraction: 0.85), value: swipeState)
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var alignment: Alignment {
-        switch swipeState {
-        case .swipingRight: return .leading
-        case .swipingLeft: return .trailing
-        default: return .leading
-        }
-    }
-
-    private var revealedWidth: CGFloat {
-        switch swipeState {
-        case .swipingRight(let d): return d
-        case .swipingLeft(let d): return d
-        default: return 0
-        }
-    }
-    
-    // Note: background stripe removed; using compact background behind icon instead
-
-    // Selected action for current swipe direction/distance
-    private var selectedAction: (action: SwipeAction, isLong: Bool, progress: CGFloat)? {
-        switch swipeState {
-        case .swipingRight(let distance):
-            if distance >= configuration.longTriggerDistance, let a = configuration.rightLong {
-                return (a, true, min(distance / configuration.longTriggerDistance, 1.0))
-            } else if distance >= configuration.shortTriggerDistance, let a = configuration.rightShort {
-                return (a, false, min(distance / configuration.shortTriggerDistance, 1.0))
-            }
-        case .swipingLeft(let distance):
-            if distance >= configuration.longTriggerDistance, let a = configuration.leftLong {
-                return (a, true, min(distance / configuration.longTriggerDistance, 1.0))
-            } else if distance >= configuration.shortTriggerDistance, let a = configuration.leftShort {
-                return (a, false, min(distance / configuration.shortTriggerDistance, 1.0))
-            }
+    private func updateSwipeState(for position: CGFloat) {
+        switch position {
+        case let pos where pos <= -SwipeConstants.longSwipeDragMin:
+            updateTrailingSwipe(
+                symbol: secondaryTrailingAction?.symbol.fillName ?? primaryTrailingAction?.symbol.fillName,
+                color: (secondaryTrailingAction?.color ?? primaryTrailingAction?.color)?.opacity(0.16),
+                shouldVibrate: prevDragPosition > -SwipeConstants.longSwipeDragMin && secondaryTrailingAction != nil
+            )
+        case let pos where pos <= -SwipeConstants.shortSwipeDragMin:
+            updateTrailingSwipe(
+                symbol: primaryTrailingAction?.symbol.fillName,
+                color: primaryTrailingAction?.color.opacity(0.12),
+                shouldVibrate: prevDragPosition > -SwipeConstants.shortSwipeDragMin || prevDragPosition <= -SwipeConstants.longSwipeDragMin
+            )
+        case let pos where pos < 0:
+            let opacity = min(abs(pos) / SwipeConstants.shortSwipeDragMin, 1.0) * 0.08
+            updateTrailingSwipe(
+                symbol: primaryTrailingAction?.symbol.emptyName,
+                color: primaryTrailingAction?.color.opacity(opacity),
+                shouldVibrate: prevDragPosition <= -SwipeConstants.shortSwipeDragMin
+            )
+        case let pos where pos < SwipeConstants.shortSwipeDragMin:
+            let opacity = min(pos / SwipeConstants.shortSwipeDragMin, 1.0) * 0.08
+            updateLeadingSwipe(
+                symbol: primaryLeadingAction?.symbol.emptyName,
+                color: primaryLeadingAction?.color.opacity(opacity),
+                shouldVibrate: prevDragPosition >= SwipeConstants.shortSwipeDragMin
+            )
+        case let pos where pos < SwipeConstants.longSwipeDragMin:
+            updateLeadingSwipe(
+                symbol: primaryLeadingAction?.symbol.fillName,
+                color: primaryLeadingAction?.color.opacity(0.12),
+                shouldVibrate: prevDragPosition < SwipeConstants.shortSwipeDragMin || prevDragPosition >= SwipeConstants.longSwipeDragMin
+            )
         default:
-            break
+            updateLeadingSwipe(
+                symbol: secondaryLeadingAction?.symbol.fillName ?? primaryLeadingAction?.symbol.fillName,
+                color: (secondaryLeadingAction?.color ?? primaryLeadingAction?.color)?.opacity(0.16),
+                shouldVibrate: prevDragPosition < SwipeConstants.longSwipeDragMin && secondaryLeadingAction != nil
+            )
         }
-        return nil
+        prevDragPosition = position
     }
-}
-
-// MARK: - Swipe Action Hint View
-
-struct SwipeActionHint: View {
-    let action: SwipeAction
-    let isActive: Bool
-    let progress: CGFloat
     
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: action.systemImage)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(action.color.opacity(isActive ? 1.0 : 0.6))
-                        .scaleEffect(isActive ? 1.1 : 0.8 + (progress * 0.2))
-                )
-                .shadow(color: action.color.opacity(0.3), radius: isActive ? 8 : 4, x: 0, y: 2)
-            
-            Text(action.displayName)
-                .font(.caption2)
-                .fontWeight(.medium)
-                .foregroundStyle(action.color)
-                .opacity(0.8 + (progress * 0.2))
+    private func updateTrailingSwipe(symbol: String?, color: Color?, shouldVibrate: Bool) {
+        trailingSwipeSymbol = symbol
+        dragBackground = color
+        if shouldVibrate {
+            HapticManager.shared.gentleImpact()
         }
-        .scaleEffect(0.7 + (progress * 0.3))
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
-        .animation(.easeOut(duration: 0.2), value: progress)
     }
-}
-
-// MARK: - View Extension
-
-private struct ActionBadge: View {
-    let action: SwipeAction
-    let progress: CGFloat
-    let availableHeight: CGFloat
     
-    var body: some View {
-        // Target sizes
-        let targetCircle: CGFloat = 30
-        let targetPadding: CGFloat = 16 // around circle
-        let desiredBG: CGFloat = targetCircle + (targetPadding * 2)
-        // Keep at least 8pt margins vertically inside the card
-        let maxBG = max(40, availableHeight - 16)
-        let bg = min(desiredBG, maxBG)
-        // Ensure circle fits within bg with at least 8pt padding if space is tight
-        let circle = min(targetCircle, bg - 16)
-        let iconSize = min(18, circle - 12)
+    private func updateLeadingSwipe(symbol: String?, color: Color?, shouldVibrate: Bool) {
+        leadingSwipeSymbol = symbol
+        dragBackground = color
+        if shouldVibrate {
+            HapticManager.shared.gentleImpact()
+        }
+    }
+    
+    private func draggingDidEnd() {
+        let finalDragPosition = prevDragPosition
         
-        ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(action.color.opacity(0.18))
-                .frame(width: bg, height: bg)
+        reset()
+        
+        Task {
+            try? await Task.sleep(for: .milliseconds(300))
             
-            Circle()
-                .fill(action.color)
-                .frame(width: circle, height: circle)
-                .overlay {
-                    Image(systemName: action.systemImage)
-                        .font(.system(size: iconSize, weight: .bold))
-                        .foregroundStyle(.white)
-                }
+            switch finalDragPosition {
+            case let pos where pos < -SwipeConstants.longSwipeDragMin:
+                let action = secondaryTrailingAction ?? primaryTrailingAction
+                await action?.action()
+            case let pos where pos < -SwipeConstants.shortSwipeDragMin:
+                await primaryTrailingAction?.action()
+            case let pos where pos > SwipeConstants.longSwipeDragMin:
+                let action = secondaryLeadingAction ?? primaryLeadingAction
+                await action?.action()
+            case let pos where pos > SwipeConstants.shortSwipeDragMin:
+                await primaryLeadingAction?.action()
+            default:
+                break
+            }
         }
-        .shadow(color: action.color.opacity(0.25), radius: 6, x: 0, y: 2)
-        .scaleEffect(0.92 + (progress * 0.08))
-        .accessibilityLabel(Text(action.displayName))
+    }
+    
+    private func reset() {
+        withAnimation(.spring(response: 0.25)) {
+            dragPosition = .zero
+            prevDragPosition = .zero
+            leadingSwipeSymbol = primaryLeadingAction?.symbol.emptyName
+            trailingSwipeSymbol = primaryTrailingAction?.symbol.emptyName
+            dragBackground = nil
+        }
+    }
+    
+    private func shouldRespondToDragPosition(_ position: CGFloat) -> Bool {
+        if position > 0, primaryLeadingAction == nil {
+            return false
+        }
+        
+        if position < 0, primaryTrailingAction == nil {
+            return false
+        }
+        
+        return true
     }
 }
 
@@ -345,29 +232,15 @@ extension View {
         leftShort: SwipeAction? = nil,
         leftLong: SwipeAction? = nil,  
         rightShort: SwipeAction? = nil,
-        rightLong: SwipeAction? = nil,
-        cornerRadius: CGFloat = 16,
-        onInteractionBegan: (() -> Void)? = nil,
-        onInteractionEnded: (() -> Void)? = nil
+        rightLong: SwipeAction? = nil
     ) -> some View {
-        let hasAnyAction = leftShort != nil || leftLong != nil || rightShort != nil || rightLong != nil
-        if hasAnyAction {
-            let configuration = SwipeConfiguration(
-                leftShort: leftShort,
-                leftLong: leftLong,
-                rightShort: rightShort,
-                rightLong: rightLong
+        modifier(
+            SwipeGestureModifier(
+                primaryLeadingAction: leftShort,
+                secondaryLeadingAction: leftLong,
+                primaryTrailingAction: rightShort,
+                secondaryTrailingAction: rightLong
             )
-            self.modifier(
-                SwipeGestureModifier(
-                    configuration: configuration,
-                    cornerRadius: cornerRadius,
-                    onInteractionBegan: onInteractionBegan,
-                    onInteractionEnded: onInteractionEnded
-                )
-            )
-        } else {
-            self
-        }
+        )
     }
 }

@@ -22,7 +22,6 @@ struct SearchView: View {
     @Namespace private var tabSelectionNamespace
     @Namespace private var sortNamespace
     @State private var selectedPost: RedditPost?
-    @State private var swipeLockScroll: Bool = false
     @Environment(\.navigationPathManager) private var navigationPath
     @FocusState private var isSearchFocused: Bool
     
@@ -172,7 +171,6 @@ struct SearchView: View {
             // Dismiss focus without stealing taps from children
             .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
         }
-        .scrollDisabled(swipeLockScroll)
     }
     
     @ViewBuilder
@@ -188,8 +186,6 @@ struct SearchView: View {
                         post: post, 
                         namespace: mediaNamespace, 
                         selectedPost: $selectedPost,
-                        onSwipeBegin: { swipeLockScroll = true },
-                        onSwipeEnd: { swipeLockScroll = false }
                     )
                     .onAppear {
                         if post.id == searchResults.last?.id && hasMore && !isLoading {

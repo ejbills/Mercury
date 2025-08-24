@@ -11,8 +11,6 @@ struct PostRowView: View {
     let showLargeToolbar: Bool
     let showFullText: Bool
     let onVideoHandoff: ((VideoHandoffState) -> Void)?
-    var onSwipeBegin: (() -> Void)? = nil
-    var onSwipeEnd: (() -> Void)? = nil
     var onHidePost: ((String) -> Void)? = nil
     var onHidePostsAbove: ((String) -> Void)? = nil
     @State private var showingSafari = false
@@ -37,7 +35,7 @@ struct PostRowView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onSwipeBegin: (() -> Void)? = nil, onSwipeEnd: (() -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
@@ -45,8 +43,6 @@ struct PostRowView: View {
         self.showFullText = showFullText
         self.onRootReplyPosted = onRootReplyPosted
         self.onVideoHandoff = onVideoHandoff
-        self.onSwipeBegin = onSwipeBegin
-        self.onSwipeEnd = onSwipeEnd
         self.onHidePost = onHidePost
         self.onHidePostsAbove = onHidePostsAbove
         self.postType = post.postType
@@ -181,23 +177,20 @@ struct PostRowView: View {
         .customSwipeGesture(
             leftShort: postLeftShortSwipeAction != .none ? SwipeAction(
                 type: postLeftShortSwipeAction,
-                action: { handleSwipeAction(postLeftShortSwipeAction) }
+                action: { await handleSwipeAction(postLeftShortSwipeAction) }
             ) : nil,
             leftLong: postLeftLongSwipeAction != .none ? SwipeAction(
                 type: postLeftLongSwipeAction,
-                action: { handleSwipeAction(postLeftLongSwipeAction) }
+                action: { await handleSwipeAction(postLeftLongSwipeAction) }
             ) : nil,
             rightShort: postRightShortSwipeAction != .none ? SwipeAction(
                 type: postRightShortSwipeAction,
-                action: { handleSwipeAction(postRightShortSwipeAction) }
+                action: { await handleSwipeAction(postRightShortSwipeAction) }
             ) : nil,
             rightLong: postRightLongSwipeAction != .none ? SwipeAction(
                 type: postRightLongSwipeAction,
-                action: { handleSwipeAction(postRightLongSwipeAction) }
-            ) : nil,
-            cornerRadius: 16,
-            onInteractionBegan: { onSwipeBegin?() },
-            onInteractionEnded: { onSwipeEnd?() }
+                action: { await handleSwipeAction(postRightLongSwipeAction) }
+            ) : nil
         )
         .containerRelativeFrame(.horizontal) { width, _ in
             width - 32 // 16pt margin on each side
@@ -624,33 +617,35 @@ struct PostRowView: View {
         }
     }
     
-    private func handleSwipeAction(_ actionType: SwipeActionType) {
-        switch actionType {
-        case .upvote:
-            handleVote(.upvoted)
-        case .downvote:
-            handleVote(.downvoted)
-        case .save:
-            handleSave()
-        case .share:
-            handleShare()
-        case .reply:
-            showingPostReply = true
-        case .profile:
-            navigationPath.navigate(to: .userProfile(username: post.author))
-        case .subreddit:
-            navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
-        case .hide:
-            onHidePost?(post.id)
-        case .hideAbove:
-            onHidePostsAbove?(post.id)
-        case .copyLink:
-            handleCopyLink()
-        case .collapse, .collapseToTop, .parentComment, .selectText:
-            // Comment-specific actions not applicable to posts
-            break
-        case .none:
-            break
+    private func handleSwipeAction(_ actionType: SwipeActionType) async {
+        await MainActor.run {
+            switch actionType {
+            case .upvote:
+                handleVote(.upvoted)
+            case .downvote:
+                handleVote(.downvoted)
+            case .save:
+                handleSave()
+            case .share:
+                handleShare()
+            case .reply:
+                showingPostReply = true
+            case .profile:
+                navigationPath.navigate(to: .userProfile(username: post.author))
+            case .subreddit:
+                navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
+            case .hide:
+                onHidePost?(post.id)
+            case .hideAbove:
+                onHidePostsAbove?(post.id)
+            case .copyLink:
+                handleCopyLink()
+            case .collapse, .collapseToTop, .parentComment:
+                // Comment-specific actions not applicable to posts
+                break
+            case .none:
+                break
+            }
         }
     }
     

@@ -11,8 +11,6 @@ struct CommentView: View {
     let onCollapseParent: () -> Void
     let onScrollToParent: () -> Void
     let onReplyPosted: (RedditComment) -> Void
-    let onSwipeBegin: (() -> Void)?
-    let onSwipeEnd: (() -> Void)?
     
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
@@ -32,7 +30,7 @@ struct CommentView: View {
     @State private var shareItem: ShareItem?
     @State private var savedState: Bool
 
-    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onCollapseParent: @escaping () -> Void = {}, onScrollToParent: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }, onSwipeBegin: (() -> Void)? = nil, onSwipeEnd: (() -> Void)? = nil) {
+    init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onCollapseParent: @escaping () -> Void = {}, onScrollToParent: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
         self.depth = depth
         self.post = post
@@ -41,8 +39,6 @@ struct CommentView: View {
         self.onCollapseParent = onCollapseParent
         self.onScrollToParent = onScrollToParent
         self.onReplyPosted = onReplyPosted
-        self.onSwipeBegin = onSwipeBegin
-        self.onSwipeEnd = onSwipeEnd
         self._voteState = State(initialValue: comment.currentVoteState)
         self._displayScore = State(initialValue: comment.displayScore)
         self._savedState = State(initialValue: comment.saved)
@@ -66,23 +62,20 @@ struct CommentView: View {
         .customSwipeGesture(
             leftShort: commentLeftShortSwipeAction != .none ? SwipeAction(
                 type: commentLeftShortSwipeAction,
-                action: { handleSwipeAction(commentLeftShortSwipeAction) }
+                action: { await handleSwipeAction(commentLeftShortSwipeAction) }
             ) : nil,
             leftLong: commentLeftLongSwipeAction != .none ? SwipeAction(
                 type: commentLeftLongSwipeAction,
-                action: { handleSwipeAction(commentLeftLongSwipeAction) }
+                action: { await handleSwipeAction(commentLeftLongSwipeAction) }
             ) : nil,
             rightShort: commentRightShortSwipeAction != .none ? SwipeAction(
                 type: commentRightShortSwipeAction,
-                action: { handleSwipeAction(commentRightShortSwipeAction) }
+                action: { await handleSwipeAction(commentRightShortSwipeAction) }
             ) : nil,
             rightLong: commentRightLongSwipeAction != .none ? SwipeAction(
                 type: commentRightLongSwipeAction,
-                action: { handleSwipeAction(commentRightLongSwipeAction) }
-            ) : nil,
-            cornerRadius: depth == 0 ? 16 : 12,
-            onInteractionBegan: onSwipeBegin,
-            onInteractionEnded: onSwipeEnd
+                action: { await handleSwipeAction(commentRightLongSwipeAction) }
+            ) : nil
         )
     }
     
@@ -419,53 +412,52 @@ struct CommentView: View {
         }
     }
     
-    private func handleSwipeAction(_ actionType: SwipeActionType) {
-        switch actionType {
-        case .upvote:
-            handleVote(.upvoted)
-        case .downvote:
-            handleVote(.downvoted)
-        case .save:
-            handleSave()
-        case .share:
-            var items: [Any] = []
-            if !comment.body.isEmpty && comment.body != "[deleted]" {
-                items.append(comment.body)
+    private func handleSwipeAction(_ actionType: SwipeActionType) async {
+        await MainActor.run {
+            switch actionType {
+            case .upvote:
+                handleVote(.upvoted)
+            case .downvote:
+                handleVote(.downvoted)
+            case .save:
+                handleSave()
+            case .share:
+                var items: [Any] = []
+                if !comment.body.isEmpty && comment.body != "[deleted]" {
+                    items.append(comment.body)
+                }
+                if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                    items.append(url)
+                }
+                let contextText = "Comment by u/\(comment.author) on \"\(post.title)\""
+                items.append(contextText)
+                shareItem = ShareItem(items: items)
+            case .reply:
+                showingReply = true
+            case .profile:
+                if !isDeletedUser {
+                    navigationPath.navigate(to: .userProfile(username: comment.author))
+                }
+            case .subreddit:
+                if let sub = comment.subreddit, !sub.isEmpty {
+                    navigationPath.navigate(to: .subredditFeed(subreddit: sub))
+                }
+            case .parentComment:
+                onScrollToParent()
+            case .collapse:
+                onCollapseToggle()
+            case .collapseToTop:
+                onCollapseParent()
+                onScrollToParent()
+            case .copyLink:
+                UIPasteboard.general.string = "https://www.reddit.com\(comment.permalink)"
+                let h = UINotificationFeedbackGenerator()
+                h.notificationOccurred(.success)
+            case .hide, .hideAbove:
+                break
+            case .none:
+                break
             }
-            if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
-                items.append(url)
-            }
-            let contextText = "Comment by u/\(comment.author) on \"\(post.title)\""
-            items.append(contextText)
-            shareItem = ShareItem(items: items)
-        case .reply:
-            showingReply = true
-        case .profile:
-            if !isDeletedUser {
-                navigationPath.navigate(to: .userProfile(username: comment.author))
-            }
-        case .subreddit:
-            if let sub = comment.subreddit, !sub.isEmpty {
-                navigationPath.navigate(to: .subredditFeed(subreddit: sub))
-            }
-        case .parentComment:
-            onScrollToParent()
-        case .collapse:
-            onCollapseToggle()
-        case .collapseToTop:
-            onCollapseParent()
-            onScrollToParent()
-        case .selectText:
-            let h = UIImpactFeedbackGenerator(style: .light)
-            h.impactOccurred()
-        case .copyLink:
-            UIPasteboard.general.string = "https://www.reddit.com\(comment.permalink)"
-            let h = UINotificationFeedbackGenerator()
-            h.notificationOccurred(.success)
-        case .hide, .hideAbove:
-            break
-        case .none:
-            break
         }
     }
 }
