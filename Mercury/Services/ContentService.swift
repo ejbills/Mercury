@@ -33,7 +33,7 @@ class ContentService: BaseRedditService {
             let request = createRequest(url: url)
             
             do {
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await NetworkManager.shared.session.data(for: request)
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw APIError.networkError
@@ -168,7 +168,7 @@ class ContentService: BaseRedditService {
         let request = createRequest(url: url)
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
 
@@ -199,7 +199,7 @@ class ContentService: BaseRedditService {
         request.httpBody = bodyString.data(using: .utf8)
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -238,7 +238,7 @@ class ContentService: BaseRedditService {
         request.httpBody = bodyString.data(using: .utf8)
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -277,7 +277,7 @@ class ContentService: BaseRedditService {
         request.httpBody = bodyString.data(using: .utf8)
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(httpResponse)
         } catch _ as URLError {
@@ -291,7 +291,7 @@ class ContentService: BaseRedditService {
     
     private func performPostRequest(request: URLRequest, endpoint: String) async throws -> PostResponse {
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError

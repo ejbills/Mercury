@@ -48,7 +48,7 @@ struct AnimatedGifView: UIViewRepresentable {
         Task {
             do {
                 onLoadingChange?(true)
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await NetworkManager.shared.session.data(from: url)
                 
                 await MainActor.run {
                     do {

@@ -398,7 +398,7 @@ extension LinkItemView {
         }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await NetworkManager.shared.session.data(from: url)
             if let uiImage = UIImage(data: data) {
                 await MainActor.run {
                     self.imageStatus = .finished(Image(uiImage: uiImage))

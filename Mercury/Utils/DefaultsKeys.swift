@@ -31,6 +31,14 @@ extension Defaults.Keys {
     static let commentRightShortSwipeAction = Key<SwipeActionType>("commentRightShortSwipeAction", default: SwipeActionType.downvote)
     static let commentRightLongSwipeAction = Key<SwipeActionType>("commentRightLongSwipeAction", default: SwipeActionType.reply)
     static let hiddenPostIds = Key<Set<String>>("hiddenPostIds", default: [])
+
+    // Proxy / Network
+    static let proxyEnabled = Key<Bool>("proxyEnabled", default: false)
+    static let proxyType = Key<ProxyType>("proxyType", default: .http)
+    static let proxyHost = Key<String?>("proxyHost", default: nil)
+    static let proxyPort = Key<Int?>("proxyPort", default: nil)
+    static let proxyUsername = Key<String?>("proxyUsername", default: nil)
+    static let proxyPassword = Key<String?>("proxyPassword", default: nil)
 }
 
 enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
@@ -120,4 +128,12 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         default: return true
         }
     }
+}
+
+enum ProxyType: String, CaseIterable, Codable, Defaults.Serializable {
+    case http = "HTTP"
+    case https = "HTTPS"
+    case socks5 = "SOCKS5"
+
+    var displayName: String { rawValue }
 }

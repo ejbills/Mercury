@@ -22,17 +22,19 @@ struct UserProfileHeader: View {
             Group {
                 if let url = profile?.profileIconURL ?? headerAvatarURL {
                     LazyImage(url: url) { state in
-                        if let image = state.image {
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            gradientBackground
-                        }
+                            if let image = state.image {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .opacity((state.image != nil) ? 1 : 0)
+                            } else {
+                                // Always show neutral background while loading/error
+                                neutralBackground
+                            }
                     }
                     .priority(.high)
                 } else {
-                    gradientBackground
+                    neutralBackground
                 }
             }
             .frame(height: headerHeight)
@@ -81,12 +83,9 @@ struct UserProfileHeader: View {
         .frame(height: headerHeight)
     }
     
-    private var gradientBackground: some View {
-        LinearGradient(
-            colors: [accentColor.opacity(0.8), accentColor.opacity(0.4)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private var neutralBackground: some View {
+        Rectangle()
+            .fill(.quaternary)
     }
     
     private func labelChip(system: String, text: String, style: ChipStyle = .prominent) -> some View {

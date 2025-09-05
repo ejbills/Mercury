@@ -28,6 +28,19 @@ struct SettingsView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                        
+                        Spacer()
+                    }
+                    
+                    Link(destination: URL(string: "https://buymeacoffee.com/keplercafe")!) {
+                        HStack {
+                            Label("Buy me a coffee", systemImage: "cup.and.saucer")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .foregroundStyle(.primary)
                     }
                 } else {
                     Text("Not signed in")
@@ -70,6 +83,12 @@ struct SettingsView: View {
                     )
                 } label: {
                     Label("Reddit API Status", systemImage: "checkmark.shield")
+                }
+
+                NavigationLink {
+                    ProxySettingsView()
+                } label: {
+                    Label("Network & Proxy", systemImage: "network")
                 }
             }
 

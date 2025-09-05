@@ -39,7 +39,7 @@ class InboxService: BaseRedditService {
         let request = createRequest(url: url)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
             
@@ -126,7 +126,7 @@ class InboxService: BaseRedditService {
         let postData = parameters.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&").data(using: .utf8)
         request.httpBody = postData
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
         } catch is URLError {
@@ -148,7 +148,7 @@ class InboxService: BaseRedditService {
         let body = parameters.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
         request.httpBody = body.data(using: .utf8)
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
         } catch is URLError {

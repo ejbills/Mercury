@@ -32,6 +32,7 @@ struct MediaDetailView: View {
     @State private var downloadProgress: Double = 0.0
     @State private var showShareSheet = false
     @State private var showingPostReply = false
+    @State private var currentGalleryIndex = 0
 
     init(post: RedditPost, namespace: Namespace.ID, videoHandoffState: VideoHandoffState? = nil, onVideoHandoffReturn: ((VideoHandoffState) -> Void)? = nil) {
         self.post = post
@@ -107,6 +108,22 @@ struct MediaDetailView: View {
     
     private var bottomContentOverlay: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Gallery counter (only for gallery posts)
+            if post.postType == .gallery && !post.galleryImages.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("\(currentGalleryIndex + 1) of \(post.galleryImages.count)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.4))
+                        .clipShape(Capsule())
+                    Spacer()
+                }
+            }
+            
             // Post context
             VStack(alignment: .leading, spacing: 8) {
                 PostHeader(post: post, colorScheme: .dark)
@@ -255,16 +272,46 @@ struct MediaDetailView: View {
                 }
             }
         case .gallery:
-            // Gallery posts should use GalleryDetailView instead
-            VStack(spacing: 16) {
-                Image(systemName: "photo.stack")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white)
-                Text("Gallery view not available")
-                    .font(.title3)
-                    .foregroundStyle(.white)
+            if !post.galleryImages.isEmpty {
+                TabView(selection: $currentGalleryIndex) {
+                    ForEach(0..<post.galleryImages.count, id: \.self) { imageIndex in
+                        LazyImage(url: URL(string: post.galleryImages[imageIndex].url)) { state in
+                            if let image = state.image {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else if state.error != nil {
+                                VStack(spacing: 16) {
+                                    Image(systemName: "photo.stack")
+                                        .font(.system(size: 48))
+                                        .foregroundStyle(.white)
+                                    Text("Failed to load image")
+                                        .font(.title3)
+                                        .foregroundStyle(.white)
+                                }
+                            } else {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.5)
+                            }
+                        }
+                        .tag(imageIndex)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.white)
+                    Text("Gallery is empty")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                }
+                .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
             }
-            .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
         case .text, .link, .youtube:
             // These shouldn't appear in media detail view
             VStack(spacing: 16) {

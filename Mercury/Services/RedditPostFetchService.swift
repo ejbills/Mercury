@@ -12,9 +12,8 @@ class RedditPostFetchService {
     private let cache = NSCache<NSString, CachedRedditPost>()
     
     private init() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        self.session = URLSession(configuration: config)
+        // Use centralized proxied session
+        self.session = NetworkManager.shared.session
         
         // Cache configuration
         cache.countLimit = 50

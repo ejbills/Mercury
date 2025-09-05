@@ -204,7 +204,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.httpBody = bodyData
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
@@ -277,7 +277,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 await MainActor.run {
@@ -377,7 +377,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.httpBody = body.data(using: .utf8)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 await handleRefreshError("Network error during token refresh")

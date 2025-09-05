@@ -33,7 +33,7 @@ class CommentsService: BaseRedditService {
         let request = createRequest(url: url)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -107,7 +107,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -172,7 +172,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -206,7 +206,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -240,7 +240,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -274,7 +274,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -321,7 +321,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError

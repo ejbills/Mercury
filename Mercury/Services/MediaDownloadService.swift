@@ -199,7 +199,7 @@ final class MediaDownloadService {
         return try await withCheckedThrowingContinuation { continuation in
             var progressObserver: NSKeyValueObservation?
             
-            let task = URLSession.shared.downloadTask(with: url) { tempURL, response, error in
+            let task = NetworkManager.shared.session.downloadTask(with: url) { tempURL, response, error in
                 progressObserver?.invalidate()
                 
                 if error != nil {

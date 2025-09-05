@@ -19,7 +19,7 @@ class UserService: BaseRedditService {
         let request = createRequest(url: url)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -91,7 +91,7 @@ class UserService: BaseRedditService {
         let request = createRequest(url: url)
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -150,7 +150,7 @@ class UserService: BaseRedditService {
     
     private func performPostRequest(request: URLRequest, endpoint: String) async throws -> PostResponse {
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
