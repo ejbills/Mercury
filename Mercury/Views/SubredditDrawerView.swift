@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct SubredditDrawerView: View {
     let apiService: RedditAPIManager
@@ -6,16 +7,17 @@ struct SubredditDrawerView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var hasInitiallyLoaded = false
+    @Default(.favoriteSubreddits) private var favoriteSubreddits
     @Environment(\.navigationPathManager) private var navigationPath
     
     var body: some View {
         Group {
             if isLoading && subreddits.isEmpty {
-                loadingView
+                loadingViewWithQuickAccess
             } else if let errorMessage = errorMessage, subreddits.isEmpty {
-                errorView(errorMessage)
+                errorViewWithQuickAccess(errorMessage)
             } else if subreddits.isEmpty {
-                emptyStateView
+                emptyStateViewWithQuickAccess
             } else {
                 AlphabeticalSubredditList(
                     subreddits: subreddits,
@@ -25,6 +27,10 @@ struct SubredditDrawerView: View {
                     onQuickLinkTap: { quickLink in
                         let subreddit = quickLink.endpoint.isEmpty ? "home" : quickLink.endpoint
                         navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
+                    },
+                    favoriteSubreddits: favoriteSubreddits,
+                    onFavoriteToggle: { subreddit in
+                        toggleFavorite(subreddit)
                     }
                 )
             }
@@ -98,6 +104,131 @@ struct SubredditDrawerView: View {
         .padding(.top, 100)
     }
     
+    private var loadingViewWithQuickAccess: some View {
+        List {
+            Section(header: quickAccessSectionHeader) {
+                QuickAccessGrid(quickLinks: QuickLink.allCases) { quickLink in
+                    let subreddit = quickLink.endpoint.isEmpty ? "home" : quickLink.endpoint
+                    navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
+                }
+                .listRowSeparator(.hidden)
+            }
+            
+            Section {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    
+                    Text("Loading communities...")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+    
+    private func errorViewWithQuickAccess(_ message: String) -> some View {
+        List {
+            Section(header: quickAccessSectionHeader) {
+                QuickAccessGrid(quickLinks: QuickLink.allCases) { quickLink in
+                    let subreddit = quickLink.endpoint.isEmpty ? "home" : quickLink.endpoint
+                    navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
+                }
+                .listRowSeparator(.hidden)
+            }
+            
+            Section {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.orange)
+                    
+                    Text("Failed to load communities")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text(message)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("Try Again") {
+                        Task { await reloadSubreddits() }
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 12))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .padding(.horizontal, 32)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+    
+    private var emptyStateViewWithQuickAccess: some View {
+        List {
+            Section(header: quickAccessSectionHeader) {
+                QuickAccessGrid(quickLinks: QuickLink.allCases) { quickLink in
+                    let subreddit = quickLink.endpoint.isEmpty ? "home" : quickLink.endpoint
+                    navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
+                }
+                .listRowSeparator(.hidden)
+            }
+            
+            Section {
+                VStack(spacing: 16) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 48, weight: .thin))
+                        .foregroundStyle(.secondary)
+                    
+                    Text("No Subscriptions")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text("You haven't subscribed to any communities yet.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .padding(.horizontal, 32)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+    
+    private var quickAccessSectionHeader: some View {
+        HStack {
+            Pill(size: .regular) {
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .font(.caption)
+                        .foregroundStyle(.yellow)
+                    Text("Quick Access")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+    
     
     private func loadSubredditsInitially() async {
         await MainActor.run {
@@ -138,6 +269,29 @@ struct SubredditDrawerView: View {
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
+            }
+        }
+    }
+    
+    private func toggleFavorite(_ subreddit: Subreddit) {
+        let wasRemoved = favoriteSubreddits.contains(subreddit.displayName)
+        
+        withAnimation(.bouncy(duration: 0.4)) {
+            if wasRemoved {
+                favoriteSubreddits.remove(subreddit.displayName)
+            } else {
+                favoriteSubreddits.insert(subreddit.displayName)
+            }
+        }
+        
+        // Haptic feedback based on action
+        Task { @MainActor in
+            if wasRemoved {
+                // Gentle haptic for removal
+                HapticManager.shared.gentleImpact()
+            } else {
+                // Success haptic for addition
+                HapticManager.shared.success()
             }
         }
     }

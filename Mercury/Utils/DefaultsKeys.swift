@@ -31,6 +31,7 @@ extension Defaults.Keys {
     static let commentRightShortSwipeAction = Key<SwipeActionType>("commentRightShortSwipeAction", default: SwipeActionType.downvote)
     static let commentRightLongSwipeAction = Key<SwipeActionType>("commentRightLongSwipeAction", default: SwipeActionType.reply)
     static let hiddenPostIds = Key<Set<String>>("hiddenPostIds", default: [])
+    static let favoriteSubreddits = Key<Set<String>>("favoriteSubreddits", default: Set())
 
     // Proxy / Network
     static let proxyEnabled = Key<Bool>("proxyEnabled", default: false)

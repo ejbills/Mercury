@@ -4,11 +4,15 @@ struct AlphabeticalSubredditList: View {
     let subreddits: [Subreddit]
     let onSubredditTap: (Subreddit) -> Void
     let onQuickLinkTap: ((QuickLink) -> Void)?
+    let favoriteSubreddits: Set<String>
+    let onFavoriteToggle: ((Subreddit) -> Void)?
     
-    init(subreddits: [Subreddit], onSubredditTap: @escaping (Subreddit) -> Void, onQuickLinkTap: ((QuickLink) -> Void)? = nil) {
+    init(subreddits: [Subreddit], onSubredditTap: @escaping (Subreddit) -> Void, onQuickLinkTap: ((QuickLink) -> Void)? = nil, favoriteSubreddits: Set<String> = Set(), onFavoriteToggle: ((Subreddit) -> Void)? = nil) {
         self.subreddits = subreddits
         self.onSubredditTap = onSubredditTap
         self.onQuickLinkTap = onQuickLinkTap
+        self.favoriteSubreddits = favoriteSubreddits
+        self.onFavoriteToggle = onFavoriteToggle
     }
     
     private var allSections: [(String, SectionType)] {
@@ -19,7 +23,13 @@ struct AlphabeticalSubredditList: View {
             sections.append(("★", .quickAccess(QuickLink.allCases)))
         }
         
-        // Add subreddit sections
+        // Add favorites section if there are any favorites
+        let favoriteSubs = subreddits.filter { favoriteSubreddits.contains($0.displayName) }
+        if !favoriteSubs.isEmpty {
+            sections.append(("♥", .favorites(favoriteSubs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() })))
+        }
+        
+        // Add regular subreddit sections
         let subredditSections = groupedSubreddits.map { ($0.0, SectionType.subreddits($0.1)) }
         sections.append(contentsOf: subredditSections)
         
@@ -51,6 +61,7 @@ struct AlphabeticalSubredditList: View {
     
     private enum SectionType {
         case quickAccess([QuickLink])
+        case favorites([Subreddit])
         case subreddits([Subreddit])
     }
     
@@ -64,11 +75,23 @@ struct AlphabeticalSubredditList: View {
                             case .quickAccess(let quickLinks):
                                 QuickAccessGrid(quickLinks: quickLinks, onQuickLinkTap: onQuickLinkTap)
                                     .listRowSeparator(.hidden)
+                            case .favorites(let subreddits):
+                                ForEach(subreddits) { subreddit in
+                                    SubredditRow(
+                                        subreddit: subreddit,
+                                        action: { onSubredditTap(subreddit) },
+                                        isFavorite: true, // Always true for favorites section
+                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil
+                                    )
+                                }
                             case .subreddits(let subreddits):
                                 ForEach(subreddits) { subreddit in
-                                    SubredditRow(subreddit: subreddit) {
-                                        onSubredditTap(subreddit)
-                                    }
+                                    SubredditRow(
+                                        subreddit: subreddit,
+                                        action: { onSubredditTap(subreddit) },
+                                        isFavorite: favoriteSubreddits.contains(subreddit.displayName),
+                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil
+                                    )
                                 }
                             }
                         }
@@ -97,6 +120,13 @@ struct AlphabeticalSubredditList: View {
                             .font(.caption)
                             .foregroundStyle(.yellow)
                         Text("Quick Access")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                    } else if title == "♥" {
+                        Image(systemName: "heart.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        Text("Favorites")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                     } else {

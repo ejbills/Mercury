@@ -5,6 +5,15 @@ import NukeUI
 struct SubredditRow: View {
     let subreddit: Subreddit
     let action: () -> Void
+    let isFavorite: Bool
+    let onFavoriteToggle: (() -> Void)?
+    
+    init(subreddit: Subreddit, action: @escaping () -> Void, isFavorite: Bool = false, onFavoriteToggle: (() -> Void)? = nil) {
+        self.subreddit = subreddit
+        self.action = action
+        self.isFavorite = isFavorite
+        self.onFavoriteToggle = onFavoriteToggle
+    }
     
     var body: some View {
         Button(action: action) {
@@ -39,6 +48,16 @@ struct SubredditRow: View {
                 }
                 
                 Spacer()
+                
+                if let onFavoriteToggle = onFavoriteToggle {
+                    Button(action: onFavoriteToggle) {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(isFavorite ? .yellow : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                }
                 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))

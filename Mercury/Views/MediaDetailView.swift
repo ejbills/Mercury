@@ -33,6 +33,8 @@ struct MediaDetailView: View {
     @State private var showShareSheet = false
     @State private var showingPostReply = false
     @State private var currentGalleryIndex = 0
+    @State private var gifProgress: Double = 0 // 0..1 for GIF scrubbing
+    @State private var isScrubbingGestureActive: Bool = false
 
     init(post: RedditPost, namespace: Namespace.ID, videoHandoffState: VideoHandoffState? = nil, onVideoHandoffReturn: ((VideoHandoffState) -> Void)? = nil) {
         self.post = post
@@ -56,7 +58,19 @@ struct MediaDetailView: View {
             (colorScheme == .dark ? Color.black : Color.white)
                 .ignoresSafeArea()
             
-            mediaContent
+            Group {
+                if post.postType != .video {
+                    mediaContent
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isContentVisible.toggle()
+                            }
+                        }
+                } else {
+                    mediaContent
+                }
+            }
                 .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
                 .overlay {
                     if isDownloading {
@@ -64,27 +78,12 @@ struct MediaDetailView: View {
                     }
                 }
             
-            // Overlay container that handles taps
-            VStack {
-                Spacer()
-                
-                if isContentVisible {
-                    bottomContentOverlay
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: isContentVisible)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isContentVisible.toggle()
-                }
-            }
-            .allowsHitTesting(isContentVisible) // Only allow taps when overlays are visible
+            
+            
         }
+        .overlay(bottomOverlay, alignment: .bottom)
         .navigationBarHidden(true)
         .statusBarHidden(!isContentVisible)
-
         .onAppear { hasAppeared = true }
         .onDisappear {
             // Return handoff state to parent if we have video
@@ -187,6 +186,32 @@ struct MediaDetailView: View {
         "\(post.id)-\(post.postType.displayName.lowercased())"
     }
 
+    private var progressBar: some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.gray.opacity(0.35))
+            Capsule()
+                .fill(Color.gray.opacity(0.8))
+                .scaleEffect(x: max(0, min(1, gifProgress)), y: 1, anchor: .leading)
+        }
+        .frame(height: 4)
+        .opacity(0.95)
+        .animation(.linear(duration: 0.05), value: gifProgress)
+    }
+    
+    private var bottomOverlay: some View {
+        Group {
+            if isContentVisible, post.postType != .video {
+                bottomContentOverlay
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: isContentVisible)
+    
+                
+            }
+        }
+    }
+
+
     private func submitRootReply(text: String) async throws {
         let parent = post.fullname
         _ = try await redditAPI.submitComment(parentFullname: parent, text: text)
@@ -224,10 +249,48 @@ struct MediaDetailView: View {
             
         case .gif:
             if let gifURL = post.gifURL, let url = URL(string: gifURL) {
-                NukeGifView(url: url, contentMode: .fill, cornerRadius: 0)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .zoomable()
-                    .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+                    ZStack(alignment: .bottom) {
+                        ScrubbableGifView(
+                            url: url,
+                            contentMode: .fit,
+                            cornerRadius: 0,
+                            progress: $gifProgress,
+                            isScrubbing: isScrubbingGestureActive
+                        )
+                        .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+
+                        // Scrubber only at the bottom area to not block other gestures
+                        if !isContentVisible {
+                            VStack(spacing: 8) {
+                                // Let SwiftUI size the bar naturally; just add padding.
+                                progressBar
+                                    .frame(height: 8)
+                                    .contentShape(Rectangle())
+
+                                    .highPriorityGesture(
+                                        DragGesture(minimumDistance: 2, coordinateSpace: .local)
+                                            .onChanged { value in
+                                                // Begin scrubbing only with a drag, not a tap
+                                                if !isScrubbingGestureActive {
+                                                    let moved = abs(value.translation.width) > 1 || abs(value.translation.height) > 6
+                                                    if !moved { return }
+                                                }
+                                                isScrubbingGestureActive = true
+                                                let width = UIScreen.main.bounds.width - 32
+                                                let x = max(0, min(value.location.x, width))
+                                                gifProgress = Double(x / width)
+                                            }
+                                            .onEnded { _ in
+                                                isScrubbingGestureActive = false
+                                            }
+                                    )
+                                    
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 12)
+                        }
+                    }
+            
             }
             
         case .video:

@@ -181,18 +181,16 @@ struct GiphyEmbedView: View {
     @State private var hasError = false
     @State private var targetHeight: CGFloat? = nil
     @Environment(\.colorScheme) private var colorScheme
-    private let defaultHeight: CGFloat = 300
     
     var body: some View {
         VStack(spacing: 0) {
             // Static height to avoid layout shifts in comment lists
             Group {
                 if let giphyMedia = giphyMedia, let url = URL(string: giphyMedia.url) {
-                    NukeGifView(
+                    FLAnimatedGifView(
                         url: url,
                         contentMode: .fill,
                         cornerRadius: 12,
-                        fixedHeight: defaultHeight
                     )
                     .frame(maxWidth: .infinity)
                 } else if hasError {
@@ -201,8 +199,6 @@ struct GiphyEmbedView: View {
                     loadingView
                 }
             }
-            .frame(height: defaultHeight)
-            .frame(maxWidth: .infinity)
 
             HStack {
                 Spacer()
@@ -237,6 +233,7 @@ struct GiphyEmbedView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .frame(height: 200)
     }
     
     private var errorView: some View {
@@ -313,7 +310,7 @@ struct EmbeddedMediaView: View {
     var body: some View {
         Group {
             if isGif, let gifURL = URL(string: processedURL) {
-                NukeGifView(url: gifURL, contentMode: .fill, cornerRadius: 12, fixedHeight: fixedHeight)
+                FLAnimatedGifView(url: gifURL, contentMode: .fit, cornerRadius: 12, fixedHeight: fixedHeight)
                     .frame(maxWidth: .infinity)
             } else {
                 imageView

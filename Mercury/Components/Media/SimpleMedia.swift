@@ -97,6 +97,7 @@ struct SimpleGifView: View {
     @State private var isLoaded = false
     @State private var isBlurred = false
     
+    
     private var displayHeight: CGFloat {
         let apiDims = post.imageDimensions ?? post.videoThumbnailDimensions
         return MediaLayout.height(for: apiDims, maxHeight: 600, fallback: 300)
@@ -108,11 +109,16 @@ struct SimpleGifView: View {
             .frame(maxWidth: .infinity)
             .frame(height: displayHeight)
             .overlay {
-                NukeGifView(url: url, contentMode: .fill, cornerRadius: 12)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: displayHeight)
-                    .clipped()
+                FLAnimatedGifView(
+                    url: url,
+                    contentMode: .fill,
+                    cornerRadius: 12,
+                    fixedHeight: displayHeight
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: displayHeight)
             }
+            
             .opacity(isLoaded ? 1 : 0)
             .onAppear {
                 if !isLoaded {
@@ -157,37 +163,47 @@ struct SimpleVideoView: View {
             .frame(maxWidth: .infinity)
             .frame(height: displayHeight)
             .overlay(alignment: .center) {
-                if let u = URL(string: videoURL) {
-                    NukeVideoPlayer(
-                        url: u,
-                        cornerRadius: 12,
-                        isLooping: true,
-                        gravity: .resizeAspectFill,
-                        onReady: {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                isLoading = false
-                                showThumbnail = false
-                            }
-                        },
-                        onError: { _ in
-                            withAnimation(.easeInOut(duration: 0.15)) { isLoading = false }
-                        },
-                        onPlayerAvailable: { p in
-                            inlineAVPlayer = p
-                            p.isMuted = isMuted
-                        },
-                        onTimeUpdate: { t in inlineCurrentTime = t },
-                        resumeTime: resumeFromState?.currentTime,
-                        resumeMuted: resumeFromState?.isMuted
-                    )
-                    .frame(height: displayHeight)
-                } else {
-                    ZStack { if showThumbnail { thumbnailView } }
-                }
-            }
-            .overlay(alignment: .center) {
-                if isLoading {
-                    loadingOverlay
+                ZStack {
+                    // Background thumbnail or placeholder while loading
+                    if showThumbnail {
+                        thumbnailView
+                    } else {
+                        placeholder
+                    }
+
+                    // Player on top when URL is valid
+                    if let u = URL(string: videoURL) {
+                        NukeVideoPlayer(
+                            url: u,
+                            cornerRadius: 12,
+                            isLooping: true,
+                            gravity: .resizeAspectFill,
+                            onReady: {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    isLoading = false
+                                    showThumbnail = false
+                                }
+                            },
+                            onError: { _ in
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    isLoading = false
+                                    showThumbnail = true
+                                }
+                            },
+                            onPlayerAvailable: { p in
+                                inlineAVPlayer = p
+                                p.isMuted = isMuted
+                            },
+                            onTimeUpdate: { t in inlineCurrentTime = t },
+                            resumeTime: resumeFromState?.currentTime,
+                            resumeMuted: resumeFromState?.isMuted
+                        )
+                        .frame(height: displayHeight)
+                    }
+
+                    if isLoading {
+                        loadingOverlay
+                    }
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -235,7 +251,7 @@ struct SimpleVideoView: View {
                     Image(systemName: "video")
                         .font(.system(size: 32))
                         .foregroundStyle(.secondary)
-                    Text("Video")
+                    Text("Loading video…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

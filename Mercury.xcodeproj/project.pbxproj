@@ -15,8 +15,8 @@
 		BB39177A2E51AFC600529397 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB3917792E51AFC600529397 /* MarkdownUI */; };
 		BB88549B2E57BFB4009CA1D0 /* YouTubePlayerKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB88549A2E57BFB4009CA1D0 /* YouTubePlayerKit */; };
 		BBD10C992E56C65A00E13AA3 /* Glur in Frameworks */ = {isa = PBXBuildFile; productRef = BBD10C982E56C65A00E13AA3 /* Glur */; };
+		BBDE23412E6B6BC5007487FB /* FLAnimatedImage in Frameworks */ = {isa = PBXBuildFile; productRef = BBDE23402E6B6BC5007487FB /* FLAnimatedImage */; };
 		BBDF6A1B2E6B46830056ED15 /* NukeVideo in Frameworks */ = {isa = PBXBuildFile; productRef = BBDF6A1A2E6B46830056ED15 /* NukeVideo */; };
-		BBDF6A1E2E6B46990056ED15 /* SSSwiftUIGIFView in Frameworks */ = {isa = PBXBuildFile; productRef = BBDF6A1D2E6B46990056ED15 /* SSSwiftUIGIFView */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -62,9 +62,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BBDE23412E6B6BC5007487FB /* FLAnimatedImage in Frameworks */,
 				BB157DCB2E4E6C9000375C89 /* Nuke in Frameworks */,
 				BB39177A2E51AFC600529397 /* MarkdownUI in Frameworks */,
-				BBDF6A1E2E6B46990056ED15 /* SSSwiftUIGIFView in Frameworks */,
 				BB88549B2E57BFB4009CA1D0 /* YouTubePlayerKit in Frameworks */,
 				BB157DC02E4E59FC00375C89 /* Defaults in Frameworks */,
 				BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */,
@@ -133,7 +133,7 @@
 				BBD10C982E56C65A00E13AA3 /* Glur */,
 				BB88549A2E57BFB4009CA1D0 /* YouTubePlayerKit */,
 				BBDF6A1A2E6B46830056ED15 /* NukeVideo */,
-				BBDF6A1D2E6B46990056ED15 /* SSSwiftUIGIFView */,
+				BBDE23402E6B6BC5007487FB /* FLAnimatedImage */,
 			);
 			productName = Mercury;
 			productReference = BBD11B3C2E4E48D100827872 /* Mercury.app */;
@@ -170,7 +170,7 @@
 				BB3917782E51AFC600529397 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				BBD10C972E56C65A00E13AA3 /* XCRemoteSwiftPackageReference "Glur" */,
 				BB8854992E57BFB4009CA1D0 /* XCRemoteSwiftPackageReference "YouTubePlayerKit" */,
-				BBDF6A1C2E6B46990056ED15 /* XCRemoteSwiftPackageReference "SSSwiftUIGIFView" */,
+				BBDE233F2E6B6BC5007487FB /* XCRemoteSwiftPackageReference "FLAnimatedImage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBD11B3D2E4E48D100827872 /* Products */;
@@ -499,12 +499,12 @@
 				minimumVersion = 1.0.4;
 			};
 		};
-		BBDF6A1C2E6B46990056ED15 /* XCRemoteSwiftPackageReference "SSSwiftUIGIFView" */ = {
+		BBDE233F2E6B6BC5007487FB /* XCRemoteSwiftPackageReference "FLAnimatedImage" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/SimformSolutionsPvtLtd/SSSwiftUIGIFView.git";
+			repositoryURL = "https://github.com/Flipboard/FLAnimatedImage.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
+				minimumVersion = 1.0.17;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -550,15 +550,15 @@
 			package = BBD10C972E56C65A00E13AA3 /* XCRemoteSwiftPackageReference "Glur" */;
 			productName = Glur;
 		};
+		BBDE23402E6B6BC5007487FB /* FLAnimatedImage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BBDE233F2E6B6BC5007487FB /* XCRemoteSwiftPackageReference "FLAnimatedImage" */;
+			productName = FLAnimatedImage;
+		};
 		BBDF6A1A2E6B46830056ED15 /* NukeVideo */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BB157DC82E4E6B9400375C89 /* XCRemoteSwiftPackageReference "Nuke" */;
 			productName = NukeVideo;
-		};
-		BBDF6A1D2E6B46990056ED15 /* SSSwiftUIGIFView */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BBDF6A1C2E6B46990056ED15 /* XCRemoteSwiftPackageReference "SSSwiftUIGIFView" */;
-			productName = SSSwiftUIGIFView;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
