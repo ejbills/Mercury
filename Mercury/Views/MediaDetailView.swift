@@ -224,7 +224,7 @@ struct MediaDetailView: View {
             
         case .gif:
             if let gifURL = post.gifURL, let url = URL(string: gifURL) {
-                AnimatedGifView(url: url, contentMode: .scaleAspectFit, cornerRadius: 0)
+                NukeGifView(url: url, contentMode: .fill, cornerRadius: 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .zoomable()
                     .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
@@ -246,13 +246,11 @@ struct MediaDetailView: View {
                     }
                 }
                 .onAppear {
-                    
                     if let handoffState = videoHandoffState {
                         // Use handoff player and state
                         player = handoffState.player
-                        originalMuteState = handoffState.isMuted  // Remember original state
+                        originalMuteState = handoffState.isMuted
                         handoffState.applyTo(handoffState.player)
-                        // Temporarily unmute for detail view (will be restored on dismiss)
                         player?.applyMuteState(muted: false)
                         player?.play()
                     } else {

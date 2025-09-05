@@ -295,6 +295,8 @@ struct PostCommentsView: View {
                 let rootAfter = commentsResponse.data.after
                 
                 threadManager.loadInitialComments(comments, moreObjects: moreObjects, rootAfter: rootAfter)
+                // Prefetch embedded images/GIFs in the just-loaded comments
+                MediaPrefetcher.shared.prefetch(comments: comments)
             } else {
                 threadManager.loadInitialComments([], moreObjects: [], rootAfter: nil)
             }

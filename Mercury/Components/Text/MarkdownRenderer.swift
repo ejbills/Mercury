@@ -185,15 +185,14 @@ struct GiphyEmbedView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Stable container height derived from API dimensions when available
+            // Static height to avoid layout shifts in comment lists
             Group {
                 if let giphyMedia = giphyMedia, let url = URL(string: giphyMedia.url) {
-                    AnimatedGifCard(
+                    NukeGifView(
                         url: url,
+                        contentMode: .fill,
                         cornerRadius: 12,
-                        apiDimensions: nil,
-                        maxHeight: targetHeight ?? defaultHeight,
-                        fixedHeight: targetHeight ?? defaultHeight
+                        fixedHeight: defaultHeight
                     )
                     .frame(maxWidth: .infinity)
                 } else if hasError {
@@ -202,7 +201,7 @@ struct GiphyEmbedView: View {
                     loadingView
                 }
             }
-            .frame(height: targetHeight ?? defaultHeight)
+            .frame(height: defaultHeight)
             .frame(maxWidth: .infinity)
 
             HStack {
@@ -274,6 +273,7 @@ struct GiphyEmbedView: View {
 struct EmbeddedMediaView: View {
     let url: String
     @State private var isLoaded = false
+    private let fixedHeight: CGFloat = 300
     
     private var processedURL: String {
         var processedURL = url
@@ -313,7 +313,7 @@ struct EmbeddedMediaView: View {
     var body: some View {
         Group {
             if isGif, let gifURL = URL(string: processedURL) {
-                AnimatedGifCard(url: gifURL, cornerRadius: 12, apiDimensions: nil, maxHeight: 400)
+                NukeGifView(url: gifURL, contentMode: .fill, cornerRadius: 12, fixedHeight: fixedHeight)
                     .frame(maxWidth: .infinity)
             } else {
                 imageView
@@ -327,9 +327,9 @@ struct EmbeddedMediaView: View {
             if let image = state.image {
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity)
-                    .frame(maxHeight: 400)
+                    .frame(height: fixedHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .opacity(isLoaded ? 1 : 0)
                     .onAppear {
@@ -343,7 +343,7 @@ struct EmbeddedMediaView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.quaternary.opacity(0.3))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 200)
+                    .frame(height: fixedHeight)
                     .overlay {
                         VStack(spacing: 8) {
                             Image(systemName: "photo")
@@ -358,7 +358,7 @@ struct EmbeddedMediaView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.quaternary.opacity(0.3))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 200)
+                    .frame(height: fixedHeight)
                     .overlay {
                         ProgressView()
                             .scaleEffect(1.2)

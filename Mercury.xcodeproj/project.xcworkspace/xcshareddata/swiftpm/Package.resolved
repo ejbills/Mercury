@@ -1,5 +1,5 @@
 {
-  "originHash" : "e3e1e118042a3753099bf70074437e51e91313c63c53aa64e5c44cb90bcd2713",
+  "originHash" : "8495076919d605bae5ede70c893d025c67e5ada2535ffc950d5799f2dd8d7126",
   "pins" : [
     {
       "identity" : "defaults",
@@ -38,6 +38,15 @@
       }
     },
     {
+      "identity" : "ssswiftuigifview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SimformSolutionsPvtLtd/SSSwiftUIGIFView.git",
+      "state" : {
+        "revision" : "bd16555ae068ec4c01f9bdb913526caa08eb30b1",
+        "version" : "2.0.0"
+      }
+    },
+    {
       "identity" : "swift-cmark",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-cmark",
@@ -62,15 +71,6 @@
       "state" : {
         "revision" : "f99ae8aa18f0cf0d53481901f88a0991dc3bd4a2",
         "version" : "601.0.1"
-      }
-    },
-    {
-      "identity" : "swiftygif",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/alexiscreuzot/SwiftyGif.git",
-      "state" : {
-        "revision" : "4430cbc148baa3907651d40562d96325426f409a",
-        "version" : "5.4.5"
       }
     },
     {

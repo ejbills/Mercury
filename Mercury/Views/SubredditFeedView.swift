@@ -300,6 +300,8 @@ struct SubredditFeedView: View {
                 self.hasMore = response.data.after != nil && !response.data.children.isEmpty
                 self.isLoading = false
             }
+            // Eagerly prefetch media for the loaded posts
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
@@ -331,6 +333,8 @@ struct SubredditFeedView: View {
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.isLoadingMore = false
             }
+            // Prefetch media for newly appended posts
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
             await MainActor.run {
                 self.isLoadingMore = false
@@ -354,6 +358,7 @@ struct SubredditFeedView: View {
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.errorMessage = nil // Clear any previous error on success
             }
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
             await MainActor.run { 
                 self.errorMessage = error.localizedDescription

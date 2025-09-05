@@ -390,6 +390,7 @@ struct SearchView: View {
                     self.hasMore = postsResponse.data.after != nil && !self.searchResults.isEmpty
                     self.isLoading = false
                 }
+                MediaPrefetcher.shared.prefetch(posts: self.searchResults)
             } catch {
                 await MainActor.run {
                     self.errorMessage = error.localizedDescription
@@ -422,6 +423,7 @@ struct SearchView: View {
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.isLoading = false
             }
+            MediaPrefetcher.shared.prefetch(posts: self.searchResults)
         } catch {
             await MainActor.run {
                 self.isLoading = false

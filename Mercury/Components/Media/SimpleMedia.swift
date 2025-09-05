@@ -97,22 +97,30 @@ struct SimpleGifView: View {
     @State private var isLoaded = false
     @State private var isBlurred = false
     
+    private var displayHeight: CGFloat {
+        let apiDims = post.imageDimensions ?? post.videoThumbnailDimensions
+        return MediaLayout.height(for: apiDims, maxHeight: 600, fallback: 300)
+    }
+    
     var body: some View {
-        AnimatedGifCard(url: url, cornerRadius: 12)
-                .frame(maxWidth: .infinity)
-                .frame(maxHeight: 600)
-                .opacity(isLoaded ? 1 : 0)
-                .onAppear {
-                    if !isLoaded {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            isLoaded = true
-                        }
-                    }
-                }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                selectedPost = post
+        Rectangle()
+            .fill(.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: displayHeight)
+            .overlay {
+                NukeGifView(url: url, contentMode: .fill, cornerRadius: 12)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: displayHeight)
+                    .clipped()
             }
+            .opacity(isLoaded ? 1 : 0)
+            .onAppear {
+                if !isLoaded {
+                    withAnimation(.easeOut(duration: 0.3)) { isLoaded = true }
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { selectedPost = post }
             .matchedTransitionSource(id: mediaId, in: namespace)
             .nsfwBlurred(post: post, contentType: .gif, isBlurred: $isBlurred)
     }
@@ -136,6 +144,8 @@ struct SimpleVideoView: View {
     @State private var isLoading: Bool = true
     @State private var showThumbnail: Bool = true
     @State private var isBlurred = false
+    @State private var inlineCurrentTime: Double = 0
+    @State private var inlineAVPlayer: AVPlayer? = nil
     
     private var displayHeight: CGFloat {
         MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
@@ -147,19 +157,32 @@ struct SimpleVideoView: View {
             .frame(maxWidth: .infinity)
             .frame(height: displayHeight)
             .overlay(alignment: .center) {
-                ZStack {
-                    if showThumbnail { thumbnailView }
-                    
-                    if let player = player {
-                        SimpleVideoPlayer(
-                            player: player,
-                            showControls: false,
-                            shouldLoop: true,
-                            autoPlay: true,
-                        )
-                        .frame(height: displayHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
+                if let u = URL(string: videoURL) {
+                    NukeVideoPlayer(
+                        url: u,
+                        cornerRadius: 12,
+                        isLooping: true,
+                        gravity: .resizeAspectFill,
+                        onReady: {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                isLoading = false
+                                showThumbnail = false
+                            }
+                        },
+                        onError: { _ in
+                            withAnimation(.easeInOut(duration: 0.15)) { isLoading = false }
+                        },
+                        onPlayerAvailable: { p in
+                            inlineAVPlayer = p
+                            p.isMuted = isMuted
+                        },
+                        onTimeUpdate: { t in inlineCurrentTime = t },
+                        resumeTime: resumeFromState?.currentTime,
+                        resumeMuted: resumeFromState?.isMuted
+                    )
+                    .frame(height: displayHeight)
+                } else {
+                    ZStack { if showThumbnail { thumbnailView } }
                 }
             }
             .overlay(alignment: .center) {
@@ -171,20 +194,11 @@ struct SimpleVideoView: View {
                 muteButton.padding(4)
             }
             .contentShape(Rectangle())
-            .onTapGesture { 
-                handleTap()
-            }
-            .onAppear { 
-                setupVideo()
-            }
-            .onDisappear { teardownVideo() }
+            .onTapGesture { handleTap() }
             .matchedTransitionSource(id: mediaId, in: namespace)
             .nsfwBlurred(post: post, contentType: .video, isBlurred: $isBlurred)
-            .onChange(of: resumeFromState) { _, newState in
-                if let state = newState {
-                    resumeFromExplicitState(state)
-                }
-            }
+            .onChange(of: resumeFromState) { _, _ in }
+            
     }
     
     private var thumbnailView: some View {
@@ -281,18 +295,16 @@ struct SimpleVideoView: View {
     }
     
     private func handleTap() {
-        guard let player = player, let url = URL(string: videoURL) else { return }
-        
+        guard let url = URL(string: videoURL) else { return }
+        if let p = inlineAVPlayer { p.pause() }
+        let handoffPlayer = inlineAVPlayer ?? AVPlayer(url: url)
         let handoffState = VideoHandoffState(
-            postId: post.id, 
-            videoURL: url, 
-            currentTime: player.currentTime().seconds,
-            isMuted: isMuted,  // Use local state, not player state
-            player: player
+            postId: post.id,
+            videoURL: url,
+            currentTime: inlineCurrentTime,
+            isMuted: isMuted,
+            player: handoffPlayer
         )
-        
-        player.pause()
-        
         onRequestDetail(handoffState)
     }
     
@@ -325,6 +337,9 @@ struct SimpleVideoView: View {
     
     private func toggleMute() {
         isMuted.toggle()
+        // Apply to inline NukeVideo-backed player if present
+        inlineAVPlayer?.applyMuteState(muted: isMuted)
+        // Also apply to legacy/local player if present (detail handoff compatibility)
         player?.applyMuteState(muted: isMuted)
     }
 }
