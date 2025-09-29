@@ -17,6 +17,7 @@ struct PostRowView: View {
     @State private var isVoting = false
     @State private var showingCopiedToast = false
     @State private var shareItem: URL?
+    @State private var shareItems: [URL]?
     @State private var isOfflinePlayerPresented = false
     @State private var offlinePlayer: AVPlayer? = nil
     @State private var isDownloading = false
@@ -111,7 +112,7 @@ struct PostRowView: View {
                 if hasMediaOrTextContent {
                     postMediaContent
                         .overlay {
-                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image) {
+                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
                                 downloadProgressOverlay
                             }
                         }
@@ -197,7 +198,11 @@ struct PostRowView: View {
         }
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
         .sheet(isPresented: $showShareSheet) {
-            MediaShareSheet(post: post, mediaURL: shareItem)
+            if let urls = shareItems {
+                MediaShareSheet(post: post, mediaURLs: urls)
+            } else {
+                MediaShareSheet(post: post, mediaURL: shareItem)
+            }
         }
         .sheet(isPresented: $showingPostReply) {
             MarkdownComposerView(
@@ -588,31 +593,44 @@ struct PostRowView: View {
     }
     
     private func handleDownload() {
-        guard post.postType == .video || post.postType == .gif || post.postType == .image else { return }
+        guard post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery else { return }
         guard !isDownloading else { return }
         isDownloading = true
         Task {
             defer { isDownloading = false }
             do {
                 let service = MediaDownloadService()
-                let fileURL = try await service.download(post: post, options: .init(
-                    preferredFilename: post.id,
-                    onProgress: { progress in
-                        Task { @MainActor in
-                            downloadProgress = progress
+                if post.postType == .gallery {
+                    let urls = try await service.downloadAllGalleryImages(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
                         }
+                    ))
+                    await MainActor.run {
+                        shareItems = urls
+                        shareItem = nil
+                        showShareSheet = true
                     }
-                ))
-                await MainActor.run {
-                    shareItem = fileURL
-                    showShareSheet = true
+                } else {
+                    let fileURL = try await service.download(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItem = fileURL
+                        shareItems = nil
+                        showShareSheet = true
+                    }
                 }
             } catch {
-                
-                await MainActor.run {
-                    shareItem = URL(string: post.permalinkURL)
-                    showShareSheet = true
-                }
+                // On failure, do not present share sheet with metadata
             }
         }
     }
@@ -673,6 +691,7 @@ struct PostRowView: View {
                     case .youtube: "Opening YouTube"
                     case .gif: "Downloading GIF"
                     case .image: "Downloading Image"
+                    case .gallery: "Downloading Gallery"
                     default: "Downloading"
                     }
                     

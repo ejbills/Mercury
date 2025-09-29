@@ -216,9 +216,7 @@ struct GiphyEmbedView: View {
                     )
             }
         }
-        .task {
-            await loadGiphyMedia()
-        }
+        .task { await loadGiphyMedia() }
     }
     
     private var loadingView: some View {
@@ -310,8 +308,16 @@ struct EmbeddedMediaView: View {
     var body: some View {
         Group {
             if isGif, let gifURL = URL(string: processedURL) {
-                FLAnimatedGifView(url: gifURL, contentMode: .fit, cornerRadius: 12, fixedHeight: fixedHeight)
-                    .frame(maxWidth: .infinity)
+                GeometryReader { proxy in
+                    FLAnimatedGifView(
+                        url: gifURL,
+                        contentMode: .fit,
+                        cornerRadius: 12,
+                        fixedHeight: fixedHeight
+                    )
+                    .frame(width: proxy.size.width, height: fixedHeight)
+                }
+                .frame(height: fixedHeight)
             } else {
                 imageView
             }
@@ -322,20 +328,25 @@ struct EmbeddedMediaView: View {
     private var imageView: some View {
         LazyImage(url: URL(string: processedURL)) { state in
             if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: fixedHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .opacity(isLoaded ? 1 : 0)
-                    .onAppear {
-                        if !isLoaded {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isLoaded = true
+                GeometryReader { proxy in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: proxy.size.width, height: fixedHeight)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .opacity(isLoaded ? 1 : 0)
+                        .onAppear {
+                            if !isLoaded {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isLoaded = true
+                                }
                             }
+                            
                         }
-                    }
+                        
+                }
+                .frame(height: fixedHeight)
             } else if state.error != nil {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.quaternary.opacity(0.3))
@@ -351,6 +362,7 @@ struct EmbeddedMediaView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    
             } else {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.quaternary.opacity(0.3))
@@ -360,6 +372,7 @@ struct EmbeddedMediaView: View {
                         ProgressView()
                             .scaleEffect(1.2)
                     }
+                    
             }
         }
         .processors([.resize(size: CGSize(width: 800, height: 600))])

@@ -1,6 +1,7 @@
 import SwiftUI
 import Nuke
 import FLAnimatedImage
+import UIKit
 
 /// GIF view backed by Nuke pipeline (data) and rendered with FLAnimatedImage.
 struct FLAnimatedGifView: View {
@@ -27,7 +28,8 @@ struct FLAnimatedGifView: View {
                 .frame(height: fixedHeight)
                 .contentShape(Rectangle())
             } else if isLoading {
-                placeholder.overlay { ProgressView().scaleEffect(1.1) }
+                placeholder
+                    .overlay { ProgressView().scaleEffect(1.1) }
             } else if error != nil {
                 errorView
             } else {
@@ -74,11 +76,13 @@ struct FLAnimatedGifView: View {
                 DispatchQueue.main.async {
                     self.gifData = data
                     self.isLoading = false
+                    
                 }
             case .failure(let error):
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.error = error
+                    
                 }
             }
         }
@@ -108,14 +112,16 @@ private struct FLAnimatedImageViewRepresentable: UIViewRepresentable {
         view.setContentHuggingPriority(.defaultLow, for: .vertical)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        view.animatedImage = FLAnimatedImage(animatedGIFData: data)
+        let animated = FLAnimatedImage(animatedGIFData: data)
+        view.animatedImage = animated
         context.coordinator.currentData = data as NSData
         return view
     }
 
     func updateUIView(_ uiView: FLAnimatedImageView, context: Context) {
         if context.coordinator.currentData !== data as NSData {
-            uiView.animatedImage = FLAnimatedImage(animatedGIFData: data)
+            let animated = FLAnimatedImage(animatedGIFData: data)
+            uiView.animatedImage = animated
             context.coordinator.currentData = data as NSData
         }
         uiView.contentMode = uiContentMode
@@ -124,4 +130,3 @@ private struct FLAnimatedImageViewRepresentable: UIViewRepresentable {
 
     final class Coordinator { var currentData: NSData? }
 }
-

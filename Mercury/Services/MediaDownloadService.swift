@@ -84,6 +84,7 @@ final class MediaDownloadService {
         }
         
         let filename = (options.preferredFilename?.isEmpty == false ? options.preferredFilename! : post.id) + ".\(fileExtension)"
+        
         return try await downloadFile(
             from: imageURL,
             filename: filename,
@@ -127,6 +128,7 @@ final class MediaDownloadService {
         // For multiple gallery downloads, use downloadAllGalleryImages
         let firstImage = galleryImages[0]
         let filename = (options.preferredFilename?.isEmpty == false ? options.preferredFilename! : post.id) + "_1.jpg"
+        
         return try await downloadFile(
             from: firstImage.url,
             filename: filename,
@@ -143,12 +145,13 @@ final class MediaDownloadService {
         }
         
         let totalImages = galleryImages.count
-        var downloadedURLs: [URL] = []
+        var downloadedPairs: [(Int, URL)] = []
         
         // Download all images concurrently
         try await withThrowingTaskGroup(of: (Int, URL).self) { group in
             for (index, galleryImage) in galleryImages.enumerated() {
                 group.addTask {
+                    
                     let filename = (downloadOptions.preferredFilename?.isEmpty == false ? downloadOptions.preferredFilename! : post.id) + "_\(index + 1).jpg"
                     let imageURL = try await self.downloadFile(
                         from: galleryImage.url,
@@ -158,21 +161,24 @@ final class MediaDownloadService {
                             let imageProgress = progress / Double(totalImages)
                             let baseProgress = Double(index) / Double(totalImages)
                             let totalProgress = baseProgress + imageProgress
+                            
                             downloadOptions.onProgress?(totalProgress)
                         }
                     )
+                    
                     return (index, imageURL)
                 }
             }
             
-            // Collect results in order
-            for try await (_, url) in group {
-                downloadedURLs.append(url)
+            // Collect results
+            for try await pair in group {
+                downloadedPairs.append(pair)
             }
         }
         
         downloadOptions.onProgress?(1.0)
-        return downloadedURLs.sorted { _, _ in true } // Keep original order
+        // Return URLs in original gallery order
+        return downloadedPairs.sorted(by: { $0.0 < $1.0 }).map { $0.1 }
     }
     
     // MARK: - Video Download
@@ -210,6 +216,7 @@ final class MediaDownloadService {
                 guard let tempURL = tempURL,
                       let httpResponse = response as? HTTPURLResponse,
                       httpResponse.statusCode == 200 else {
+                    
                     continuation.resume(throwing: Error.network)
                     return
                 }
@@ -226,6 +233,7 @@ final class MediaDownloadService {
                     
                     continuation.resume(returning: destinationURL)
                 } catch {
+                    
                     continuation.resume(throwing: Error.io)
                 }
             }

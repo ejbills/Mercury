@@ -51,13 +51,7 @@ struct MediaShareSheet: UIViewControllerRepresentable {
             }
         }
         
-        // Always include the post permalink as text (this is the main thing being shared)
-        activityItems.append(post.permalinkURL)
-        
-        // Add post title for context
-        if !post.title.isEmpty {
-            activityItems.append("\(post.title)")
-        }
+        // Do not include post permalink or title when sharing downloads
         
         let activityVC = UIActivityViewController(
             activityItems: activityItems,

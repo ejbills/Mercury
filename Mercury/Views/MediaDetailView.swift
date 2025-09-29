@@ -28,6 +28,7 @@ struct MediaDetailView: View {
     @State private var savedState: Bool
     @State private var originalMuteState: Bool = true
     @State private var shareItem: URL?
+    @State private var shareItems: [URL]?
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
     @State private var showShareSheet = false
@@ -168,7 +169,11 @@ struct MediaDetailView: View {
             .ignoresSafeArea(edges: .bottom)
         )
         .sheet(isPresented: $showShareSheet) {
-            MediaShareSheet(post: post, mediaURL: shareItem)
+            if let urls = shareItems {
+                MediaShareSheet(post: post, mediaURLs: urls)
+            } else {
+                MediaShareSheet(post: post, mediaURL: shareItem)
+            }
         }
         .sheet(isPresented: $showingPostReply) {
             MarkdownComposerView(
@@ -445,7 +450,8 @@ struct MediaDetailView: View {
     private func handleShare() {
         // Simple share always shares the post URL, not the media
         // Media sharing is handled by the download button
-        shareItem = nil  // No media file to share
+        shareItem = nil
+        shareItems = nil
         showShareSheet = true
     }
     
@@ -479,24 +485,37 @@ struct MediaDetailView: View {
             defer { isDownloading = false }
             do {
                 let service = MediaDownloadService()
-                let fileURL = try await service.download(post: post, options: .init(
-                    preferredFilename: post.id,
-                    onProgress: { progress in
-                        Task { @MainActor in
-                            downloadProgress = progress
+                if post.postType == .gallery {
+                    let urls = try await service.downloadAllGalleryImages(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
                         }
+                    ))
+                    await MainActor.run {
+                        shareItems = urls
+                        shareItem = nil
+                        showShareSheet = true
                     }
-                ))
-                await MainActor.run {
-                    shareItem = fileURL
-                    showShareSheet = true
+                } else {
+                    let fileURL = try await service.download(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItem = fileURL
+                        shareItems = nil
+                        showShareSheet = true
+                    }
                 }
             } catch {
-                await MainActor.run {
-                    // Fallback to sharing the post URL
-                    shareItem = URL(string: post.permalinkURL)
-                    showShareSheet = true
-                }
+                // On failure, do not present share sheet with metadata
             }
         }
     }
