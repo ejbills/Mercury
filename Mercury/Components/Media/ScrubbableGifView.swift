@@ -119,9 +119,10 @@ private struct ScrubbableGIFPlayerViewRepresentable: UIViewRepresentable {
             frames.reserveCapacity(count)
             frameDurations.reserveCapacity(count)
 
+            let scale = imageView?.traitCollection.displayScale ?? 2.0
             for i in 0..<count {
                 if let cg = CGImageSourceCreateImageAtIndex(src, i, nil) {
-                    frames.append(UIImage(cgImage: cg, scale: UIScreen.main.scale, orientation: .up))
+                    frames.append(UIImage(cgImage: cg, scale: scale, orientation: .up))
                 }
                 let dur = Self.frameDuration(at: i, source: src)
                 frameDurations.append(dur)

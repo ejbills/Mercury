@@ -86,20 +86,19 @@ struct MediaDetailView: View {
         .statusBarHidden(!isContentVisible)
         .onAppear { hasAppeared = true }
         .onDisappear {
+            // Force mute to avoid audio bleeding when navigating away
+            player?.applyMuteState(muted: true)
+
             // Return handoff state to parent if we have video
             if let player = player,
                let handoffState = videoHandoffState,
                let onReturn = onVideoHandoffReturn {
-                
-                // Restore original mute immediately before returning
-                player.applyMuteState(muted: originalMuteState)
-
                 let currentTime = player.currentTime().seconds
+                // Preserve the user's original mute preference in the returned state
                 let updatedState = handoffState.updated(time: currentTime, muted: originalMuteState)
-                
                 onReturn(updatedState)
             }
-            // Clear our reference (but don't destroy the player)
+            // Clear our reference (but don't destroy the shared player)
             self.player = nil
         }
     }
@@ -263,27 +262,29 @@ struct MediaDetailView: View {
                         if !isContentVisible {
                             VStack(spacing: 8) {
                                 // Let SwiftUI size the bar naturally; just add padding.
-                                progressBar
-                                    .frame(height: 8)
-                                    .contentShape(Rectangle())
-
-                                    .highPriorityGesture(
-                                        DragGesture(minimumDistance: 2, coordinateSpace: .local)
-                                            .onChanged { value in
-                                                // Begin scrubbing only with a drag, not a tap
-                                                if !isScrubbingGestureActive {
-                                                    let moved = abs(value.translation.width) > 1 || abs(value.translation.height) > 6
-                                                    if !moved { return }
+                                GeometryReader { geo in
+                                    progressBar
+                                        .frame(height: 8)
+                                        .contentShape(Rectangle())
+                                        .highPriorityGesture(
+                                            DragGesture(minimumDistance: 2, coordinateSpace: .local)
+                                                .onChanged { value in
+                                                    // Begin scrubbing only with a drag, not a tap
+                                                    if !isScrubbingGestureActive {
+                                                        let moved = abs(value.translation.width) > 1 || abs(value.translation.height) > 6
+                                                        if !moved { return }
+                                                    }
+                                                    isScrubbingGestureActive = true
+                                                    let width = geo.size.width
+                                                    let x = max(0, min(value.location.x, width))
+                                                    gifProgress = Double(x / width)
                                                 }
-                                                isScrubbingGestureActive = true
-                                                let width = UIScreen.main.bounds.width - 32
-                                                let x = max(0, min(value.location.x, width))
-                                                gifProgress = Double(x / width)
-                                            }
-                                            .onEnded { _ in
-                                                isScrubbingGestureActive = false
-                                            }
-                                    )
+                                                .onEnded { _ in
+                                                    isScrubbingGestureActive = false
+                                                }
+                                        )
+                                }
+                                .frame(height: 8)
                                     
                             }
                             .padding(.horizontal, 16)

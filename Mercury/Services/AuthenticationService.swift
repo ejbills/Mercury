@@ -103,7 +103,20 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     // MARK: - OAuth Flow
     
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        return ASPresentationAnchor()
+        // Prefer an existing window from a foreground UIWindowScene
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let scene = scenes.first(where: { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }) {
+            if let key = scene.windows.first(where: { $0.isKeyWindow }) { return key }
+            if let any = scene.windows.first { return any }
+            // Create a transient, scene-attached window as anchor
+            return UIWindow(windowScene: scene)
+        }
+        // Fallback to any available scene
+        if let scene = scenes.first {
+            if let any = scene.windows.first { return any }
+            return UIWindow(windowScene: scene)
+        }
+        preconditionFailure("No UIWindowScene available for ASWebAuthenticationSession presentation anchor")
     }
     
     func startOAuthFlow() {

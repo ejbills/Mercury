@@ -14,7 +14,12 @@ enum Layout {
 
     // Content width accounting for horizontal padding on both sides
     static func contentWidth() -> CGFloat {
-        UIScreen.main.bounds.width - (horizontalPadding * 2)
+        // Prefer a screen instance via UIWindowScene when available to avoid UIScreen.main
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            return scene.screen.bounds.width - (horizontalPadding * 2)
+        }
+
+        return 375 - (horizontalPadding * 2)
     }
 }
 
@@ -43,4 +48,3 @@ enum MediaLayout {
         return min(max(calculated, minHeight), maxHeight)
     }
 }
-

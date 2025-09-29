@@ -152,6 +152,8 @@ struct SimpleVideoView: View {
     @State private var isBlurred = false
     @State private var inlineCurrentTime: Double = 0
     @State private var inlineAVPlayer: AVPlayer? = nil
+    @State private var reloadToken: Int = 0
+    @State private var loadFailed: Bool = false
     
     private var displayHeight: CGFloat {
         MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
@@ -182,12 +184,20 @@ struct SimpleVideoView: View {
                                 withAnimation(.easeInOut(duration: 0.15)) {
                                     isLoading = false
                                     showThumbnail = false
+                                    loadFailed = false
                                 }
                             },
-                            onError: { _ in
+                            onError: { err in
+                                if let err = err {
+                                    print("[Video] Failed to load: \(videoURL) — \(err.localizedDescription)")
+                                } else {
+                                    print("[Video] Failed to load: \(videoURL) — unknown error")
+                                }
                                 withAnimation(.easeInOut(duration: 0.15)) {
                                     isLoading = false
-                                    showThumbnail = true
+                                    // Show the placeholder with failure message
+                                    showThumbnail = false
+                                    loadFailed = true
                                 }
                             },
                             onPlayerAvailable: { p in
@@ -196,7 +206,8 @@ struct SimpleVideoView: View {
                             },
                             onTimeUpdate: { t in inlineCurrentTime = t },
                             resumeTime: resumeFromState?.currentTime,
-                            resumeMuted: resumeFromState?.isMuted
+                            resumeMuted: resumeFromState?.isMuted,
+                            reloadToken: reloadToken
                         )
                         .frame(height: displayHeight)
                     }
@@ -214,6 +225,12 @@ struct SimpleVideoView: View {
             .matchedTransitionSource(id: mediaId, in: namespace)
             .nsfwBlurred(post: post, contentType: .video, isBlurred: $isBlurred)
             .onChange(of: resumeFromState) { _, _ in }
+            .onDisappear {
+                // Ensure audio never bleeds when navigating away
+                inlineAVPlayer?.applyMuteState(muted: true)
+                player?.applyMuteState(muted: true)
+                isMuted = true
+            }
             
     }
     
@@ -251,7 +268,7 @@ struct SimpleVideoView: View {
                     Image(systemName: "video")
                         .font(.system(size: 32))
                         .foregroundStyle(.secondary)
-                    Text("Loading video…")
+                    Text(loadFailed ? "Failed to load video" : "Loading video…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -357,5 +374,14 @@ struct SimpleVideoView: View {
         inlineAVPlayer?.applyMuteState(muted: isMuted)
         // Also apply to legacy/local player if present (detail handoff compatibility)
         player?.applyMuteState(muted: isMuted)
+    }
+
+    private func retryPlayback() {
+        // Force reload
+        isLoading = true
+        showThumbnail = true
+        inlineAVPlayer?.pause()
+        inlineAVPlayer = nil
+        reloadToken &+= 1 // wraparound-safe increment
     }
 }
