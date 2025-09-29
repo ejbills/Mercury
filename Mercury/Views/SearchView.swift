@@ -1,10 +1,13 @@
 import SwiftUI
-import Combine
 
 struct SearchView: View {
     let apiService: RedditAPIManager
     
-    @State private var searchText = ""
+    // Search text supports both legacy internal state and iOS 26 external binding
+    @Binding private var searchTextExternal: String
+    private let usesExternalSearchText: Bool
+    @State private var searchTextInternal: String = ""
+    private var searchText: Binding<String> { usesExternalSearchText ? $searchTextExternal : $searchTextInternal }
     @State private var selectedTab: SearchTab = .posts
     @State private var selectedSort: SearchSort = .relevance
     @State private var searchResults: [RedditPost] = []
@@ -17,6 +20,7 @@ struct SearchView: View {
     @State private var after: String?
     @State private var hasMore = true
     @State private var showingSortOptions = false
+    @State private var showingSearchTypeOptions = false
     @State private var isDebouncing = false
     @Namespace private var mediaNamespace
     @Namespace private var tabSelectionNamespace
@@ -25,8 +29,21 @@ struct SearchView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     @FocusState private var isSearchFocused: Bool
     
-    private let searchSubject = PassthroughSubject<String, Never>()
-    @State private var cancellables = Set<AnyCancellable>()
+    @State private var debounceTask: Task<Void, Never>? = nil
+    
+    // MARK: - Initializers
+    init(apiService: RedditAPIManager) {
+        self.apiService = apiService
+        self._searchTextExternal = .constant("")
+        self.usesExternalSearchText = false
+    }
+    
+    init(apiService: RedditAPIManager, searchText: Binding<String>) {
+        self.apiService = apiService
+        self._searchTextExternal = searchText
+        self.usesExternalSearchText = true
+        self._searchTextInternal = State(initialValue: searchText.wrappedValue)
+    }
     
     enum SearchTab: String, CaseIterable, SectionPickerIconProvider {
         case posts = "Posts"
@@ -60,26 +77,31 @@ struct SearchView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Search input + tabs
-            VStack(spacing: 8) {
-                searchBar
-                    .padding(.horizontal, 16)
+            // Header area
+            Group {
+                if #available(iOS 26.0, *) {
+                    // No local search UI or section header — toolbar hosts segmented control.
+                    EmptyView()
+                } else {
+                    VStack(spacing: 8) {
+                        searchBar
+                            .padding(.horizontal, 16)
 
-                SectionPicker(
-                    items: SearchTab.allCases,
-                    selectedItem: $selectedTab,
-                    namespace: tabSelectionNamespace,
-                    accentColor: .accentColor,
-                    onSelectionChanged: {
-                        // Keep the search field focused when switching sections
-                        isSearchFocused = true
-                    },
-                    useBackground: false
-                )
-                // Tapping anywhere on the picker/area should dismiss keyboard
-                .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
+                        SectionPicker(
+                            items: SearchTab.allCases,
+                            selectedItem: $selectedTab,
+                            namespace: tabSelectionNamespace,
+                            accentColor: .accentColor,
+                            onSelectionChanged: {
+                                isSearchFocused = true
+                            },
+                            useBackground: false
+                        )
+                        .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
+                    }
+                    .background(.regularMaterial)
+                }
             }
-            .background(.regularMaterial)
             
             if isDebouncing && !hasSearched {
                 debounceLoadingView
@@ -93,19 +115,40 @@ struct SearchView: View {
                 emptyStateView
             }
         }
-        .navigationTitle("")
+        .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarItems }
         .fullScreenCover(item: $selectedPost) { post in
             MediaDetailView(post: post, namespace: mediaNamespace)
         }
         .onAppear {
-            setupSearchDebounce()
             loadSubscribedSubreddits()
         }
         .onDisappear {
-            cancellables.removeAll()
+            debounceTask?.cancel()
+            debounceTask = nil
         }
+        // React to system/legacy search text changes
+        .onChange(of: searchText.wrappedValue) { _, newValue in
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            debounceTask?.cancel()
+            if trimmed.isEmpty {
+                isDebouncing = false
+            } else {
+                isDebouncing = true
+                debounceTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    if Task.isCancelled { return }
+                    performSearch()
+                }
+            }
+        }
+        .onSubmit(of: .search) {
+            debounceTask?.cancel()
+            debounceTask = nil
+            performSearch()
+        }
+        
         // Smaller, native sort controls via confirmation dialogs
         .confirmationDialog("Sort Results", isPresented: $showingSortOptions) {
             ForEach(SearchSort.allCases, id: \.self) { sort in
@@ -113,6 +156,23 @@ struct SearchView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .confirmationDialog("Search Type", isPresented: $showingSearchTypeOptions) {
+            Button("Posts") {
+                selectedTab = .posts
+            }
+            Button("Communities") {
+                selectedTab = .subreddits
+            }
+            Button("Users") {
+                selectedTab = .users
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private var navTitle: String {
+        if #available(iOS 26.0, *) { return "Search" }
+        return ""
     }
     
     // Deprecated: old header removed to unify with app style
@@ -123,22 +183,17 @@ struct SearchView: View {
                 .foregroundStyle(.secondary)
                 .font(.system(size: 16, weight: .medium))
             
-            TextField("Search posts, communities, users...", text: $searchText)
+            TextField("Search posts, communities, users...", text: searchText)
                 .textFieldStyle(.plain)
                 .font(.body)
                 .focused($isSearchFocused)
-                .onChange(of: searchText) { _, newValue in
-                    let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                    isDebouncing = !trimmed.isEmpty
-                    searchSubject.send(newValue)
-                }
                 .onSubmit {
                     performSearch()
                 }
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             
-            if !searchText.isEmpty {
+            if !searchText.wrappedValue.isEmpty {
                 Button(action: clearSearch) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -327,13 +382,35 @@ struct SearchView: View {
     // MARK: - Toolbar
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
+        // iOS 26+: host the Posts/Communities/Users switch as a dropdown button
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    showingSearchTypeOptions = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: selectedTab.icon)
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(selectedTab.rawValue)
+                            .font(.callout)
+                            .fontWeight(.medium)
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+
         ToolbarItem(placement: .navigationBarTrailing) {
-            Button(action: { showingSortOptions = true }) {
+            Button(action: {
+                showingSortOptions = true
+            }) {
                 HStack(spacing: 4) {
                     Text(selectedSort.rawValue)
                         .font(.callout)
                         .fontWeight(.medium)
-                    Image(systemName: "chevron.down")
+                        Image(systemName: "chevron.down")
                         .font(.caption2)
                 }
             }
@@ -350,7 +427,7 @@ struct SearchView: View {
     // MARK: - Actions
     
     private func clearSearch() {
-        searchText = ""
+        searchText.wrappedValue = ""
         searchResults = []
         subredditResults = []
         userResults = []
@@ -361,8 +438,10 @@ struct SearchView: View {
     }
     
     private func performSearch() {
-        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
+        let query = searchText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return
+        }
         Task {
             await MainActor.run {
                 isDebouncing = false
@@ -373,11 +452,11 @@ struct SearchView: View {
                 after = nil
                 hasMore = true
                 hasSearched = true
-            }
+                }
             
             do {
                 async let postsTask = searchPosts()
-                async let subredditsTask = apiService.searchSubreddits(query: searchText, limit: 25)
+                async let subredditsTask = apiService.searchSubreddits(query: query, limit: 25)
                 async let usersTask = searchUsers()
                 
                 let (postsResponse, subreddits, users) = try await (postsTask, subredditsTask, usersTask)
@@ -389,13 +468,13 @@ struct SearchView: View {
                     self.after = postsResponse.data.after
                     self.hasMore = postsResponse.data.after != nil && !self.searchResults.isEmpty
                     self.isLoading = false
-                }
+                    }
                 MediaPrefetcher.shared.prefetch(posts: self.searchResults)
             } catch {
                 await MainActor.run {
                     self.errorMessage = error.localizedDescription
                     self.isLoading = false
-                }
+                    }
             }
         }
     }
@@ -405,7 +484,7 @@ struct SearchView: View {
         
         await MainActor.run {
             isLoading = true
-        }
+            }
         
         do {
             let response = try await searchPosts(after: after)
@@ -422,33 +501,18 @@ struct SearchView: View {
                 self.after = response.data.after
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.isLoading = false
-            }
+                }
             MediaPrefetcher.shared.prefetch(posts: self.searchResults)
         } catch {
             await MainActor.run {
                 self.isLoading = false
-            }
+                }
         }
     }
     
     // MARK: - Helper Methods
     
-    private func setupSearchDebounce() {
-        searchSubject
-            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-            .removeDuplicates()
-            .sink { searchText in
-                guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    return
-                }
-                Task {
-                    await MainActor.run {
-                        performSearch()
-                    }
-                }
-            }
-            .store(in: &cancellables)
-    }
+    // Combine-based debounce removed in favor of Task-based approach above.
     
     private func loadSubscribedSubreddits() {
         Task {
@@ -458,7 +522,7 @@ struct SearchView: View {
                     self.subscribedSubreddits = Set(subreddits.map { $0.displayName })
                 }
             } catch {
-                print("Failed to load subscribed subreddits: \(error)")
+                // Ignore failure to pre-load subscriptions
             }
         }
     }
@@ -473,7 +537,7 @@ struct SearchView: View {
         }
 
         return try await apiService.searchPosts(
-            query: searchText,
+            query: searchText.wrappedValue,
             after: after,
             limit: 25,
             sort: sortParam,
@@ -482,7 +546,7 @@ struct SearchView: View {
     }
     
     private func searchUsers() async throws -> [UserProfile] {
-        let keywords = searchText.components(separatedBy: .whitespacesAndNewlines)
+        let keywords = searchText.wrappedValue.components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
         
         var users: [UserProfile] = []
@@ -510,11 +574,7 @@ struct SearchView: View {
             }
         }
         
-        if isCurrentlySubscribed {
-            print("Unsubscribing from \(subreddit.displayName)")
-        } else {
-            print("Subscribing to \(subreddit.displayName)")
-        }
+        // Perform subscribe/unsubscribe via service if needed (silent UI update)
     }
 }
 
