@@ -49,7 +49,10 @@ class MetadataService {
     }
     
     private func fetchFromNetwork(url: String) async -> ArticleMetadata? {
-        guard let requestURL = URL(string: url) else { return nil }
+        // Normalize schemeless/relative Reddit URLs to avoid unsupported URL errors
+        let normalized = URLNormalizer.normalizeRedditURL(url)
+
+        guard let requestURL = URL(string: normalized) else { return nil }
         
         var request = URLRequest(url: requestURL)
         

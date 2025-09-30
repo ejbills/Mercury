@@ -22,11 +22,20 @@ struct SubredditFeedView: View {
     @Default(.hiddenPostIds) private var hiddenPostIds
     @State private var showSidebar = false
     @State private var hasSidebar: Bool = false
+    @State private var feedSearchText: String = ""
+    @State private var isSearching = false
+    @State private var searchResults: [RedditPost] = []
+    @State private var searchAfter: String? = nil
+    @State private var isSearchLoading = false
+    @State private var searchHasMore = true
+    @State private var searchDebounceTask: Task<Void, Never>? = nil
+    @State private var showingPostComposer = false
     
     private let pageSize = 25
     
     var body: some View {
-        let visiblePosts = posts.filter { !hiddenPostIds.contains($0.id) }
+        let base = isSearching ? searchResults : posts
+        let visiblePosts = base.filter { !hiddenPostIds.contains($0.id) }
         
         return ScrollViewReader { proxy in
             ScrollView {
@@ -35,12 +44,12 @@ struct SubredditFeedView: View {
                         .frame(height: 0)
                         .id("top")
                     
-                    if posts.isEmpty && isLoading {
+                    if (isSearching ? searchResults.isEmpty : posts.isEmpty) && (isSearching ? isSearchLoading : isLoading) {
                         skeletonLoadingView
-                    } else if posts.isEmpty && errorMessage != nil && !isLoading {
+                    } else if !isSearching && posts.isEmpty && errorMessage != nil && !isLoading {
                         errorView
                             .padding(.top, 100)
-                    } else if posts.isEmpty {
+                    } else if (!isSearching && posts.isEmpty) || (isSearching && searchResults.isEmpty && !isSearchLoading) {
                         emptyStateView
                             .padding(.top, 100)
                     } else {
@@ -65,18 +74,22 @@ struct SubredditFeedView: View {
                             )
                             .id(post.id)
                                     .onAppear {
-                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
-                                            Task {
-                                                await loadMorePosts()
+                                        if isSearching {
+                                            if post.id == searchResults.last?.id && searchHasMore && !isSearchLoading {
+                                                Task { await loadMoreSearch() }
+                                            }
+                                        } else {
+                                            if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                                Task { await loadMorePosts() }
                                             }
                                         }
                                     }
                             }
                         
-                        if hasMore {
-                            loadMoreSection
+                        if isSearching {
+                            if searchHasMore { searchLoadMoreSection } else if !searchResults.isEmpty { endOfFeedView }
                         } else {
-                            endOfFeedView
+                            if hasMore { loadMoreSection } else { endOfFeedView }
                         }
                     }
                 }
@@ -97,6 +110,25 @@ struct SubredditFeedView: View {
         }
         .navigationTitle(subredditDisplayName)
         .navigationBarTitleDisplayMode(.large)
+        .searchable(text: $feedSearchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search \(subredditDisplayName)")
+        .onChange(of: feedSearchText) { _, newValue in
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            searchDebounceTask?.cancel()
+            if trimmed.isEmpty {
+                withAnimation { isSearching = false }
+                return
+            }
+            isSearching = true
+            isSearchLoading = true
+            searchDebounceTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if Task.isCancelled { return }
+                await performInFeedSearch(reset: true)
+            }
+        }
+        .onSubmit(of: .search) {
+            Task { await performInFeedSearch(reset: true) }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 sortButton
@@ -111,6 +143,15 @@ struct SubredditFeedView: View {
                     }
                     .accessibilityLabel("Subreddit Sidebar")
                 }
+            }
+            // Create Post button available from any feed; composer handles subreddit entry
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingPostComposer = true
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                }
+                .accessibilityLabel("New Post")
             }
         }
         .fullScreenCover(item: $selectedPost) { post in
@@ -128,6 +169,12 @@ struct SubredditFeedView: View {
         }
         .sheet(isPresented: $showSidebar) {
             SubredditSidebarView(subreddit: subreddit, apiService: apiService)
+        }
+        .sheet(isPresented: $showingPostComposer) {
+            PostComposerSheet(initialSubreddit: isRealSubreddit ? subredditDisplayName : "") {
+                Task { await refreshFeed() }
+            }
+            .environment(\.redditAPI, apiService)
         }
         // confirmationDialogs removed; Menu anchored to toolbar button handles sorting
     }
@@ -405,6 +452,56 @@ struct SubredditFeedView: View {
                 self.errorMessage = error.localizedDescription
             }
         }
+    }
+
+    // MARK: - In-feed Search
+    @MainActor
+    private func performInFeedSearch(reset: Bool) async {
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        let query = feedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            isSearching = false
+            isSearchLoading = false
+            return
+        }
+        if reset {
+            searchAfter = nil
+            searchHasMore = true
+            searchResults = []
+        }
+        do {
+            let res = try await apiService.searchPosts(query: query, subreddit: clean, after: searchAfter, limit: pageSize, sort: "relevance", timeFrame: nil)
+            let new = res.data.children.compactMap { $0.data }
+            let unique = new.filter { n in !searchResults.contains(where: { $0.id == n.id }) }
+            searchResults.append(contentsOf: unique)
+            searchAfter = res.data.after
+            searchHasMore = res.data.after != nil && !unique.isEmpty
+            isSearchLoading = false
+            MediaPrefetcher.shared.prefetch(posts: self.searchResults)
+        } catch {
+            isSearchLoading = false
+        }
+    }
+
+    private var searchLoadMoreSection: some View {
+        Group {
+            if isSearchLoading {
+                HStack(spacing: 12) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("Loading more results…").font(.body).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                Color.clear.frame(height: 1).onAppear { Task { await loadMoreSearch() } }
+            }
+        }
+    }
+
+    private func loadMoreSearch() async {
+        guard isSearching, searchHasMore, !isSearchLoading else { return }
+        isSearchLoading = true
+        await performInFeedSearch(reset: false)
     }
     
     private func fetchPosts(after: String?) async throws -> PostResponse {

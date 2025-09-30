@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 /// Main coordinator class that manages all Reddit services
 @Observable
@@ -85,6 +86,18 @@ class RedditAPIManager {
     
     func fetchSavedPosts(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try await contentService.fetchSavedPosts(after: after, limit: limit)
+    }
+
+    func submitTextPost(subreddit: String, title: String, text: String) async throws {
+        try await contentService.submitTextPost(subreddit: subreddit, title: title, text: text)
+    }
+
+    func submitLinkPost(subreddit: String, title: String, url: String) async throws {
+        try await contentService.submitLinkPost(subreddit: subreddit, title: title, url: url)
+    }
+
+    func submitImagePost(subreddit: String, title: String, caption: String?, images: [UIImage]) async throws {
+        try await contentService.submitImagePost(subreddit: subreddit, title: title, caption: caption, images: images)
     }
 
     // MARK: - Subreddit actions
@@ -197,6 +210,18 @@ class RedditAPIManager {
     
     func fetchInbox(category: InboxService.Category, after: String? = nil, limit: Int = 25) async throws -> InboxService.Page {
         try await inboxService.fetch(category: category, after: after, limit: limit)
+    }
+    
+    func fetchPrivateMessagesRaw(after: String? = nil, limit: Int = 50) async throws -> (items: [RawMessage], after: String?) {
+        try await inboxService.fetchPrivateMessagesRaw(after: after, limit: limit)
+    }
+    
+    func markMessagesRead(fullnames: [String]) async throws {
+        try await inboxService.markMessagesRead(fullnames: fullnames)
+    }
+
+    func markAllInboxRead(for category: InboxService.Category) async throws {
+        try await inboxService.markAllRead(for: category)
     }
     
     func replyToMessage(fullname: String, text: String) async throws {

@@ -16,6 +16,11 @@ struct PostCommentsView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var singleThreadMode: Bool = false
+    @State private var commentSearchText: String = ""
+    @State private var isSearching: Bool = false
+    @State private var filteredComments: [RedditComment] = []
+    @State private var isSearchLoading: Bool = false
+    @State private var searchDebounceTask: Task<Void, Never>? = nil
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
@@ -60,6 +65,39 @@ struct PostCommentsView: View {
                 sortButton
             }
         }
+        .searchable(text: $commentSearchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search comments")
+        .onChange(of: commentSearchText) { _, newValue in
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            searchDebounceTask?.cancel()
+            if trimmed.isEmpty {
+                withAnimation { isSearching = false }
+                isSearchLoading = false
+                filteredComments = []
+                return
+            }
+            isSearching = true
+            isSearchLoading = true
+            searchDebounceTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if Task.isCancelled { return }
+                await expandCommentsForSearchIfNeeded(maxPasses: 4)
+                filteredComments = threadManager.matchingComments(containing: trimmed)
+                isSearchLoading = false
+            }
+        }
+        .onSubmit(of: .search) {
+            let q = commentSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !q.isEmpty else { return }
+            isSearching = true
+            isSearchLoading = true
+            Task {
+                await expandCommentsForSearchIfNeeded(maxPasses: 6)
+                await MainActor.run {
+                    filteredComments = threadManager.matchingComments(containing: q)
+                    isSearchLoading = false
+                }
+            }
+        }
         .refreshable {
             await MainActor.run {
                 threadManager = CommentThreadManager()
@@ -87,7 +125,25 @@ struct PostCommentsView: View {
     
     private func commentsSection(proxy: ScrollViewProxy) -> some View {
         Group {
-            if isLoading && threadManager.commentThreads.isEmpty {
+            if (isSearching && isSearchLoading) {
+                loadingView
+            } else if isSearching {
+                if filteredComments.isEmpty {
+                    emptyCommentsView
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(filteredComments, id: \.id) { c in
+                            CommentView(
+                                comment: c,
+                                depth: c.depth,
+                                post: post,
+                                onReplyPosted: { _ in }
+                            )
+                            .padding(.horizontal, 12)
+                        }
+                    }
+                }
+            } else if isLoading && threadManager.commentThreads.isEmpty {
                 loadingView
             } else if let errorMessage = errorMessage, threadManager.commentThreads.isEmpty {
                 errorView(message: errorMessage)
@@ -312,11 +368,59 @@ struct PostCommentsView: View {
             isLoading = false
         }
     }
-    
+
     private func scrollToTargetIfNeeded(proxy: ScrollViewProxy) {
         guard let targetId = targetCommentId, !targetId.isEmpty else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             proxy.animatedScrollTo(targetId, anchor: .center)
+        }
+    }
+
+    // MARK: - Search Expansion
+    private func expandCommentsForSearchIfNeeded(maxPasses: Int) async {
+        var passes = 0
+        while passes < maxPasses {
+            passes += 1
+            // Prioritize root pagination if available
+            if threadManager.hasMoreRootComments, let after = threadManager.rootAfter {
+                do {
+                    let response = try await redditAPI.fetchPostComments(postId: post.id, sort: commentSort, after: after)
+                    if response.count > 1 {
+                        let commentsResponse = response[1]
+                        let comments = commentsResponse.flattenedComments
+                        let nextAfter = commentsResponse.data.after
+                        await MainActor.run {
+                            threadManager.appendRootPage(newComments: comments, nextAfter: nextAfter)
+                        }
+                        // Prefetch to keep UI smooth
+                        MediaPrefetcher.shared.prefetch(comments: comments)
+                        continue
+                    }
+                } catch {
+                    break
+                }
+            }
+
+            // Otherwise, fetch consolidated root children batch if present
+            if let nextMore = threadManager.moreObjects.first {
+                do {
+                    let batchIds = nextMore.children
+                    let newComments = try await redditAPI.fetchMoreComments(postId: post.id, commentIds: batchIds, sort: commentSort)
+                    await MainActor.run {
+                        if nextMore.name == "root_more_children" {
+                            threadManager.appendRootChildrenPage(newComments: newComments, consumedCount: batchIds.count)
+                        } else {
+                            threadManager.insertMoreComments(newComments, replacingMoreId: nextMore.id)
+                        }
+                    }
+                    MediaPrefetcher.shared.prefetch(comments: newComments)
+                    continue
+                } catch {
+                    break
+                }
+            }
+            // Nothing else to expand
+            break
         }
     }
 }

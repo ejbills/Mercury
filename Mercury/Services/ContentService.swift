@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Service responsible for fetching posts, feeds, and subreddit content
 class ContentService: BaseRedditService {
@@ -418,4 +419,225 @@ class ContentService: BaseRedditService {
         }
     }
 
+}
+
+// MARK: - Post Submission
+extension ContentService {
+    /// Submit a self (text) post to a subreddit
+    func submitTextPost(subreddit: String, title: String, text: String) async throws {
+        try validateAccessToken()
+        guard let url = URL(string: "\(baseURL)/api/submit") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: url)
+        // Reddit API: kind=self, sr=subreddit (no r/ prefix), title, text, api_type=json
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        let params: [String: String] = [
+            "api_type": "json",
+            "kind": "self",
+            "sr": clean,
+            "title": title,
+            "text": text
+        ]
+        let body = params.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
+        request.httpBody = body.data(using: String.Encoding.utf8)
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch { throw error }
+    }
+
+    // MARK: - Image/Gallery Submission
+
+    struct MediaLeaseResponse: Codable {
+        struct Args: Codable {
+            struct Field: Codable { let name: String; let value: String }
+            let action: String
+            let fields: [Field]
+        }
+        struct Asset: Codable {
+            let assetId: String
+            enum CodingKeys: String, CodingKey { case assetId = "asset_id" }
+        }
+        let args: Args
+        let asset: Asset
+    }
+
+    /// Upload one image to Reddit via media lease, returning (assetId, ext)
+    private func uploadSingleImage(_ data: Data, mimeType: String) async throws -> (id: String, ext: String) {
+        try validateAccessToken()
+        let ext = mimeType.contains("png") ? "png" : (mimeType.contains("jpeg") || mimeType.contains("jpg") ? "jpg" : "bin")
+        // 1) Get lease
+        var components = URLComponents(string: baseURL + "/api/media/asset.json")!
+        components.queryItems = [ URLQueryItem(name: "raw_json", value: "1") ]
+        guard let leaseURL = components.url else { throw APIError.parseError }
+        var leaseReq = createPOSTRequest(url: leaseURL)
+        leaseReq.httpBody = "filepath=upload.\(ext)&mimetype=\(mimeType)".data(using: .utf8)
+        let (leaseData, leaseResp) = try await NetworkManager.shared.session.data(for: leaseReq)
+        guard let http = leaseResp as? HTTPURLResponse else { throw APIError.networkError }
+        try validateResponse(http)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let lease: MediaLeaseResponse
+        do {
+            lease = try decoder.decode(MediaLeaseResponse.self, from: leaseData)
+        } catch {
+            // Fallback manual parse
+            guard let obj = try? JSONSerialization.jsonObject(with: leaseData) as? [String: Any],
+                  let args = obj["args"] as? [String: Any],
+                  let action = args["action"] as? String,
+                  let fieldsArr = args["fields"] as? [[String: Any]],
+                  let asset = obj["asset"] as? [String: Any],
+                  let assetId = asset["asset_id"] as? String else { throw error }
+            let fields: [MediaLeaseResponse.Args.Field] = fieldsArr.compactMap { d in
+                if let name = d["name"] as? String, let value = d["value"] as? String { return .init(name: name, value: value) }
+                return nil
+            }
+            lease = MediaLeaseResponse(args: .init(action: action, fields: fields), asset: .init(assetId: assetId))
+        }
+
+        // 2) Upload multipart to S3
+        var dict: [String: String] = [:]
+        lease.args.fields.forEach { dict[$0.name] = $0.value }
+        let actionStr = lease.args.action.hasPrefix("//") ? "https:" + lease.args.action : lease.args.action
+        guard let actionURL = URL(string: actionStr) else { throw APIError.parseError }
+        var uploadReq = URLRequest(url: actionURL)
+        uploadReq.httpMethod = "POST"
+        let boundary = "----MercuryS3_\(UUID().uuidString)"
+        uploadReq.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
+        for (k, v) in dict { append("--\(boundary)\r\n"); append("Content-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n") }
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n")
+        append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(data)
+        append("\r\n--\(boundary)--\r\n")
+        uploadReq.httpBody = body
+        let (_, upResp) = try await NetworkManager.shared.session.data(for: uploadReq)
+        guard let upHTTP = upResp as? HTTPURLResponse, (200..<400).contains(upHTTP.statusCode) else { throw APIError.networkError }
+        return (lease.asset.assetId, ext)
+    }
+
+    /// Attempt to submit a single-image post using kind=image and preview URL. Fallback to richtext if needed.
+    func submitImagePost(subreddit: String, title: String, caption: String?, images: [UIImage]) async throws {
+        try validateAccessToken()
+        guard !images.isEmpty else { throw APIError.parseError }
+        // Prepare data up to 20 images
+        let prepared: [(Data, String)] = images.prefix(20).compactMap { (img) -> (Data, String)? in
+            if let png = img.pngData() { return (png, "image/png") }
+            if let jpg = img.jpegData(compressionQuality: 0.92) { return (jpg, "image/jpeg") }
+            return nil
+        }
+        guard !prepared.isEmpty else { throw APIError.parseError }
+
+        // Upload all images to get asset ids
+        var assets: [(id: String, ext: String)] = []
+        for (data, mime) in prepared { assets.append(try await uploadSingleImage(data, mimeType: mime)) }
+
+        if assets.count == 1 {
+            // Try native image post first
+            let a = assets[0]
+            let imageURL = "https://preview.redd.it/\(a.id).\(a.ext)"
+            guard let url = URL(string: baseURL + "/api/submit") else { throw APIError.parseError }
+            var req = createPOSTRequest(url: url)
+            let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+            let params: [String: String] = [
+                "api_type": "json",
+                "kind": "image",
+                "sr": clean,
+                "title": title,
+                "url": imageURL
+            ]
+            let body = params.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
+            req.httpBody = body.data(using: .utf8)
+            do {
+                let (data, resp) = try await NetworkManager.shared.session.data(for: req)
+                guard let http = resp as? HTTPURLResponse else { throw APIError.networkError }
+                try validateResponse(http)
+                // Validate JSON errors array
+                struct SubmitResponse: Codable { struct J: Codable { let errors: [[String]]?; let data: DataField?; struct DataField: Codable { let id: String?; let url: String? } }; let json: J }
+                if let submit = try? JSONDecoder().decode(SubmitResponse.self, from: data), let errs = submit.json.errors, !errs.isEmpty {
+                    throw APIError.serverError(http.statusCode)
+                }
+                return
+            } catch {
+                // Fallback to richtext self-post embedding
+                try await submitRichtextImagePost(subreddit: clean, title: title, caption: caption, assets: assets)
+            }
+        } else {
+            // Gallery-like: richtext self post embedding multiple media nodes
+            let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+            try await submitRichtextImagePost(subreddit: clean, title: title, caption: caption, assets: assets)
+        }
+    }
+
+    private func submitRichtextImagePost(subreddit: String, title: String, caption: String?, assets: [(id: String, ext: String)]) async throws {
+        try validateAccessToken()
+        guard let url = URL(string: baseURL + "/api/submit?raw_json=1") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: url)
+        var document: [[String: Any]] = []
+        if let caption = caption, !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            document.append(["e": "paragraph", "c": [["e": "text", "t": caption]]])
+        }
+        for a in assets { document.append(["e": "media", "id": a.id, "t": "image"]) }
+        let rtjson: [String: Any] = ["document": document]
+        let rtData = try JSONSerialization.data(withJSONObject: rtjson, options: [])
+        guard let jsonString = String(data: rtData, encoding: .utf8) else { throw APIError.parseError }
+        let params: [String: String] = [
+            "api_type": "json",
+            "kind": "self",
+            "sr": subreddit,
+            "title": title,
+            "richtext_json": jsonString
+        ]
+        let body = params.map { key, value in
+            "\(key)=\(Self.formEncode(value))"
+        }.joined(separator: "&")
+        request.httpBody = body.data(using: .utf8)
+        let (respData, response) = try await NetworkManager.shared.session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+        try validateResponse(http)
+        // Validate JSON success
+        struct SubmitResponse: Codable { struct J: Codable { let errors: [[String]]? }; let json: J }
+        if let submit = try? JSONDecoder().decode(SubmitResponse.self, from: respData), let errs = submit.json.errors, !errs.isEmpty {
+            throw APIError.serverError(http.statusCode)
+        }
+    }
+}
+
+ extension ContentService {
+    static func formEncode(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: ":#[]@!$&'()*+,;=%\" <>?{}|^`\\")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+
+    /// Submit a link post to a subreddit (optionally with body text)
+    func submitLinkPost(subreddit: String, title: String, url: String) async throws {
+        try validateAccessToken()
+        guard let endpoint = URL(string: "\(baseURL)/api/submit") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: endpoint)
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        let params: [String: String] = [
+            "api_type": "json",
+            "kind": "link",
+            "sr": clean,
+            "title": title,
+            "url": url
+        ]
+        let body = params.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
+        request.httpBody = body.data(using: String.Encoding.utf8)
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError { throw APIError.networkError }
+    }
+    
+    private static func urlEncode(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+    }
 }

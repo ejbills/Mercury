@@ -13,6 +13,7 @@ struct InboxView: View {
     @State private var selectedItem: InboxItem?
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var isRefreshing = false
+    @State private var hasLoaded = false
     
     enum InboxFilter: String, CaseIterable, SectionPickerIconProvider {
         case all = "All"
@@ -49,13 +50,76 @@ struct InboxView: View {
             }
             .navigationTitle("Inbox")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button("Mark All Read") {
+                            Task { await markAllReadForCurrentFilter() }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsisif ")
+                    }
+                }
+            }
             .refreshable { await reload(preservingData: false) }
         }
         .sheet(item: $selectedItem) { item in
             InboxDetailView(item: item)
                 .environment(\.redditAPI, apiService)
         }
-        .task { await reload() }
+        .task {
+            if !hasLoaded {
+                await reload()
+                hasLoaded = true
+            }
+        }
+    }
+    
+    private func markAllReadForCurrentFilter() async {
+        // Map UI filter to service category and perform server-side mark all
+        let category: InboxService.Category = {
+            switch selectedFilter {
+            case .all: return .all
+            case .unread: return .unread
+            case .messages: return .messages
+            case .mentions: return .mentions
+            case .replies: return .replies
+            }
+        }()
+
+        do {
+            try await apiService.markAllInboxRead(for: category)
+        } catch {
+            // Ignore errors for now; could surface an alert if desired
+        }
+
+        // Optimistically update locally-loaded items of the selected type
+        await MainActor.run {
+            messages = messages.map { item in
+                let shouldMark: Bool = {
+                    switch selectedFilter {
+                    case .all, .unread: return true
+                    case .messages: return item.type == .privateMessage
+                    case .mentions: return item.type == .mention
+                    case .replies: return item.type == .commentReply
+                    }
+                }()
+                if shouldMark {
+                    return InboxItem(
+                        id: item.id,
+                        fullName: item.fullName,
+                        subject: item.subject,
+                        body: item.body,
+                        author: item.author,
+                        subreddit: item.subreddit,
+                        isUnread: false,
+                        created: item.created,
+                        type: item.type,
+                        contextURL: item.contextURL
+                    )
+                } else { return item }
+            }
+        }
     }
     
     private var filterPickerSection: some View {
@@ -77,49 +141,48 @@ struct InboxView: View {
             LazyVStack(spacing: 8) {
                 ForEach(filteredMessages) { message in
                     Card(style: .compact) {
-                        Button {
-                            handleTap(on: message)
-                        } label: {
-                            HStack(alignment: .top, spacing: 12) {
-                                UserAvatar(username: message.author, size: 32)
-                                
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack(alignment: .firstTextBaseline) {
-                                        if message.isUnread {
-                                            Circle()
-                                                .fill(Color.blue)
-                                                .frame(width: 6, height: 6)
-                                        }
-                                        Text(message.subject)
-                                            .font(.headline)
-                                            .fontWeight(message.isUnread ? .semibold : .medium)
-                                            .lineLimit(1)
-                                        Spacer()
-                                        Text(message.timeAgo)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                        HStack(alignment: .top, spacing: 12) {
+                            UserAvatar(username: message.author, size: 32)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    if message.isUnread {
+                                        Circle()
+                                            .fill(Color.blue)
+                                            .frame(width: 6, height: 6)
                                     }
-                                    
-                                    HStack(spacing: 6) {
-                                        Text("u/\(message.author)")
+                                    Text(message.subject)
+                                        .font(.headline)
+                                        .fontWeight(message.isUnread ? .semibold : .medium)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text(message.timeAgo)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                HStack(spacing: 6) {
+                                    Text("u/\(message.author)")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    if let subreddit = message.subreddit {
+                                        Text("• r/\(subreddit)")
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
-                                        if let subreddit = message.subreddit {
-                                            Text("• r/\(subreddit)")
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
-                                        }
                                     }
-                                    
-                                    Text(message.body)
-                                        .font(.body)
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(3)
                                 }
+
+                                Text(message.body)
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(3)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            Task { await handleTapAndMarkRead(on: message) }
+                        }
                     }
                     .padding(.horizontal, 12)
                     .onAppear {
@@ -302,6 +365,32 @@ struct InboxView: View {
                 } else {
                     await MainActor.run { selectedItem = item }
                 }
+            }
+        }
+    }
+    
+    private func markRead(fullnames: [String]) async {
+        do { try await apiService.markMessagesRead(fullnames: fullnames) } catch { }
+    }
+
+    private func handleTapAndMarkRead(on item: InboxItem) async {
+        await MainActor.run { handleTap(on: item) }
+        guard item.isUnread, let fullname = item.fullName else { return }
+        await markRead(fullnames: [fullname])
+        await MainActor.run {
+            if let idx = messages.firstIndex(where: { $0.id == item.id }) {
+                messages[idx] = InboxItem(
+                    id: item.id,
+                    fullName: item.fullName,
+                    subject: item.subject,
+                    body: item.body,
+                    author: item.author,
+                    subreddit: item.subreddit,
+                    isUnread: false,
+                    created: item.created,
+                    type: item.type,
+                    contextURL: item.contextURL
+                )
             }
         }
     }

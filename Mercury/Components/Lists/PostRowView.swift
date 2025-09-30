@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Nuke
 import NukeUI
 import AVKit
@@ -14,6 +15,7 @@ struct PostRowView: View {
     var onHidePost: ((String) -> Void)? = nil
     var onHidePostsAbove: ((String) -> Void)? = nil
     @State private var showingSafari = false
+    @State private var safariURL: URL? = nil
     @State private var isVoting = false
     @State private var showingCopiedToast = false
     @State private var shareItem: URL?
@@ -215,6 +217,11 @@ struct PostRowView: View {
         }
         .sheet(isPresented: $showingSafari) {
             if let urlString = post.url, let url = URL(string: urlString) {
+                SafariView(url: url)
+            }
+        }
+        .sheet(isPresented: Binding(get: { safariURL != nil }, set: { if !$0 { safariURL = nil } })) {
+            if let url = safariURL {
                 SafariView(url: url)
             }
         }
@@ -426,7 +433,15 @@ struct PostRowView: View {
                     if let linkedPost = linkedPost {
                         navigationPath.navigate(to: .postComments(post: linkedPost))
                     } else {
-                        showingSafari = true
+                        // Normalize to https Reddit URL and try fetch again; else open safely in Safari
+                        let normalized = URLNormalizer.normalizeRedditURL(urlString)
+                        Task {
+                            if let fetched = await RedditPostFetchService.shared.fetchPost(from: normalized) {
+                                await MainActor.run { navigationPath.navigate(to: .postComments(post: fetched)) }
+                            } else if let url = URL(string: normalized) {
+                                await MainActor.run { safariURL = url }
+                            }
+                        }
                     }
                 }
             } else {
@@ -436,11 +451,14 @@ struct PostRowView: View {
                     fallbackDomain: post.domain,
                     fallbackTitle: post.title
                 ) {
-                    showingSafari = true
+                    let normalized = URLNormalizer.normalizeRedditURL(urlString)
+                    if let url = URL(string: normalized) { safariURL = url }
                 }
             }
         }
     }
+
+    // Normalization centralized in URLNormalizer
 
     private func isRedditPostURL(_ url: String) -> Bool {
         let u = url.lowercased()

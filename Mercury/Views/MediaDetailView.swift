@@ -2,6 +2,7 @@
 // Mercury
 
 import SwiftUI
+import UIKit
 import AVKit
 import AVFoundation
 

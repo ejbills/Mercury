@@ -149,6 +149,15 @@ class CommentThreadManager {
 }
 
 extension CommentThreadManager {
+    func matchingComments(containing query: String) -> [RedditComment] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return [] }
+        let lower = q.lowercased()
+        return allComments.filter { $0.body.lowercased().contains(lower) }
+    }
+}
+
+extension CommentThreadManager {
     func addRootComment(_ comment: RedditComment) {
         let newComment = comment // value copy for clarity
         allComments.insert(newComment, at: 0)

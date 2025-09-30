@@ -6,6 +6,8 @@ struct InboxDetailView: View {
     @Environment(\.redditAPI) private var redditAPI
     @State private var showContext = false
     @State private var replyText: String = ""
+    @State private var selectedRange: NSRange = .init(location: 0, length: 0)
+    @State private var isFirstResponder: Bool = true
     @State private var isSending = false
     @State private var sendError: String?
     
@@ -52,13 +54,27 @@ struct InboxDetailView: View {
                                 Text("Reply")
                                     .font(.headline)
                                     .fontWeight(.semibold)
-                                TextEditor(text: $replyText)
-                                    .frame(minHeight: 100)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(.gray.opacity(0.2), lineWidth: 0.5)
-                                    )
-                                    .disabled(isSending)
+                                ZStack(alignment: .topLeading) {
+                                    MarkdownTextView(text: $replyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
+                                        .frame(minHeight: 140, alignment: .topLeading)
+                                    if replyText.isEmpty {
+                                        Text("Write your reply in Markdown…")
+                                            .foregroundStyle(.secondary)
+                                            .padding(.top, 8)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                                .padding(8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.secondarySystemBackground))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(.gray.opacity(0.2), lineWidth: 0.5)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .disabled(isSending)
                                 HStack {
                                     if let sendError = sendError {
                                         Text(sendError)
