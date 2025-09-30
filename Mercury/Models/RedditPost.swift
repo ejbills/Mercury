@@ -902,6 +902,15 @@ enum PostSort: String, CaseIterable {
         default: return false
         }
     }
+    
+    var iconName: String {
+        switch self {
+        case .hot: return "flame.fill"
+        case .new: return "clock.fill"
+        case .top: return "arrow.up.circle.fill"
+        case .rising: return "chart.line.uptrend.xyaxis"
+        }
+    }
 }
 
 enum TopTimeFrame: String, CaseIterable {
@@ -920,6 +929,17 @@ enum TopTimeFrame: String, CaseIterable {
         case .month: return "Past Month"
         case .year: return "Past Year"
         case .all: return "All Time"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .hour: return "clock"
+        case .day: return "sun.max.fill"
+        case .week: return "calendar"
+        case .month: return "calendar"
+        case .year: return "calendar"
+        case .all: return "infinity"
         }
     }
 }

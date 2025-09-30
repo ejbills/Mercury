@@ -77,10 +77,11 @@ struct PostActionToolbar: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.title3)
-                        .foregroundStyle(secondaryColor)
-                        .frame(width: 32, height: 32)
+                    GlassMenuLabel(
+                        systemImage: "ellipsis",
+                        foreground: secondaryColor,
+                        font: .title3
+                    )
                 }
             }
             
@@ -159,11 +160,11 @@ struct PostActionToolbar: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.title2)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(secondaryColor)
-                            .contentShape(Rectangle())
+                        GlassMenuLabel(
+                            systemImage: "ellipsis",
+                            foreground: secondaryColor,
+                            font: .title2
+                        )
                     }
                     .buttonStyle(.plain)
                 }

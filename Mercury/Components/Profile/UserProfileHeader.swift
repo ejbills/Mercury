@@ -95,19 +95,10 @@ struct UserProfileHeader: View {
             Text(text)
                 .font(.system(size: 13, weight: .medium))
         }
-        .foregroundStyle(style == .prominent ? .white : .white.opacity(0.9))
+        .foregroundStyle(.white)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            style == .prominent ?
-            Material.ultraThinMaterial :
-                Material.thinMaterial,
-            in: Capsule()
-        )
-        .overlay(
-            Capsule()
-                .stroke(.white.opacity(0.2), lineWidth: 0.5)
-        )
+        .modifier(ProfileChipGlassModifier(style: style))
     }
     
     private func cakeDayText(_ createdUTC: Double) -> String {
@@ -137,18 +128,11 @@ struct UserProfileHeader: View {
                 let item = items[i]
                 VStack(spacing: 8) {
                     Button(action: item.3) {
-                        ZStack {
-                            Circle()
-                                .fill(.white.opacity(0.15))
-                                .overlay(
-                                    Circle()
-                                        .stroke(.white.opacity(0.3), lineWidth: 1)
-                                )
-                            Image(systemName: item.0)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                        .frame(width: 60, height: 60)
+                        Image(systemName: item.0)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 60, height: 60)
+                            .modifier(ProfileActionGlassModifier())
                     }
                     .buttonStyle(ScaleButtonStyle())
                     
@@ -167,3 +151,30 @@ enum ChipStyle {
     case secondary
 }
 
+private struct ProfileChipGlassModifier: ViewModifier {
+    let style: ChipStyle
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular.tint(.white.opacity(style == .prominent ? 0.22 : 0.14)))
+        } else {
+            content
+                .background(style == .prominent ? Material.ultraThinMaterial : Material.thinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5))
+        }
+    }
+}
+
+private struct ProfileActionGlassModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular.tint(.white.opacity(0.18)))
+                .hoverEffect(.lift)
+        } else {
+            content
+                .background(Circle().fill(.white.opacity(0.15)))
+                .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 1))
+        }
+    }
+}

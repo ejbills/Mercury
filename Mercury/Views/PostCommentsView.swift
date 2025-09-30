@@ -8,7 +8,7 @@ struct PostCommentsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var commentSort: CommentSort = .best
-    @State private var showingSortOptions = false
+    // Old confirmation dialog removed; use Menu anchored in toolbar
     @State private var loadingRootMoreIds: Set<String> = []
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
@@ -71,16 +71,7 @@ struct PostCommentsView: View {
         .task {
             await loadComments()
         }
-        .confirmationDialog("Sort Comments", isPresented: $showingSortOptions) {
-            ForEach(CommentSort.allCases, id: \.self) { sort in
-                Button(sort.displayName) {
-                    commentSort = sort
-                    Task {
-                        await loadComments()
-                    }
-                }
-            }
-        }
+        // confirmationDialog removed; Menu handles sorting
         .fullScreenCover(item: $selectedPost) { post in
             MediaDetailView(
                 post: post,
@@ -260,17 +251,31 @@ struct PostCommentsView: View {
     }
     
     private var sortButton: some View {
-        Button(action: {
-            showingSortOptions = true
-        }) {
-            HStack(spacing: 4) {
+        Menu {
+            ForEach(CommentSort.allCases, id: \.self) { sort in
+                Button(action: {
+                    commentSort = sort
+                    Task { await loadComments() }
+                }) {
+                    HStack(spacing: 8) {
+                        if commentSort == sort { Image(systemName: "checkmark") }
+                        Image(systemName: sort.iconName)
+                        Text(sort.displayName)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
                 Text(commentSort.displayName)
                     .font(.callout)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
                     .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
+            // Let Liquid Glass handle container styling to avoid double bubble
         }
+        .buttonStyle(.plain)
     }
     
     // MARK: - Helper Functions

@@ -251,6 +251,17 @@ enum CommentSort: String, CaseIterable {
         case .qa: return "Q&A"
         }
     }
+    
+    var iconName: String {
+        switch self {
+        case .best: return "hand.thumbsup.fill"
+        case .top: return "arrow.up.circle.fill"
+        case .new: return "clock.fill"
+        case .controversial: return "exclamationmark.circle"
+        case .old: return "hourglass"
+        case .qa: return "questionmark.circle"
+        }
+    }
 }
 
 enum CommentReplies: Codable {

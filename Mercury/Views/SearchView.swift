@@ -19,8 +19,7 @@ struct SearchView: View {
     @State private var hasSearched = false
     @State private var after: String?
     @State private var hasMore = true
-    @State private var showingSortOptions = false
-    @State private var showingSearchTypeOptions = false
+    // Old confirmation dialogs replaced by anchored Menus in the toolbar
     @State private var isDebouncing = false
     @Namespace private var mediaNamespace
     @Namespace private var tabSelectionNamespace
@@ -149,25 +148,7 @@ struct SearchView: View {
             performSearch()
         }
         
-        // Smaller, native sort controls via confirmation dialogs
-        .confirmationDialog("Sort Results", isPresented: $showingSortOptions) {
-            ForEach(SearchSort.allCases, id: \.self) { sort in
-                Button(sort.rawValue) { applySort(sort) }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog("Search Type", isPresented: $showingSearchTypeOptions) {
-            Button("Posts") {
-                selectedTab = .posts
-            }
-            Button("Communities") {
-                selectedTab = .subreddits
-            }
-            Button("Users") {
-                selectedTab = .users
-            }
-            Button("Cancel", role: .cancel) {}
-        }
+        // confirmationDialogs removed; Menus are anchored to toolbar items
     }
 
     private var navTitle: String {
@@ -385,9 +366,11 @@ struct SearchView: View {
         // iOS 26+: host the Posts/Communities/Users switch as a dropdown button
         if #available(iOS 26.0, *) {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    showingSearchTypeOptions = true
-                }) {
+                Menu {
+                    Button("Posts") { selectedTab = .posts }
+                    Button("Communities") { selectedTab = .subreddits }
+                    Button("Users") { selectedTab = .users }
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: selectedTab.icon)
                             .font(.system(size: 14, weight: .semibold))
@@ -398,22 +381,35 @@ struct SearchView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    // Let Liquid Glass handle container styling
                 }
+                .buttonStyle(.plain)
             }
         }
 
         ToolbarItem(placement: .navigationBarTrailing) {
-            Button(action: {
-                showingSortOptions = true
-            }) {
-                HStack(spacing: 4) {
+            Menu {
+                ForEach(SearchSort.allCases, id: \.self) { sort in
+                    Button(action: { applySort(sort) }) {
+                        HStack(spacing: 8) {
+                            if selectedSort == sort { Image(systemName: "checkmark") }
+                            Image(systemName: sort.icon)
+                            Text(sort.rawValue)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
                     Text(selectedSort.rawValue)
                         .font(.callout)
                         .fontWeight(.medium)
-                        Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.down")
                         .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
+                // Let Liquid Glass handle container styling
             }
+            .buttonStyle(.plain)
             .disabled(selectedTab != .posts)
         }
     }

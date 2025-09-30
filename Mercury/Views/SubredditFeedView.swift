@@ -12,8 +12,7 @@ struct SubredditFeedView: View {
     @State private var hasMore = true
     @State private var postSort: PostSort = .hot
     @State private var topTimeFrame: TopTimeFrame = .day
-    @State private var showingSortOptions = false
-    @State private var showingTimeFrameOptions = false
+    // Old confirmation dialogs replaced by anchored Menus
     @Namespace private var mediaNamespace
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
@@ -112,34 +111,7 @@ struct SubredditFeedView: View {
         .refreshable {
             await refreshFeed()
         }
-        .confirmationDialog("Sort Posts", isPresented: $showingSortOptions) {
-            ForEach(PostSort.allCases, id: \.self) { sort in
-                Button(sort.displayName) {
-                    postSort = sort
-                    if sort.supportsTimeFrame {
-                        showingTimeFrameOptions = true
-                    } else {
-                        Task {
-                            await loadInitialPosts()
-                        }
-                    }
-                }
-            }
-        }
-        .confirmationDialog("Top Posts Time Frame", isPresented: $showingTimeFrameOptions) {
-            ForEach(TopTimeFrame.allCases, id: \.self) { timeFrame in
-                Button(timeFrame.displayName) {
-                    topTimeFrame = timeFrame
-                    Task {
-                        await loadInitialPosts()
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                // Reset to previous sort if cancelled
-                postSort = .hot
-            }
-        }
+        // confirmationDialogs removed; Menu anchored to toolbar button handles sorting
     }
     
     private var subredditDisplayName: String {
@@ -262,15 +234,44 @@ struct SubredditFeedView: View {
     }
     
     private var sortButton: some View {
-        Button(action: {
-            showingSortOptions = true
-        }) {
-            HStack(spacing: 4) {
+        Menu {
+            // Sort options
+            ForEach(PostSort.allCases, id: \.self) { sort in
+                Button(action: {
+                    postSort = sort
+                    Task { await loadInitialPosts() }
+                }) {
+                    HStack(spacing: 8) {
+                        if postSort == sort { Image(systemName: "checkmark") }
+                        Image(systemName: sort.iconName)
+                        Text(sort.displayName)
+                    }
+                }
+            }
+            
+            if postSort.supportsTimeFrame {
+                Divider()
+                Menu("Time Frame") {
+                    ForEach(TopTimeFrame.allCases, id: \.self) { time in
+                        Button(action: {
+                            topTimeFrame = time
+                            Task { await loadInitialPosts() }
+                        }) {
+                            HStack(spacing: 8) {
+                                if topTimeFrame == time { Image(systemName: "checkmark") }
+                                Image(systemName: time.iconName)
+                                Text(time.displayName)
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(postSort.displayName)
                         .font(.callout)
                         .fontWeight(.medium)
-                    
                     if postSort.supportsTimeFrame {
                         Text(topTimeFrame.displayName)
                             .font(.caption2)
@@ -279,8 +280,11 @@ struct SubredditFeedView: View {
                 }
                 Image(systemName: "chevron.down")
                     .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
+            // Let Liquid Glass handle container styling to avoid double bubble
         }
+        .buttonStyle(.plain)
     }
     
     private func loadInitialPosts() async {
