@@ -28,10 +28,22 @@ class ProfileViewModel {
     
     // Header avatar fallback
     private(set) var headerAvatarURL: URL?
+    private(set) var isFollowingUser: Bool = false
     
     init(username: String, redditAPI: RedditAPIManager) {
         self.username = username
         self.redditAPI = redditAPI
+    }
+
+    func toggleFollowUser() async {
+        guard let current = profile else { return }
+        let newState = !isFollowingUser
+        isFollowingUser = newState
+        do {
+            try await redditAPI.setUserFollow(username: current.actualName, follow: newState)
+        } catch {
+            isFollowingUser.toggle()
+        }
     }
     
     func initialLoad() async {
@@ -57,6 +69,7 @@ class ProfileViewModel {
             )
             
             self.profile = profile
+            self.isFollowingUser = profile.isFriend ?? false
             self.posts = enrichedPosts
             self.postsAfter = postsResponse.data.after
             self.comments = enrichedComments
@@ -106,6 +119,7 @@ class ProfileViewModel {
             )
             
             self.profile = profile
+            self.isFollowingUser = profile.isFriend ?? false
             self.posts = enrichedPosts
             self.postsAfter = postsResponse.data.after
             self.comments = enrichedComments

@@ -86,6 +86,20 @@ class RedditAPIManager {
     func fetchSavedPosts(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try await contentService.fetchSavedPosts(after: after, limit: limit)
     }
+
+    // MARK: - Subreddit actions
+
+    func subscribe(to subreddit: String) async throws {
+        try await contentService.subscribe(to: subreddit)
+    }
+
+    func unsubscribe(from subreddit: String) async throws {
+        try await contentService.unsubscribe(from: subreddit)
+    }
+
+    func fetchSubredditAbout(subreddit: String) async throws -> Subreddit {
+        try await contentService.fetchSubredditAbout(subreddit: subreddit)
+    }
     
     func fetchPostsByFullnames(_ fullnames: [String]) async throws -> [RedditPost] {
         try await contentService.fetchPostsByFullnames(fullnames)
@@ -127,6 +141,10 @@ class RedditAPIManager {
     
     func fetchUserComments(username: String, after: String? = nil, limit: Int = 25) async throws -> UserCommentsResponse {
         try await userService.fetchUserComments(username: username, after: after, limit: limit)
+    }
+    
+    func setUserFollow(username: String, follow: Bool) async throws {
+        try await userService.setUserFollow(username: username, follow: follow)
     }
     
     // MARK: - Search Methods (Delegated)

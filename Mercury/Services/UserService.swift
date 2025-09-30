@@ -145,6 +145,25 @@ class UserService: BaseRedditService {
             throw error
         }
     }
+
+    // MARK: - Follow/Unfollow User
+
+    func setUserFollow(username: String, follow: Bool) async throws {
+        try validateAccessToken()
+        guard let url = URL(string: "\(baseURL)/api/follow_user") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: url)
+        let body = "name=\(username)&follow=\(follow ? "true" : "false")"
+        request.httpBody = body.data(using: .utf8)
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
     
     // MARK: - Helper Methods
     

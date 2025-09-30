@@ -4,6 +4,7 @@ import Defaults
 struct SubredditFeedView: View {
     let subreddit: String
     let apiService: RedditAPIManager
+    @Environment(\.navigationPathManager) private var navigationPathManager
     @State private var posts: [RedditPost] = []
     @State private var isLoading = false
     @State private var isLoadingMore = false
@@ -19,6 +20,8 @@ struct SubredditFeedView: View {
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
     @Default(.hiddenPostIds) private var hiddenPostIds
+    @State private var showSidebar = false
+    @State private var hasSidebar: Bool = false
     
     private let pageSize = 25
     
@@ -87,6 +90,7 @@ struct SubredditFeedView: View {
                     hasAppeared = true
                     Task {
                         await loadInitialPosts()
+                        await preloadSidebarFlag()
                     }
                 }
             }
@@ -96,6 +100,17 @@ struct SubredditFeedView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 sortButton
+            }
+            // Show sidebar button only for real subreddits and when sidebar exists
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if isRealSubreddit && hasSidebar {
+                    Button {
+                        showSidebar = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .accessibilityLabel("Subreddit Sidebar")
+                }
             }
         }
         .fullScreenCover(item: $selectedPost) { post in
@@ -111,6 +126,9 @@ struct SubredditFeedView: View {
         .refreshable {
             await refreshFeed()
         }
+        .sheet(isPresented: $showSidebar) {
+            SubredditSidebarView(subreddit: subreddit, apiService: apiService)
+        }
         // confirmationDialogs removed; Menu anchored to toolbar button handles sorting
     }
     
@@ -125,6 +143,25 @@ struct SubredditFeedView: View {
             return subreddit
         } else {
             return "r/\(subreddit)"
+        }
+    }
+
+    private var isRealSubreddit: Bool {
+        let s = subreddit.lowercased()
+        if s == "popular" || s == "all" || s == "user/saved" || s == "saved" { return false }
+        return true
+    }
+
+    private func preloadSidebarFlag() async {
+        guard isRealSubreddit else { return }
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        do {
+            let about = try await apiService.fetchSubredditAbout(subreddit: clean)
+            await MainActor.run {
+                self.hasSidebar = !about.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !about.publicDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+        } catch {
+            await MainActor.run { self.hasSidebar = false }
         }
     }
     

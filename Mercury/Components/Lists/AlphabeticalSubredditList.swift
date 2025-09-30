@@ -6,13 +6,25 @@ struct AlphabeticalSubredditList: View {
     let onQuickLinkTap: ((QuickLink) -> Void)?
     let favoriteSubreddits: Set<String>
     let onFavoriteToggle: ((Subreddit) -> Void)?
+    let subscribedSubreddits: Set<String>
+    let onSubscribeToggle: ((Subreddit) -> Void)?
     
-    init(subreddits: [Subreddit], onSubredditTap: @escaping (Subreddit) -> Void, onQuickLinkTap: ((QuickLink) -> Void)? = nil, favoriteSubreddits: Set<String> = Set(), onFavoriteToggle: ((Subreddit) -> Void)? = nil) {
+    init(
+        subreddits: [Subreddit],
+        onSubredditTap: @escaping (Subreddit) -> Void,
+        onQuickLinkTap: ((QuickLink) -> Void)? = nil,
+        favoriteSubreddits: Set<String> = Set(),
+        onFavoriteToggle: ((Subreddit) -> Void)? = nil,
+        subscribedSubreddits: Set<String> = Set(),
+        onSubscribeToggle: ((Subreddit) -> Void)? = nil
+    ) {
         self.subreddits = subreddits
         self.onSubredditTap = onSubredditTap
         self.onQuickLinkTap = onQuickLinkTap
         self.favoriteSubreddits = favoriteSubreddits
         self.onFavoriteToggle = onFavoriteToggle
+        self.subscribedSubreddits = subscribedSubreddits
+        self.onSubscribeToggle = onSubscribeToggle
     }
     
     private var allSections: [(String, SectionType)] {
@@ -81,7 +93,9 @@ struct AlphabeticalSubredditList: View {
                                         subreddit: subreddit,
                                         action: { onSubredditTap(subreddit) },
                                         isFavorite: true, // Always true for favorites section
-                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil
+                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil,
+                                        isSubscribed: onSubscribeToggle != nil ? subscribedSubreddits.contains(subreddit.displayName) : nil,
+                                        onSubscribeToggle: onSubscribeToggle != nil ? { onSubscribeToggle!(subreddit) } : nil
                                     )
                                 }
                             case .subreddits(let subreddits):
@@ -90,7 +104,9 @@ struct AlphabeticalSubredditList: View {
                                         subreddit: subreddit,
                                         action: { onSubredditTap(subreddit) },
                                         isFavorite: favoriteSubreddits.contains(subreddit.displayName),
-                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil
+                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil,
+                                        isSubscribed: onSubscribeToggle != nil ? subscribedSubreddits.contains(subreddit.displayName) : nil,
+                                        onSubscribeToggle: onSubscribeToggle != nil ? { onSubscribeToggle!(subreddit) } : nil
                                     )
                                 }
                             }
@@ -149,35 +165,73 @@ struct AlphabeticalSubredditList: View {
 struct SectionIndexTitles: View {
     let proxy: ScrollViewProxy
     let titles: [String]
+    @State private var currentIndex: Int? = nil
+    
+    private let itemHeight: CGFloat = 16
+    private let itemSpacing: CGFloat = 2
+    private let horizontalPadding: CGFloat = 2
+    private let verticalPadding: CGFloat = 4
     
     var body: some View {
         VStack {
             Spacer()
             HStack {
                 Spacer()
-                VStack(spacing: 2) {
-                    ForEach(titles, id: \.self) { title in
-                        Button(action: {
-                            proxy.animatedScrollTo(title, anchor: UnitPoint.top)
-                        }) {
-                            Text(title)
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.blue)
-                                .frame(width: 20, height: 16)
-                        }
-                        .buttonStyle(.plain)
+                VStack(spacing: itemSpacing) {
+                    ForEach(Array(titles.enumerated()), id: \.0) { idx, title in
+                        Text(title)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(currentIndex == idx ? Color.white : Color.blue)
+                            .frame(width: 20, height: itemHeight)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                currentIndex = idx
+                                proxy.animatedScrollTo(title, anchor: UnitPoint.top)
+                            }
                     }
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 2)
+                .padding(.vertical, verticalPadding)
+                .padding(.horizontal, horizontalPadding)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(.regularMaterial)
-                        .shadow(radius: 2)
+                        .fill(.clear)
+                        .modifier(GlassContainer())
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            // Map local Y to index using fixed metrics
+                            let localY = value.location.y - verticalPadding
+                            let stride = itemHeight + itemSpacing
+                            var idx = Int(floor(localY / stride))
+                            idx = max(0, min(titles.count - 1, idx))
+                            if currentIndex != idx {
+                                currentIndex = idx
+                                HapticManager.shared.gentleImpact()
+                                let title = titles[idx]
+                                proxy.animatedScrollTo(title, anchor: UnitPoint.top)
+                            }
+                        }
+                        .onEnded { _ in
+                            // No-op; keep size and layout unchanged
+                        }
                 )
             }
             Spacer()
+        }
+    }
+}
+
+private struct GlassContainer: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular.tint(Color.blue.opacity(0.22)))
+        } else {
+            content
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.25), lineWidth: 0.8))
         }
     }
 }
@@ -307,4 +361,3 @@ struct QuickAccessGrid: View {
         }
     }
 }
-

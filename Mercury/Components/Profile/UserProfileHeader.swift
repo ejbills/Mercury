@@ -12,6 +12,8 @@ struct UserProfileHeader: View {
     let onShareTap: () -> Void
     let onOpenWebTap: () -> Void
     let onCopyTap: () -> Void
+    let isFollowing: Bool
+    let onFollowToggle: (() -> Void)?
     
     var body: some View {
         let headerHeight: CGFloat = 400
@@ -99,6 +101,7 @@ struct UserProfileHeader: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .modifier(ProfileChipGlassModifier(style: style))
+        .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
     }
     
     private func cakeDayText(_ createdUTC: Double) -> String {
@@ -114,34 +117,71 @@ struct UserProfileHeader: View {
     }
     
     private var actionsGrid: some View {
-        let items: [(String, String, Color, () -> Void)] = [
+        var all: [(String, String, Color, () -> Void)] = []
+        if let onFollowToggle = onFollowToggle {
+            all.append((isFollowing ? "person.crop.circle.fill.badge.checkmark" : "person.badge.plus", isFollowing ? "Following" : "Follow", .pink, onFollowToggle))
+        }
+        all.append(contentsOf: [
             ("message.fill", "Message", .blue, onMessageTap),
             ("square.and.arrow.up", "Share", .green, onShareTap),
             ("safari", "Open", .orange, onOpenWebTap),
             ("doc.on.doc", "Copy", .purple, onCopyTap)
-        ]
-        return LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4),
-            spacing: 16
-        ) {
-            ForEach(0..<items.count, id: \.self) { i in
-                let item = items[i]
-                VStack(spacing: 8) {
-                    Button(action: item.3) {
-                        Image(systemName: item.0)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 60, height: 60)
-                            .modifier(ProfileActionGlassModifier())
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                    
-                    Text(item.1)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-                .frame(maxWidth: .infinity)
+        ])
+
+        let primary = Array(all.prefix(3))
+        let overflow = Array(all.dropFirst(3))
+
+        return HStack(spacing: 16) {
+            ForEach(0..<primary.count, id: \.self) { i in
+                let item = primary[i]
+                actionButton(icon: item.0, label: item.1, color: item.2, action: item.3)
             }
+
+            if !overflow.isEmpty {
+                Menu {
+                    ForEach(0..<overflow.count, id: \.self) { i in
+                        let item = overflow[i]
+                        Button(action: item.3) {
+                            Label(item.1, systemImage: item.0)
+                        }
+                    }
+                } label: {
+                    actionButton(icon: "ellipsis.circle", label: "More", color: .gray, action: {})
+                }
+                .buttonStyle(.plain)
+            }
+
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 16)
+    }
+
+    private func actionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 8) {
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                    .frame(width: 56, height: 56)
+                    .background(circleGlass(color: color))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(ScaleButtonStyle())
+
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func circleGlass(color: Color) -> some View {
+        if #available(iOS 26.0, *) {
+            Circle().fill(.clear).glassEffect(.regular.tint(Color.black.opacity(0.35))).overlay(Circle().stroke(color.opacity(0.4), lineWidth: 0.8))
+        } else {
+            Circle().fill(Color.black.opacity(0.35)).overlay(Circle().stroke(color.opacity(0.4), lineWidth: 0.8))
         }
     }
 }
@@ -151,19 +191,19 @@ enum ChipStyle {
     case secondary
 }
 
-private struct ProfileChipGlassModifier: ViewModifier {
-    let style: ChipStyle
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(.regular.tint(.white.opacity(style == .prominent ? 0.22 : 0.14)))
-        } else {
-            content
-                .background(style == .prominent ? Material.ultraThinMaterial : Material.thinMaterial, in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5))
+    private struct ProfileChipGlassModifier: ViewModifier {
+        let style: ChipStyle
+        func body(content: Content) -> some View {
+            if #available(iOS 26.0, *) {
+                content
+                .glassEffect(.regular.tint(.black.opacity(style == .prominent ? 0.35 : 0.22)))
+            } else {
+                content
+                .background(style == .prominent ? Color.black.opacity(0.35) : Color.black.opacity(0.22), in: Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.8))
+            }
         }
     }
-}
 
 private struct ProfileActionGlassModifier: ViewModifier {
     func body(content: Content) -> some View {

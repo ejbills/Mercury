@@ -17,7 +17,8 @@ struct ComposeMessageSheet: View {
                 HStack {
                     Text("To")
                     Spacer()
-                    Text("u/\(toUsername)").foregroundStyle(.secondary)
+                    let display = toUsername.hasPrefix("r/") ? toUsername : "u/\(toUsername)"
+                    Text(display).foregroundStyle(.secondary)
                 }
                 .font(.subheadline)
                 .padding(.horizontal)

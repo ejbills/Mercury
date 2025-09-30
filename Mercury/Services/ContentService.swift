@@ -8,7 +8,7 @@ class ContentService: BaseRedditService {
     }()
     
     // MARK: - Subreddits
-    
+
     func fetchSubscribedSubreddits() async throws -> [Subreddit] {
         try validateAccessToken()
         
@@ -62,6 +62,71 @@ class ContentService: BaseRedditService {
         } while after != nil
         
         return allSubreddits
+    }
+
+    /// Subscribe to a subreddit
+    func subscribe(to subreddit: String) async throws {
+        try await performSubscribeAction(subreddit: subreddit, subscribe: true)
+    }
+
+    /// Unsubscribe from a subreddit
+    func unsubscribe(from subreddit: String) async throws {
+        try await performSubscribeAction(subreddit: subreddit, subscribe: false)
+    }
+
+    /// Fetch subreddit about info (for sidebar)
+    func fetchSubredditAbout(subreddit: String) async throws -> Subreddit {
+        try validateAccessToken()
+
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        guard let url = URL(string: "\(baseURL)/r/\(clean)/about.json") else {
+            throw APIError.parseError
+        }
+
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            struct AboutWrapper: Codable { let data: Subreddit }
+            let about = try decoder.decode(AboutWrapper.self, from: data)
+            return about.data
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
+
+    // MARK: - Private helpers (Subreddits)
+
+    private func performSubscribeAction(subreddit: String, subscribe: Bool) async throws {
+        try validateAccessToken()
+
+        guard let url = URL(string: "\(baseURL)/api/subscribe") else {
+            throw APIError.parseError
+        }
+
+        var request = createPOSTRequest(url: url)
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        let action = subscribe ? "sub" : "unsub"
+        let body = "action=\(action)&sr_name=\(clean)"
+        request.httpBody = body.data(using: .utf8)
+
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
     }
     
     // MARK: - Posts and Feeds

@@ -14,6 +14,7 @@ struct SearchView: View {
     @State private var subredditResults: [Subreddit] = []
     @State private var userResults: [UserProfile] = []
     @State private var subscribedSubreddits: Set<String> = []
+    @State private var searchScopeSubreddit: String? = nil
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var hasSearched = false
@@ -31,17 +32,21 @@ struct SearchView: View {
     @State private var debounceTask: Task<Void, Never>? = nil
     
     // MARK: - Initializers
-    init(apiService: RedditAPIManager) {
+    private let initialScopeSubreddit: String?
+
+    init(apiService: RedditAPIManager, initialScopeSubreddit: String? = nil) {
         self.apiService = apiService
         self._searchTextExternal = .constant("")
         self.usesExternalSearchText = false
+        self.initialScopeSubreddit = initialScopeSubreddit
     }
-    
+
     init(apiService: RedditAPIManager, searchText: Binding<String>) {
         self.apiService = apiService
         self._searchTextExternal = searchText
         self.usesExternalSearchText = true
         self._searchTextInternal = State(initialValue: searchText.wrappedValue)
+        self.initialScopeSubreddit = nil
     }
     
     enum SearchTab: String, CaseIterable, SectionPickerIconProvider {
@@ -78,13 +83,32 @@ struct SearchView: View {
         VStack(spacing: 0) {
             // Header area
             Group {
-                if #available(iOS 26.0, *) {
-                    // No local search UI or section header — toolbar hosts segmented control.
-                    EmptyView()
-                } else {
-                    VStack(spacing: 8) {
-                        searchBar
+        if #available(iOS 26.0, *) {
+            // No local search UI or section header — toolbar hosts segmented control.
+            EmptyView()
+        } else {
+            VStack(spacing: 8) {
+                searchBar
+                    .padding(.horizontal, 16)
+
+                        if let scope = searchScopeSubreddit, !scope.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "target")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("Searching in r/\(scope)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button(action: { clearScope() }) {
+                                    Text("Clear")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.bordered)
+                                .buttonBorderShape(.capsule)
+                            }
                             .padding(.horizontal, 16)
+                        }
 
                         SectionPicker(
                             items: SearchTab.allCases,
@@ -122,6 +146,9 @@ struct SearchView: View {
         }
         .onAppear {
             loadSubscribedSubreddits()
+            if let scope = initialScopeSubreddit, self.searchScopeSubreddit == nil {
+                self.searchScopeSubreddit = scope
+            }
         }
         .onDisappear {
             debounceTask?.cancel()
@@ -130,6 +157,7 @@ struct SearchView: View {
         // React to system/legacy search text changes
         .onChange(of: searchText.wrappedValue) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            parseScope(from: trimmed)
             debounceTask?.cancel()
             if trimmed.isEmpty {
                 isDebouncing = false
@@ -257,9 +285,16 @@ struct SearchView: View {
                 .padding(.top, 40)
         } else {
             ForEach(Array(subredditResults.enumerated()), id: \.1.id) { _, subreddit in
-                SubredditRow(subreddit: subreddit) {
-                    navigationPath.navigate(to: .subredditFeed(subreddit: subreddit.displayName))
-                }
+                SubredditRow(
+                    subreddit: subreddit,
+                    action: {
+                        navigationPath.navigate(to: .subredditFeed(subreddit: subreddit.displayName))
+                    },
+                    isFavorite: false,
+                    onFavoriteToggle: nil,
+                    isSubscribed: subscribedSubreddits.contains(subreddit.displayName),
+                    onSubscribeToggle: { Task { await toggleSubscription(for: subreddit) } }
+                )
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -367,9 +402,24 @@ struct SearchView: View {
         if #available(iOS 26.0, *) {
             ToolbarItem(placement: .navigationBarLeading) {
                 Menu {
-                    Button("Posts") { selectedTab = .posts }
-                    Button("Communities") { selectedTab = .subreddits }
-                    Button("Users") { selectedTab = .users }
+                    Button(action: { selectedTab = .posts }) {
+                        HStack(spacing: 8) {
+                            if selectedTab == .posts { Image(systemName: "checkmark") }
+                            Label("Posts", systemImage: SearchTab.posts.icon)
+                        }
+                    }
+                    Button(action: { selectedTab = .subreddits }) {
+                        HStack(spacing: 8) {
+                            if selectedTab == .subreddits { Image(systemName: "checkmark") }
+                            Label("Communities", systemImage: SearchTab.subreddits.icon)
+                        }
+                    }
+                    Button(action: { selectedTab = .users }) {
+                        HStack(spacing: 8) {
+                            if selectedTab == .users { Image(systemName: "checkmark") }
+                            Label("Users", systemImage: SearchTab.users.icon)
+                        }
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: selectedTab.icon)
@@ -431,10 +481,13 @@ struct SearchView: View {
         errorMessage = nil
         after = nil
         hasMore = true
+        searchScopeSubreddit = nil
     }
     
     private func performSearch() {
-        let query = searchText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = searchText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        parseScope(from: raw)
+        let query = strippedQuery(from: raw)
         guard !query.isEmpty else {
             return
         }
@@ -449,7 +502,7 @@ struct SearchView: View {
                 hasMore = true
                 hasSearched = true
                 }
-            
+
             do {
                 async let postsTask = searchPosts()
                 async let subredditsTask = apiService.searchSubreddits(query: query, limit: 25)
@@ -532,8 +585,13 @@ struct SearchView: View {
         case .top: sortParam = "top"
         }
 
+        // Build query and scope
+        let currentQuery = strippedQuery(from: searchText.wrappedValue)
+        let scope = searchScopeSubreddit
+
         return try await apiService.searchPosts(
-            query: searchText.wrappedValue,
+            query: currentQuery,
+            subreddit: scope,
             after: after,
             limit: 25,
             sort: sortParam,
@@ -560,17 +618,67 @@ struct SearchView: View {
     }
     
     private func toggleSubscription(for subreddit: Subreddit) async {
-        let isCurrentlySubscribed = subscribedSubreddits.contains(subreddit.displayName)
-        
+        let name = subreddit.displayName
+        let isCurrentlySubscribed = subscribedSubreddits.contains(name)
+
+        // Optimistic UI update
         await MainActor.run {
+            if isCurrentlySubscribed { subscribedSubreddits.remove(name) }
+            else { subscribedSubreddits.insert(name) }
+        }
+
+        do {
             if isCurrentlySubscribed {
-                subscribedSubreddits.remove(subreddit.displayName)
+                try await apiService.unsubscribe(from: name)
             } else {
-                subscribedSubreddits.insert(subreddit.displayName)
+                try await apiService.subscribe(to: name)
+            }
+        } catch {
+            // Revert on failure
+            await MainActor.run {
+                if isCurrentlySubscribed { subscribedSubreddits.insert(name) }
+                else { subscribedSubreddits.remove(name) }
             }
         }
-        
-        // Perform subscribe/unsubscribe via service if needed (silent UI update)
+    }
+
+    private func parseScope(from text: String) {
+        // Patterns supported: "r/name query", "in:r/name query"
+        // Only set scope if a subreddit token is at the beginning
+        let lower = text.lowercased()
+        if lower.hasPrefix("in:r/") || lower.hasPrefix("r/") {
+            let prefix = lower.hasPrefix("in:r/") ? "in:r/" : "r/"
+            let rest = String(text.dropFirst(prefix.count))
+            let parts = rest.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            if let sub = parts.first {
+                let clean = sub.replacingOccurrences(of: "/", with: "")
+                if !clean.isEmpty { self.searchScopeSubreddit = String(clean) }
+            }
+        } else if lower.isEmpty {
+            self.searchScopeSubreddit = nil
+        }
+    }
+
+    private func clearScope() {
+        self.searchScopeSubreddit = nil
+    }
+
+    private func strippedQuery(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("in:r/") {
+            let rest = String(trimmed.dropFirst("in:r/".count))
+            if let space = rest.firstIndex(of: " ") {
+                return String(rest[rest.index(after: space)...])
+            } else { return "" }
+        }
+        if lower.hasPrefix("r/") {
+            let rest = String(trimmed.dropFirst("r/".count))
+            if let space = rest.firstIndex(of: " ") {
+                return String(rest[rest.index(after: space)...])
+            } else { return "" }
+        }
+        return trimmed
     }
 }
 

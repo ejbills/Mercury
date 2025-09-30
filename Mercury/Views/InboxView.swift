@@ -63,10 +63,13 @@ struct InboxView: View {
             items: InboxFilter.allCases,
             selectedItem: $selectedFilter,
             namespace: filterNamespace,
-            accentColor: .accentColor
-        ) {
-            Task { await reload() }
-        }
+            accentColor: .accentColor,
+            onSelectionChanged: {
+                Task { await reload() }
+            },
+            useBackground: true,
+            style: .glass
+        )
     }
     
     private var messagesList: some View {

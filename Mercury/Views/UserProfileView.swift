@@ -14,6 +14,7 @@ struct UserProfileView: View {
     @State private var showProfileWeb = false
     @State private var showingCopiedToast = false
     @Namespace private var sectionNamespace
+    @State private var hasBoundAPI = false
     
     init(username: String) {
         self.username = username
@@ -46,7 +47,9 @@ struct UserProfileView: View {
                         onMessageTap: { showCompose = true },
                         onShareTap: shareProfile,
                         onOpenWebTap: { showProfileWeb = true },
-                        onCopyTap: copyUsername
+                        onCopyTap: copyUsername,
+                        isFollowing: viewModel.isFollowingUser,
+                        onFollowToggle: { Task { await viewModel.toggleFollowUser() } }
                     )
                     
                     sectionPicker
@@ -90,8 +93,11 @@ struct UserProfileView: View {
             .refreshable { await viewModel.refreshAll() }
         }
         .task {
-            viewModel = ProfileViewModel(username: username, redditAPI: redditAPI)
-            await viewModel.initialLoad()
+            if !hasBoundAPI {
+                viewModel = ProfileViewModel(username: username, redditAPI: redditAPI)
+                hasBoundAPI = true
+                await viewModel.initialLoad()
+            }
         }
         .fullScreenCover(item: $selectedPost) { post in
             MediaDetailView(
@@ -124,7 +130,10 @@ struct UserProfileView: View {
             items: ProfileSection.allCases,
             selectedItem: $selectedSection,
             namespace: sectionNamespace,
-            accentColor: .accentColor
+            accentColor: .accentColor,
+            onSelectionChanged: nil,
+            useBackground: true,
+            style: .glass
         )
     }
     // MARK: - Actions

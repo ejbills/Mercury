@@ -9,6 +9,7 @@ struct SubredditDrawerView: View {
     @State private var hasInitiallyLoaded = false
     @Default(.favoriteSubreddits) private var favoriteSubreddits
     @Environment(\.navigationPathManager) private var navigationPath
+    @State private var searchText: String = ""
     
     var body: some View {
         Group {
@@ -20,7 +21,7 @@ struct SubredditDrawerView: View {
                 emptyStateViewWithQuickAccess
             } else {
                 AlphabeticalSubredditList(
-                    subreddits: subreddits,
+                    subreddits: filteredSubreddits,
                     onSubredditTap: { subreddit in
                         navigationPath.navigate(to: .subredditFeed(subreddit: subreddit.displayName))
                     },
@@ -31,6 +32,10 @@ struct SubredditDrawerView: View {
                     favoriteSubreddits: favoriteSubreddits,
                     onFavoriteToggle: { subreddit in
                         toggleFavorite(subreddit)
+                    },
+                    subscribedSubreddits: Set(subreddits.map { $0.displayName }),
+                    onSubscribeToggle: { subreddit in
+                        Task { await unfollow(subreddit) }
                     }
                 )
             }
@@ -42,6 +47,7 @@ struct SubredditDrawerView: View {
                 await loadSubredditsInitially()
             }
         }
+        .searchable(text: $searchText)
     }
     
     
@@ -293,6 +299,37 @@ struct SubredditDrawerView: View {
                 // Success haptic for addition
                 HapticManager.shared.success()
             }
+        }
+    }
+
+    private func unfollow(_ subreddit: Subreddit) async {
+        let name = subreddit.displayName
+        let previous = subreddits
+        await MainActor.run {
+            withAnimation(.easeInOut) {
+                subreddits.removeAll { $0.displayName == name }
+            }
+        }
+
+        do {
+            try await apiService.unsubscribe(from: name)
+        } catch {
+            // Revert on failure
+            await MainActor.run {
+                subreddits = previous
+            }
+        }
+    }
+}
+
+private extension SubredditDrawerView {
+    var filteredSubreddits: [Subreddit] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return subreddits }
+        return subreddits.filter { s in
+            s.displayName.localizedCaseInsensitiveContains(q) ||
+            s.title.localizedCaseInsensitiveContains(q) ||
+            s.publicDescription.localizedCaseInsensitiveContains(q)
         }
     }
 }
