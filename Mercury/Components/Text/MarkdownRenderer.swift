@@ -34,11 +34,17 @@ struct MarkdownRenderer: View {
                 ForEach(Array(embedContent.enumerated()), id: \.offset) { index, embed in
                     switch embed {
                     case .link(let url):
-                        if isImageURL(url) || isGifURL(url) {
-                            EmbeddedMediaView(url: url)
+                        if isImageURL(url) || isGifURL(url) || isGiphyLink(url) {
+                            if isGiphyLink(url) {
+                                EmbeddedGiphyView(source: url)
+                            } else {
+                                EmbeddedMediaView(url: url)
+                            }
                         } else {
                             LinkItemView(link: url)
                         }
+                    case .giphyToken(let token):
+                        EmbeddedGiphyView(source: token)
                     case .attachment(let key):
                         if let image = attachments?[key] {
                             Image(uiImage: image)
@@ -97,6 +103,21 @@ struct MarkdownRenderer: View {
             }
             content.append(contentsOf: regularLinks)
         }
+
+        // Detect GIPHY tokens Reddit may include (e.g. giphy|ID or giphy%7CID)
+        let giphyTokenPattern = #"giphy(?:\||%7C)[^\s)\]>]+"#
+        if let giphyRegex = try? NSRegularExpression(pattern: giphyTokenPattern, options: .caseInsensitive) {
+            let range = NSRange(location: 0, length: processedText.utf16.count)
+            let matches = giphyRegex.matches(in: processedText, options: [], range: range)
+            for m in matches {
+                if let r = Range(m.range, in: processedText) {
+                    let token = String(processedText[r])
+                    content.append(.giphyToken(token))
+                }
+            }
+            // Strip tokens out of the visible markdown
+            processedText = giphyRegex.stringByReplacingMatches(in: processedText, options: [], range: range, withTemplate: "")
+        }
         return content
     }
     
@@ -111,6 +132,9 @@ struct MarkdownRenderer: View {
         processed = processed.replacingOccurrences(of: "&lt;", with: "<")
         processed = processed.replacingOccurrences(of: "&gt;", with: ">")
         processed = processed.replacingOccurrences(of: "&quot;", with: "\"")
+        // Remove any raw giphy tokens from rendered markdown
+        let giphyTokenPattern = #"giphy(?:\||%7C)[^\s)\]>]+"#
+        processed = processed.replacingOccurrences(of: giphyTokenPattern, with: "", options: .regularExpression)
         do {
             let superscriptRegex = try NSRegularExpression(pattern: "\\^(\\w+)", options: [])
             let range = NSRange(location: 0, length: processed.utf16.count)
@@ -164,11 +188,17 @@ struct MarkdownRenderer: View {
     private func isGifURL(_ url: String) -> Bool {
         return url.lowercased().hasSuffix(".gif")
     }
+
+    private func isGiphyLink(_ url: String) -> Bool {
+        let lower = url.lowercased()
+        return lower.contains("media.giphy.com") || lower.contains("giphy.com/gifs/") || lower.contains("giphy.com/stickers/")
+    }
 }
 
 // MARK: - Embed Content Types
 enum EmbedContent: Hashable {
     case link(String)
+    case giphyToken(String)
     case attachment(String)
 }
 

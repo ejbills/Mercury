@@ -57,7 +57,7 @@ struct InboxView: View {
                             Task { await markAllReadForCurrentFilter() }
                         }
                     } label: {
-                        Image(systemName: "ellipsisif ")
+                        Image(systemName: "ellipsis")
                     }
                 }
             }

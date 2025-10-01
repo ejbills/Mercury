@@ -12,11 +12,10 @@ class BaseRedditService {
     
     /// Creates a URLRequest with common headers
     func createRequest(url: URL) -> URLRequest {
-        var request = URLRequest(url: url)        
+        var request = URLRequest(url: url)
         if let accessToken = authService?.accessToken {
             request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
-        
         return request
     }
     

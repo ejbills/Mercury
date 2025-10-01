@@ -403,12 +403,19 @@ struct PostRowView: View {
                 YouTubeEmbedView(url: youtubeURL)
             }
         case .gallery:
-            SimpleGalleryView(
-                post: post,
-                mediaId: "\(post.id)-gallery",
-                namespace: namespace,
-                selectedPost: $selectedPost
-            )
+            VStack(alignment: .leading, spacing: 12) {
+                SimpleGalleryView(
+                    post: post,
+                    mediaId: "\(post.id)-gallery",
+                    namespace: namespace,
+                    selectedPost: $selectedPost
+                )
+                if showFullText && post.hasContent, let content = post.selftext, !content.isEmpty {
+                    MarkdownRenderer(content: content, compactMode: !showFullText, showEmbeddedContent: showFullText)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                }
+            }
         case .link:
             if shouldShowLinkPreview {
                 linkPostContent

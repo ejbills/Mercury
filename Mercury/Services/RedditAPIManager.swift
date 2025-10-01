@@ -88,16 +88,16 @@ class RedditAPIManager {
         try await contentService.fetchSavedPosts(after: after, limit: limit)
     }
 
-    func submitTextPost(subreddit: String, title: String, text: String) async throws {
-        try await contentService.submitTextPost(subreddit: subreddit, title: title, text: text)
+    func submitTextPost(subreddit: String, title: String, text: String, flairId: String? = nil, flairText: String? = nil) async throws {
+        try await contentService.submitTextPost(subreddit: subreddit, title: title, text: text, flairId: flairId, flairText: flairText)
     }
 
-    func submitLinkPost(subreddit: String, title: String, url: String) async throws {
-        try await contentService.submitLinkPost(subreddit: subreddit, title: title, url: url)
+    func submitLinkPost(subreddit: String, title: String, url: String, flairId: String? = nil, flairText: String? = nil) async throws {
+        try await contentService.submitLinkPost(subreddit: subreddit, title: title, url: url, flairId: flairId, flairText: flairText)
     }
 
-    func submitImagePost(subreddit: String, title: String, caption: String?, images: [UIImage]) async throws {
-        try await contentService.submitImagePost(subreddit: subreddit, title: title, caption: caption, images: images)
+    func submitImagePost(subreddit: String, title: String, caption: String?, images: [UIImage], flairId: String? = nil, flairText: String? = nil) async throws {
+        try await contentService.submitImagePost(subreddit: subreddit, title: title, caption: caption, images: images, flairId: flairId, flairText: flairText)
     }
 
     // MARK: - Subreddit actions
@@ -238,5 +238,23 @@ class RedditAPIManager {
 
     func deleteComment(commentId: String) async throws {
         try await commentsService.deleteComment(commentId: commentId)
+    }
+
+    // MARK: - Flairs + Post Requirements
+    func fetchLinkFlairs(subreddit: String) async throws -> [LinkFlair] {
+        try await contentService.fetchLinkFlairs(subreddit: subreddit)
+    }
+
+    func fetchPostRequirements(subreddit: String, postType: String? = nil) async throws -> PostRequirements? {
+        try await contentService.fetchPostRequirements(subreddit: subreddit, postType: postType)
+    }
+
+    // MARK: - Flair Selector / SelectFlair
+    func fetchFlairSelector(subreddit: String, linkFullname: String) async throws -> [LinkFlair] {
+        try await contentService.fetchFlairSelector(subreddit: subreddit, linkFullname: linkFullname)
+    }
+
+    func selectFlair(subreddit: String, linkFullname: String, flairTemplateId: String, text: String? = nil) async throws {
+        try await contentService.selectFlair(subreddit: subreddit, linkFullname: linkFullname, flairTemplateId: flairTemplateId, text: text)
     }
 }

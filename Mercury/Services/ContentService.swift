@@ -424,25 +424,32 @@ class ContentService: BaseRedditService {
 // MARK: - Post Submission
 extension ContentService {
     /// Submit a self (text) post to a subreddit
-    func submitTextPost(subreddit: String, title: String, text: String) async throws {
+    func submitTextPost(subreddit: String, title: String, text: String, flairId: String? = nil, flairText: String? = nil) async throws {
         try validateAccessToken()
         guard let url = URL(string: "\(baseURL)/api/submit") else { throw APIError.parseError }
         var request = createPOSTRequest(url: url)
         // Reddit API: kind=self, sr=subreddit (no r/ prefix), title, text, api_type=json
         let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
-        let params: [String: String] = [
+        var params: [String: String] = [
             "api_type": "json",
             "kind": "self",
             "sr": clean,
             "title": title,
             "text": text
         ]
+        if let flairId, !flairId.isEmpty { params["flair_id"] = flairId }
+        if let flairText, !flairText.isEmpty { params["flair_text"] = flairText }
         let body = params.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
         request.httpBody = body.data(using: String.Encoding.utf8)
         do {
-            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
+            // Check json.errors
+            struct SubmitResponse: Codable { struct J: Codable { let errors: [[String]]?; let data: DataField?; struct DataField: Codable { let id: String?; let url: String? } }; let json: J }
+            if let submit = try? JSONDecoder().decode(SubmitResponse.self, from: data) {
+                if let errs = submit.json.errors, !errs.isEmpty { throw APIError.serverError(http.statusCode) }
+            }
         } catch is URLError {
             throw APIError.networkError
         } catch { throw error }
@@ -521,7 +528,7 @@ extension ContentService {
     }
 
     /// Attempt to submit a single-image post using kind=image and preview URL. Fallback to richtext if needed.
-    func submitImagePost(subreddit: String, title: String, caption: String?, images: [UIImage]) async throws {
+    func submitImagePost(subreddit: String, title: String, caption: String?, images: [UIImage], flairId: String? = nil, flairText: String? = nil) async throws {
         try validateAccessToken()
         guard !images.isEmpty else { throw APIError.parseError }
         // Prepare data up to 20 images
@@ -543,13 +550,15 @@ extension ContentService {
             guard let url = URL(string: baseURL + "/api/submit") else { throw APIError.parseError }
             var req = createPOSTRequest(url: url)
             let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
-            let params: [String: String] = [
+            var params: [String: String] = [
                 "api_type": "json",
                 "kind": "image",
                 "sr": clean,
                 "title": title,
                 "url": imageURL
             ]
+            if let flairId, !flairId.isEmpty { params["flair_id"] = flairId }
+            if let flairText, !flairText.isEmpty { params["flair_text"] = flairText }
             let body = params.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
             req.httpBody = body.data(using: .utf8)
             do {
@@ -564,16 +573,16 @@ extension ContentService {
                 return
             } catch {
                 // Fallback to richtext self-post embedding
-                try await submitRichtextImagePost(subreddit: clean, title: title, caption: caption, assets: assets)
+                try await submitRichtextImagePost(subreddit: clean, title: title, caption: caption, assets: assets, flairId: flairId, flairText: flairText)
             }
         } else {
             // Gallery-like: richtext self post embedding multiple media nodes
             let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
-            try await submitRichtextImagePost(subreddit: clean, title: title, caption: caption, assets: assets)
+            try await submitRichtextImagePost(subreddit: clean, title: title, caption: caption, assets: assets, flairId: flairId, flairText: flairText)
         }
     }
 
-    private func submitRichtextImagePost(subreddit: String, title: String, caption: String?, assets: [(id: String, ext: String)]) async throws {
+    private func submitRichtextImagePost(subreddit: String, title: String, caption: String?, assets: [(id: String, ext: String)], flairId: String?, flairText: String?) async throws {
         try validateAccessToken()
         guard let url = URL(string: baseURL + "/api/submit?raw_json=1") else { throw APIError.parseError }
         var request = createPOSTRequest(url: url)
@@ -585,13 +594,15 @@ extension ContentService {
         let rtjson: [String: Any] = ["document": document]
         let rtData = try JSONSerialization.data(withJSONObject: rtjson, options: [])
         guard let jsonString = String(data: rtData, encoding: .utf8) else { throw APIError.parseError }
-        let params: [String: String] = [
+        var params: [String: String] = [
             "api_type": "json",
             "kind": "self",
             "sr": subreddit,
             "title": title,
             "richtext_json": jsonString
         ]
+        if let flairId, !flairId.isEmpty { params["flair_id"] = flairId }
+        if let flairText, !flairText.isEmpty { params["flair_text"] = flairText }
         let body = params.map { key, value in
             "\(key)=\(Self.formEncode(value))"
         }.joined(separator: "&")
@@ -607,7 +618,144 @@ extension ContentService {
     }
 }
 
- extension ContentService {
+extension ContentService {
+    // MARK: - Subreddit Flair + Requirements
+
+    func fetchLinkFlairs(subreddit: String) async throws -> [LinkFlair] {
+        try validateAccessToken()
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        guard let url = URL(string: baseURL + "/r/\(clean)/api/link_flair_v2.json?is_newlink=true&raw_json=1") else { throw APIError.parseError }
+        let req = createRequest(url: url)
+        print("[FlairFetch] GET \(url.absoluteString)")
+        let (data, resp) = try await NetworkManager.shared.session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.networkError }
+        print("[FlairFetch] status=\(http.statusCode)")
+        try validateResponse(http)
+        if let decoded = decodeLinkFlairs(from: data) {
+            print("[FlairFetch] decoded count=\(decoded.count)")
+            return decoded
+        }
+        return []
+    }
+
+    // Fallback endpoint removed per request; only v2 OAuth endpoint is used.
+
+    private func decodeLinkFlairs(from data: Data) -> [LinkFlair]? {
+        // Attempt strict decode first
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        if let flairs = try? decoder.decode([LinkFlair].self, from: data) {
+            return flairs
+        }
+        // Fallback best-effort decode
+        guard let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return nil
+        }
+        var results: [LinkFlair] = []
+        for item in arr {
+            guard let id = item["id"] as? String else { continue }
+            let text = (item["text"] as? String) ?? ""
+            let bg = item["background_color"] as? String
+            let tc = item["text_color"] as? String
+            let editable = item["text_editable"] as? Bool
+            let modOnly = (item["mod_only"] as? Bool)
+            results.append(LinkFlair(id: id, text: text, backgroundColor: bg, textColor: tc, textEditable: editable, modOnly: modOnly))
+        }
+        return results
+    }
+
+    func fetchPostRequirements(subreddit: String, postType: String? = nil) async throws -> PostRequirements? {
+        try validateAccessToken()
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        var comps = URLComponents(string: baseURL + "/api/v1/\(clean)/post_requirements")!
+        var items: [URLQueryItem] = []
+        if let postType, !postType.isEmpty { items.append(URLQueryItem(name: "post_type", value: postType)) }
+        comps.queryItems = items.isEmpty ? nil : items
+        guard let url = comps.url else { return nil }
+        let req = createRequest(url: url)
+        print("[PostReq] GET \(url.absoluteString)")
+        let (data, resp) = try await NetworkManager.shared.session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.networkError }
+        print("[PostReq] status=\(http.statusCode)")
+        try validateResponse(http)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let reqs = try? decoder.decode(PostRequirements.self, from: data)
+        if let r = reqs { print("[PostReq] isFlairRequired=\(r.isFlairRequired ?? false)") } else { print("[PostReq] decode failed") }
+        return reqs
+    }
+
+    // MARK: - Flair Selector (existing posts)
+    /// Fetches flair options for an existing submission via flairselector.
+    /// - Parameters:
+    ///   - subreddit: target subreddit (with or without r/)
+    ///   - linkFullname: fullname like "t3_abcdef"
+    func fetchFlairSelector(subreddit: String, linkFullname: String) async throws -> [LinkFlair] {
+        try validateAccessToken()
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        guard let url = URL(string: baseURL + "/r/\(clean)/api/flairselector.json?link=\(linkFullname)&raw_json=1") else { throw APIError.parseError }
+        let req = createRequest(url: url)
+        print("[FlairSelector] GET \(url.absoluteString)")
+        let (data, resp) = try await NetworkManager.shared.session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.networkError }
+        print("[FlairSelector] status=\(http.statusCode)")
+        try validateResponse(http)
+        // Flexible decode: prefer keys from v2, fallback to common keys
+        if let arr = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let choices = arr["choices"] as? [[String: Any]] { return parseFlairChoices(choices) }
+            if let choices = arr["options"] as? [[String: Any]] { return parseFlairChoices(choices) }
+        }
+        // Some implementations return an array directly
+        if let choices = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return parseFlairChoices(choices)
+        }
+        return []
+    }
+
+    private func parseFlairChoices(_ choices: [[String: Any]]) -> [LinkFlair] {
+        var out: [LinkFlair] = []
+        for c in choices {
+            let id = (c["flair_template_id"] as? String) ?? (c["template_id"] as? String) ?? (c["id"] as? String)
+            let text = (c["text"] as? String) ?? (c["flair_text"] as? String) ?? ""
+            let bg = (c["background_color"] as? String) ?? (c["flair_background_color"] as? String)
+            let tc = (c["text_color"] as? String) ?? (c["flair_text_color"] as? String)
+            let editable = (c["text_editable"] as? Bool) ?? (c["flair_text_editable"] as? Bool)
+            let modOnly = (c["mod_only"] as? Bool) ?? (c["flair_mod_only"] as? Bool)
+            if let id = id {
+                out.append(LinkFlair(id: id, text: text, backgroundColor: bg, textColor: tc, textEditable: editable, modOnly: modOnly))
+            }
+        }
+        print("[FlairSelector] parsed choices=\(out.count)")
+        return out
+    }
+
+    /// Applies a flair to an existing submission using selectflair.
+    func selectFlair(subreddit: String, linkFullname: String, flairTemplateId: String, text: String? = nil) async throws {
+        try validateAccessToken()
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        guard let url = URL(string: baseURL + "/r/\(clean)/api/selectflair") else { throw APIError.parseError }
+        var req = createPOSTRequest(url: url)
+        var params: [String: String] = [
+            "api_type": "json",
+            "link": linkFullname,
+            "flair_template_id": flairTemplateId
+        ]
+        if let text, !text.isEmpty { params["text"] = text }
+        req.httpBody = params.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&").data(using: .utf8)
+        print("[SelectFlair] POST \(url.absoluteString) link=\(linkFullname) template=\(flairTemplateId)")
+        let (data, resp) = try await NetworkManager.shared.session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.networkError }
+        print("[SelectFlair] status=\(http.statusCode)")
+        try validateResponse(http)
+        // Optional: check errors array
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let json = obj["json"] as? [String: Any],
+           let errors = json["errors"] as? [[Any]], !errors.isEmpty {
+            print("[SelectFlair] server errors=\(errors)")
+            throw APIError.serverError(http.statusCode)
+        }
+    }
+
     static func formEncode(_ value: String) -> String {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: ":#[]@!$&'()*+,;=%\" <>?{}|^`\\")
@@ -616,24 +764,30 @@ extension ContentService {
 
 
     /// Submit a link post to a subreddit (optionally with body text)
-    func submitLinkPost(subreddit: String, title: String, url: String) async throws {
+    func submitLinkPost(subreddit: String, title: String, url: String, flairId: String? = nil, flairText: String? = nil) async throws {
         try validateAccessToken()
         guard let endpoint = URL(string: "\(baseURL)/api/submit") else { throw APIError.parseError }
         var request = createPOSTRequest(url: endpoint)
         let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
-        let params: [String: String] = [
+        var params: [String: String] = [
             "api_type": "json",
             "kind": "link",
             "sr": clean,
             "title": title,
             "url": url
         ]
+        if let flairId, !flairId.isEmpty { params["flair_id"] = flairId }
+        if let flairText, !flairText.isEmpty { params["flair_text"] = flairText }
         let body = params.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
         request.httpBody = body.data(using: String.Encoding.utf8)
         do {
-            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
+            struct SubmitResponse: Codable { struct J: Codable { let errors: [[String]]?; let data: DataField?; struct DataField: Codable { let id: String?; let url: String? } }; let json: J }
+            if let submit = try? JSONDecoder().decode(SubmitResponse.self, from: data) {
+                if let errs = submit.json.errors, !errs.isEmpty { throw APIError.serverError(http.statusCode) }
+            }
         } catch is URLError { throw APIError.networkError }
     }
     

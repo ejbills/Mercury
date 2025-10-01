@@ -22,6 +22,10 @@ struct PostComposerSheet: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var isSubmitting = false
     @State private var errorMessage: String?
+    @State private var flairs: [LinkFlair] = []
+    @State private var selectedFlairId: String? = nil
+    @State private var isFlairRequired: Bool = false
+    @State private var isLoadingFlairs = false
 
     private enum Mode: String, CaseIterable, Identifiable { case write, preview; var id: String { rawValue } }
 
@@ -31,9 +35,20 @@ struct PostComposerSheet: View {
         NavigationStack {
             Form {
                 Section(header: Text("Subreddit")) {
-                    TextField("r/subreddit", text: $selectedSubreddit)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
+                    HStack(spacing: 8) {
+                        TextField("r/subreddit", text: $selectedSubreddit)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                        if isLoadingFlairs {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Button(action: { Task { await loadFlairsIfNeeded(force: true) } }) {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .disabled(selectedSubreddit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .help("Fetch flairs for this subreddit")
+                        }
+                    }
                 }
 
                 Section(header: Text("Type")) {
@@ -48,6 +63,30 @@ struct PostComposerSheet: View {
                 Section(header: Text("Title")) {
                     TextField("Post title", text: $title)
                         .textInputAutocapitalization(.sentences)
+                }
+
+                Section(header: Text("Flair")) {
+                    if !flairs.isEmpty {
+                        Picker("Flair", selection: Binding(
+                            get: { selectedFlairId ?? "" },
+                            set: { v in selectedFlairId = v.isEmpty ? nil : v }
+                        )) {
+                            Text("None").tag("")
+                            ForEach(flairs, id: \.id) { flair in
+                                Text(flair.text).tag(flair.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } else {
+                        Text(isFlairRequired ? "Flair required. Tap the refresh icon to load flairs." : "No flairs available.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if isFlairRequired && selectedFlairId == nil {
+                        Text("This subreddit requires a post flair.")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
                 }
 
                 if postType == .link {
@@ -162,7 +201,11 @@ struct PostComposerSheet: View {
                     Button(action: { Task { await submit() } }) {
                         if isSubmitting { ProgressView() } else { Text("Post") }
                     }
-                    .disabled(isSubmitting || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (postType == .link && linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) || (postType == .image && selectedImages.isEmpty))
+                    .disabled(isSubmitting ||
+                              title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                              (postType == .link && linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ||
+                              (postType == .image && selectedImages.isEmpty) ||
+                              (isFlairRequired && selectedFlairId == nil))
                 }
             }
             .task {
@@ -172,6 +215,7 @@ struct PostComposerSheet: View {
                 } else {
                     selectedSubreddit = ""
                 }
+                await loadFlairsIfNeeded(force: false)
             }
             .alert("Couldn't submit post", isPresented: .constant(errorMessage != nil)) {
                 Button("OK") { errorMessage = nil }
@@ -189,6 +233,9 @@ struct PostComposerSheet: View {
                     self.selectedImages = Array(images.prefix(20))
                 }
             }
+        }
+        .onChange(of: selectedSubreddit) { _, _ in
+            Task { await loadFlairsIfNeeded(force: false) }
         }
     }
 
@@ -284,13 +331,14 @@ struct PostComposerSheet: View {
         isSubmitting = true
         do {
             let clean = trimmedSub.hasPrefix("r/") ? String(trimmedSub.dropFirst(2)) : trimmedSub
+            print("[Composer] submit subreddit=\(clean) postType=\(postType) flairId=\(selectedFlairId ?? "<none>")")
             switch postType {
             case .text:
-                try await redditAPI.submitTextPost(subreddit: clean, title: title, text: bodyText)
+                try await redditAPI.submitTextPost(subreddit: clean, title: title, text: bodyText, flairId: selectedFlairId)
             case .link:
-                try await redditAPI.submitLinkPost(subreddit: clean, title: title, url: linkURL)
+                try await redditAPI.submitLinkPost(subreddit: clean, title: title, url: linkURL, flairId: selectedFlairId)
             case .image:
-                try await redditAPI.submitImagePost(subreddit: clean, title: title, caption: bodyText.isEmpty ? nil : bodyText, images: selectedImages)
+                try await redditAPI.submitImagePost(subreddit: clean, title: title, caption: bodyText.isEmpty ? nil : bodyText, images: selectedImages, flairId: selectedFlairId)
             }
             isSubmitting = false
             let h = UINotificationFeedbackGenerator()
@@ -303,5 +351,52 @@ struct PostComposerSheet: View {
                 isSubmitting = false
             }
         }
+    }
+
+    private func loadFlairsIfNeeded(force: Bool) async {
+        let sub = selectedSubreddit.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sub.isEmpty else {
+            await MainActor.run {
+                flairs = []
+                selectedFlairId = nil
+                isFlairRequired = false
+            }
+            return
+        }
+        if !force && !flairs.isEmpty { return }
+        isLoadingFlairs = true
+        print("[Composer] loadFlairsIfNeeded(force=\(force)) subreddit=\(sub)")
+        do {
+            let clean = sub.hasPrefix("r/") ? String(sub.dropFirst(2)) : sub
+            async let a: [LinkFlair] = try redditAPI.fetchLinkFlairs(subreddit: clean)
+            let pt: String = {
+                switch postType {
+                case .text: return "self"
+                case .link: return "link"
+                case .image: return "image"
+                }
+            }()
+            async let b: PostRequirements? = try redditAPI.fetchPostRequirements(subreddit: clean, postType: pt)
+            var (f, req) = try await (a, b)
+            // Filter out mod-only flairs for non-mod users
+            f = f.filter { ($0.modOnly ?? false) == false }
+            await MainActor.run {
+                self.flairs = f
+                self.isFlairRequired = (req?.isFlairRequired ?? false)
+                print("[Composer] fetched flairs=\(f.count) isFlairRequired=\(self.isFlairRequired)")
+                if self.isFlairRequired && self.selectedFlairId == nil { /* keep nil, user must choose */ }
+                if !self.isFlairRequired, self.selectedFlairId != nil, !f.contains(where: { $0.id == self.selectedFlairId }) {
+                    self.selectedFlairId = nil
+                }
+            }
+        } catch {
+            print("[Composer] flair fetch error=\(error.localizedDescription)")
+            await MainActor.run {
+                self.flairs = []
+                self.isFlairRequired = false
+            }
+        }
+        isLoadingFlairs = false
+        print("[Composer] loadFlairsIfNeeded finished")
     }
 }
