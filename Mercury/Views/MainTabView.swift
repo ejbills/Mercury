@@ -72,6 +72,8 @@ struct MainTabView: View {
                                 }
                                 .navigationTitle("Search")
                         }
+                        // Limit the search field to the Search tab only (iOS 26+)
+                        .searchable(text: $searchText)
                     }
 
                     Tab("Settings", systemImage: "gearshape.fill") {
@@ -81,7 +83,6 @@ struct MainTabView: View {
                         }
                     }
                 }
-                .searchable(text: $searchText)
             } else {
                 TabView {
                     NavigationStack(path: $homeNavigationPath.path) {

@@ -427,14 +427,8 @@ struct SearchView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Text(selectedSort.rawValue)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                    Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Image(systemName: selectedSort.icon)
+                    .font(.callout)
                 // Let Liquid Glass handle container styling
             }
             .buttonStyle(.plain)

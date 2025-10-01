@@ -321,14 +321,8 @@ struct PostCommentsView: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                Text(commentSort.displayName)
-                    .font(.callout)
-                    .fontWeight(.medium)
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            Image(systemName: commentSort.iconName)
+                .font(.callout)
             // Let Liquid Glass handle container styling to avoid double bubble
         }
         .buttonStyle(.plain)

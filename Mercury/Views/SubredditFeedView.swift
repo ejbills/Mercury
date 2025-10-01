@@ -17,6 +17,8 @@ struct SubredditFeedView: View {
     @Namespace private var mediaNamespace
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var lastAutoRefresh: Date = .distantPast
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
     @Default(.hiddenPostIds) private var hiddenPostIds
@@ -141,6 +143,8 @@ struct SubredditFeedView: View {
                     } label: {
                         Image(systemName: "info.circle")
                     }
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hasSidebar)
                     .accessibilityLabel("Subreddit Sidebar")
                 }
             }
@@ -152,6 +156,15 @@ struct SubredditFeedView: View {
                     Image(systemName: "square.and.pencil")
                 }
                 .accessibilityLabel("New Post")
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            let now = Date()
+            // Auto refresh on foreground if not recently refreshed and not mid-load/search
+            if now.timeIntervalSince(lastAutoRefresh) > 120, !isLoading, !isLoadingMore, !isSearching {
+                lastAutoRefresh = now
+                Task { await refreshFeed() }
             }
         }
         .fullScreenCover(item: $selectedPost) { post in
@@ -205,10 +218,16 @@ struct SubredditFeedView: View {
         do {
             let about = try await apiService.fetchSubredditAbout(subreddit: clean)
             await MainActor.run {
-                self.hasSidebar = !about.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !about.publicDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    self.hasSidebar = !about.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !about.publicDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }
             }
         } catch {
-            await MainActor.run { self.hasSidebar = false }
+            await MainActor.run {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                    self.hasSidebar = false
+                }
+            }
         }
     }
     
@@ -351,21 +370,8 @@ struct SubredditFeedView: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(postSort.displayName)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                    if postSort.supportsTimeFrame {
-                        Text(topTimeFrame.displayName)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            Image(systemName: postSort.iconName)
+                .font(.callout)
             // Let Liquid Glass handle container styling to avoid double bubble
         }
         .buttonStyle(.plain)

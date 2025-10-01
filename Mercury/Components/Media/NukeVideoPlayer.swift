@@ -28,6 +28,8 @@ struct NukeVideoPlayer: UIViewRepresentable {
         view.layer.cornerRadius = cornerRadius
         view.videoGravity = gravity
         view.isLooping = isLooping
+        // Ensure audio session is configured to mix with other audio sources
+        AudioSessionManager.configureIfNeeded()
         context.coordinator.load(
             url: url,
             into: view,
