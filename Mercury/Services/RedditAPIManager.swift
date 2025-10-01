@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import UIKit
+import Defaults
 
 /// Main coordinator class that manages all Reddit services
 @Observable
@@ -13,6 +14,12 @@ class RedditAPIManager {
     let inboxService: InboxService
     
     private var cancellables = Set<AnyCancellable>()
+    
+    // MARK: - Simple caches
+    private var subredditCache: [Subreddit]? = nil
+    private var subredditCacheDate: Date? = nil
+    private var multiCache: [MultiReddit]? = nil
+    private var multiCacheDate: Date? = nil
     
     // MARK: - Computed Properties (for backward compatibility)
     
@@ -46,6 +53,24 @@ class RedditAPIManager {
         self.searchService = SearchService(authService: authService)
         self.commentsService = CommentsService(authService: authService)
         self.inboxService = InboxService(authService: authService)
+
+        // Load cached subreddits from Defaults for quicker launch
+        if let data = Defaults[.cachedSubscribedSubredditsData] {
+            if let decoded = try? JSONDecoder().decode([Subreddit].self, from: data) {
+                self.subredditCache = decoded
+                self.subredditCacheDate = Defaults[.cachedSubscribedSubredditsDate]
+            }
+        }
+
+        // Load cached multireddits only if username matches
+        if let cachedUser = Defaults[.cachedUserMultiredditsUsername],
+           let currentUser = authService.userInfo?.name,
+           cachedUser == currentUser,
+           let data = Defaults[.cachedUserMultiredditsData],
+           let decoded = try? JSONDecoder().decode([MultiReddit].self, from: data) {
+            self.multiCache = decoded
+            self.multiCacheDate = Defaults[.cachedUserMultiredditsDate]
+        }
     }
     
     // MARK: - Authentication Methods (Delegated)
@@ -70,6 +95,31 @@ class RedditAPIManager {
     
     func fetchSubscribedSubreddits() async throws -> [Subreddit] {
         try await contentService.fetchSubscribedSubreddits()
+    }
+
+    // Cached variant for subscribed subreddits
+    func fetchSubscribedSubredditsCached(forceRefresh: Bool = false) async throws -> [Subreddit] {
+        // Serve from in-memory cache if present and not forcing refresh
+        if !forceRefresh, let cached = subredditCache, !cached.isEmpty {
+            return cached
+        }
+        // Fall back to persisted cache if available (and not forcing refresh)
+        if !forceRefresh, subredditCache == nil, let data = Defaults[.cachedSubscribedSubredditsData],
+           let decoded = try? JSONDecoder().decode([Subreddit].self, from: data) {
+            self.subredditCache = decoded
+            self.subredditCacheDate = Defaults[.cachedSubscribedSubredditsDate]
+            return decoded
+        }
+
+        let fetched = try await contentService.fetchSubscribedSubreddits()
+        // Update caches
+        self.subredditCache = fetched
+        self.subredditCacheDate = Date()
+        if let data = try? JSONEncoder().encode(fetched) {
+            Defaults[.cachedSubscribedSubredditsData] = data
+            Defaults[.cachedSubscribedSubredditsDate] = self.subredditCacheDate
+        }
+        return fetched
     }
     
     func fetchSubredditPosts(subreddit: String, sort: PostSort = .hot, timeFrame: TopTimeFrame? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
@@ -158,6 +208,44 @@ class RedditAPIManager {
     
     func setUserFollow(username: String, follow: Bool) async throws {
         try await userService.setUserFollow(username: username, follow: follow)
+    }
+    
+    // MARK: - Multireddits
+    func fetchUserMultireddits() async throws -> [MultiReddit] {
+        try await contentService.fetchUserMultireddits()
+    }
+
+    func fetchMultiPosts(username: String, multi: String, sort: PostSort = .hot, timeFrame: TopTimeFrame? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        try await contentService.fetchMultiPosts(username: username, multi: multi, sort: sort, timeFrame: timeFrame, after: after, limit: limit)
+    }
+
+    // Cached variant for user's multireddits
+    func fetchUserMultiredditsCached(forceRefresh: Bool = false) async throws -> [MultiReddit] {
+        let currentUser = authService.userInfo?.name
+        // Serve in-memory cache if present and not forcing refresh
+        if !forceRefresh, let cached = multiCache, !cached.isEmpty {
+            return cached
+        }
+        // Serve persisted cache if present for this user
+        if !forceRefresh,
+           let cachedUser = Defaults[.cachedUserMultiredditsUsername],
+           cachedUser == currentUser,
+           let data = Defaults[.cachedUserMultiredditsData],
+           let decoded = try? JSONDecoder().decode([MultiReddit].self, from: data) {
+            self.multiCache = decoded
+            self.multiCacheDate = Defaults[.cachedUserMultiredditsDate]
+            return decoded
+        }
+
+        let fetched = try await contentService.fetchUserMultireddits()
+        self.multiCache = fetched
+        self.multiCacheDate = Date()
+        if let data = try? JSONEncoder().encode(fetched) {
+            Defaults[.cachedUserMultiredditsData] = data
+            Defaults[.cachedUserMultiredditsDate] = self.multiCacheDate
+            Defaults[.cachedUserMultiredditsUsername] = currentUser
+        }
+        return fetched
     }
     
     // MARK: - Search Methods (Delegated)

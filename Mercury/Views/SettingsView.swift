@@ -92,6 +92,14 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Privacy & Legal") {
+                NavigationLink {
+                    PrivacyAndLegalView(apiService: apiService)
+                } label: {
+                    Label("Privacy, Terms, and Disclaimers", systemImage: "lock.shield")
+                }
+            }
+
             Section("About") {
                 HStack {
                     Text("Version")

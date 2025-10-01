@@ -65,6 +65,58 @@ class ContentService: BaseRedditService {
         return allSubreddits
     }
 
+    // MARK: - Multireddits
+
+    /// Fetch the current user's multireddits
+    func fetchUserMultireddits() async throws -> [MultiReddit] {
+        try validateAccessToken()
+
+        guard let url = URL(string: "\(baseURL)/api/multi/mine.json") else {
+            throw APIError.parseError
+        }
+        let request = createRequest(url: url)
+
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            // API returns an array of labeled multi objects
+            let labeled = try decoder.decode([LabeledMulti].self, from: data)
+            let result: [MultiReddit] = labeled.map { lm in
+                MultiReddit(
+                    name: lm.data.name,
+                    path: lm.data.path,
+                    descriptionMd: lm.data.descriptionMd,
+                    iconUrl: lm.data.iconUrl,
+                    subreddits: lm.data.subreddits.map { $0.name }
+                )
+            }
+            return result
+        } catch is URLError {
+            throw APIError.networkError
+        } catch {
+            throw error
+        }
+    }
+
+    /// Fetch posts for a multireddit under a given user
+    func fetchMultiPosts(username: String, multi: String, sort: PostSort = .hot, timeFrame: TopTimeFrame? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        try validateAccessToken()
+
+        var components = URLComponents(string: "\(baseURL)/user/\(username)/m/\(multi)/\(sort.rawValue).json")!
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if let after = after { queryItems.append(URLQueryItem(name: "after", value: after)) }
+        if let timeFrame = timeFrame, sort.supportsTimeFrame { queryItems.append(URLQueryItem(name: "t", value: timeFrame.rawValue)) }
+        components.queryItems = queryItems
+        guard let url = components.url else { throw APIError.parseError }
+        let request = createRequest(url: url)
+        return try await performPostRequest(request: request, endpoint: "user/\(username)/m/\(multi)")
+    }
+
     /// Subscribe to a subreddit
     func subscribe(to subreddit: String) async throws {
         try await performSubscribeAction(subreddit: subreddit, subscribe: true)

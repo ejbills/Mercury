@@ -33,6 +33,14 @@ extension Defaults.Keys {
     static let hiddenPostIds = Key<Set<String>>("hiddenPostIds", default: [])
     static let favoriteSubreddits = Key<Set<String>>("favoriteSubreddits", default: Set())
 
+    // Cached data
+    static let cachedSubscribedSubredditsData = Key<Data?>("cachedSubscribedSubredditsData")
+    static let cachedSubscribedSubredditsDate = Key<Date?>("cachedSubscribedSubredditsDate")
+    // Multireddit cache (per user)
+    static let cachedUserMultiredditsData = Key<Data?>("cachedUserMultiredditsData")
+    static let cachedUserMultiredditsDate = Key<Date?>("cachedUserMultiredditsDate")
+    static let cachedUserMultiredditsUsername = Key<String?>("cachedUserMultiredditsUsername")
+
     // Proxy / Network
     static let proxyEnabled = Key<Bool>("proxyEnabled", default: false)
     static let proxyType = Key<ProxyType>("proxyType", default: .http)

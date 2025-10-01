@@ -4,6 +4,7 @@ import Defaults
 struct SubredditDrawerView: View {
     let apiService: RedditAPIManager
     @State private var subreddits: [Subreddit] = []
+    @State private var multis: [MultiReddit] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var hasInitiallyLoaded = false
@@ -28,6 +29,13 @@ struct SubredditDrawerView: View {
                     onQuickLinkTap: { quickLink in
                         let subreddit = quickLink.endpoint.isEmpty ? "home" : quickLink.endpoint
                         navigationPath.navigate(to: .subredditFeed(subreddit: subreddit))
+                    },
+                    multis: multis,
+                    onMultiTap: { multi in
+                        // Build path like user/<username>/m/<multi>
+                        let username = apiService.userInfo?.name ?? "me"
+                        let path = "user/\(username)/m/\(multi.name)"
+                        navigationPath.navigate(to: .subredditFeed(subreddit: path))
                     },
                     favoriteSubreddits: favoriteSubreddits,
                     onFavoriteToggle: { subreddit in
@@ -240,21 +248,41 @@ struct SubredditDrawerView: View {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
-            subreddits = []
         }
-        
+
+        // Try cached first (fast) for both subs and multis, then refresh in background
         do {
-            let fetchedSubreddits = try await apiService.fetchSubscribedSubreddits()
+            async let cachedSubs = apiService.fetchSubscribedSubredditsCached(forceRefresh: false)
+            async let cachedMultis = apiService.fetchUserMultiredditsCached(forceRefresh: false)
+            let (subs, ms) = try await (cachedSubs, cachedMultis)
             await MainActor.run {
-                self.subreddits = fetchedSubreddits.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    self.subreddits = subs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                    self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                }
                 self.isLoading = false
                 self.hasInitiallyLoaded = true
             }
         } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
+            // Ignore, we'll still try network below
+        }
+
+        // Refresh subreddits (only if we didn't have cache) and load multis in parallel
+        async let refreshedSubs: [Subreddit]? = self.subreddits.isEmpty ? (try? await apiService.fetchSubscribedSubredditsCached(forceRefresh: true)) : nil
+        async let userMultis: [MultiReddit]? = (self.multis.isEmpty) ? (try? await apiService.fetchUserMultiredditsCached(forceRefresh: true)) : nil
+
+        let (subs, ms) = await (refreshedSubs, userMultis)
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                if let subs = subs {
+                    self.subreddits = subs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                }
+                if let ms = ms {
+                    self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                }
             }
+            self.isLoading = false
+            self.hasInitiallyLoaded = true
         }
     }
     
@@ -262,13 +290,15 @@ struct SubredditDrawerView: View {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
-            subreddits = []
         }
         
         do {
-            let fetchedSubreddits = try await apiService.fetchSubscribedSubreddits()
+            async let fetchedSubreddits = apiService.fetchSubscribedSubredditsCached(forceRefresh: true)
+            async let fetchedMultis = apiService.fetchUserMultiredditsCached(forceRefresh: true)
+            let (subs, ms) = try await (fetchedSubreddits, fetchedMultis)
             await MainActor.run {
-                self.subreddits = fetchedSubreddits.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                self.subreddits = subs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
                 self.isLoading = false
             }
         } catch {

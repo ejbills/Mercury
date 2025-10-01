@@ -195,10 +195,17 @@ struct SubredditFeedView: View {
     private var subredditDisplayName: String {
         if subreddit == "popular" {
             return "Popular"
-        } else if subreddit == "all" {
+        } else if subreddit == "all" || subreddit == "r/all" {
             return "All"
         } else if subreddit == "user/saved" || subreddit == "saved" {
             return "Saved"
+        } else if subreddit.lowercased().contains("/m/") && (subreddit.hasPrefix("user/") || subreddit.hasPrefix("u/")) {
+            // Show m/<name> for multireddits
+            let comps = subreddit.split(separator: "/").map(String.init)
+            if let mIndex = comps.firstIndex(of: "m"), mIndex + 1 < comps.count {
+                return "m/\(comps[mIndex + 1])"
+            }
+            return subreddit
         } else if subreddit.hasPrefix("r/") {
             return subreddit
         } else {
@@ -209,6 +216,7 @@ struct SubredditFeedView: View {
     private var isRealSubreddit: Bool {
         let s = subreddit.lowercased()
         if s == "popular" || s == "all" || s == "user/saved" || s == "saved" { return false }
+        if s.contains("/m/") { return false }
         return true
     }
 
@@ -511,7 +519,8 @@ struct SubredditFeedView: View {
     }
     
     private func fetchPosts(after: String?) async throws -> PostResponse {
-        switch subreddit.lowercased() {
+        let s = subreddit.lowercased()
+        switch s {
         case "popular":
             return try await apiService.fetchPopularFeed(after: after, limit: pageSize)
         case "home", "hot":
@@ -519,6 +528,19 @@ struct SubredditFeedView: View {
         case "user/saved", "saved":
             return try await apiService.fetchSavedPosts(after: after, limit: pageSize)
         default:
+            // Multireddit path: user/<username>/m/<multi>
+            if s.contains("/m/") {
+                let comps = subreddit.split(separator: "/").map(String.init)
+                if let userIndex = comps.firstIndex(where: { $0 == "user" || $0 == "u" }),
+                   userIndex + 1 < comps.count,
+                   let mIndex = comps.firstIndex(of: "m"),
+                   mIndex + 1 < comps.count {
+                    let username = comps[userIndex + 1]
+                    let multiName = comps[mIndex + 1]
+                    let timeFrame = postSort.supportsTimeFrame ? topTimeFrame : nil
+                    return try await apiService.fetchMultiPosts(username: username, multi: multiName, sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)
+                }
+            }
             let cleanSubreddit = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
             let timeFrame = postSort.supportsTimeFrame ? topTimeFrame : nil
             return try await apiService.fetchSubredditPosts(subreddit: cleanSubreddit, sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)

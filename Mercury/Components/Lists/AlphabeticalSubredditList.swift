@@ -4,6 +4,8 @@ struct AlphabeticalSubredditList: View {
     let subreddits: [Subreddit]
     let onSubredditTap: (Subreddit) -> Void
     let onQuickLinkTap: ((QuickLink) -> Void)?
+    let multis: [MultiReddit]
+    let onMultiTap: ((MultiReddit) -> Void)?
     let favoriteSubreddits: Set<String>
     let onFavoriteToggle: ((Subreddit) -> Void)?
     let subscribedSubreddits: Set<String>
@@ -13,6 +15,8 @@ struct AlphabeticalSubredditList: View {
         subreddits: [Subreddit],
         onSubredditTap: @escaping (Subreddit) -> Void,
         onQuickLinkTap: ((QuickLink) -> Void)? = nil,
+        multis: [MultiReddit] = [],
+        onMultiTap: ((MultiReddit) -> Void)? = nil,
         favoriteSubreddits: Set<String> = Set(),
         onFavoriteToggle: ((Subreddit) -> Void)? = nil,
         subscribedSubreddits: Set<String> = Set(),
@@ -21,6 +25,8 @@ struct AlphabeticalSubredditList: View {
         self.subreddits = subreddits
         self.onSubredditTap = onSubredditTap
         self.onQuickLinkTap = onQuickLinkTap
+        self.multis = multis
+        self.onMultiTap = onMultiTap
         self.favoriteSubreddits = favoriteSubreddits
         self.onFavoriteToggle = onFavoriteToggle
         self.subscribedSubreddits = subscribedSubreddits
@@ -35,6 +41,11 @@ struct AlphabeticalSubredditList: View {
             sections.append(("★", .quickAccess(QuickLink.allCases)))
         }
         
+        // Add Multireddits if provided
+        if onMultiTap != nil && !multis.isEmpty {
+            sections.append(("m", .multis(multis)))
+        }
+
         // Add favorites section if there are any favorites
         let favoriteSubs = subreddits.filter { favoriteSubreddits.contains($0.displayName) }
         if !favoriteSubs.isEmpty {
@@ -73,6 +84,7 @@ struct AlphabeticalSubredditList: View {
     
     private enum SectionType {
         case quickAccess([QuickLink])
+        case multis([MultiReddit])
         case favorites([Subreddit])
         case subreddits([Subreddit])
     }
@@ -87,6 +99,12 @@ struct AlphabeticalSubredditList: View {
                             case .quickAccess(let quickLinks):
                                 QuickAccessGrid(quickLinks: quickLinks, onQuickLinkTap: onQuickLinkTap)
                                     .listRowSeparator(.hidden)
+                            case .multis(let items):
+                                ForEach(items, id: \.id) { multi in
+                                    MultiRedditRow(multi: multi) {
+                                        onMultiTap?(multi)
+                                    }
+                                }
                             case .favorites(let subreddits):
                                 ForEach(subreddits) { subreddit in
                                     SubredditRow(
@@ -138,6 +156,13 @@ struct AlphabeticalSubredditList: View {
                         Text("Quick Access")
                             .font(.subheadline)
                             .fontWeight(.semibold)
+                    } else if title == "m" {
+                        Image(systemName: "rectangle.3.group.fill")
+                            .font(.caption)
+                            .foregroundStyle(.indigo)
+                        Text("Multireddits")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                     } else if title == "♥" {
                         Image(systemName: "heart.fill")
                             .font(.caption)
@@ -179,10 +204,7 @@ struct SectionIndexTitles: View {
                 Spacer()
                 VStack(spacing: itemSpacing) {
                     ForEach(Array(titles.enumerated()), id: \.0) { idx, title in
-                        Text(title)
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundStyle(currentIndex == idx ? Color.white : Color.blue)
+                        indexLabel(for: title, isActive: currentIndex == idx)
                             .frame(width: 20, height: itemHeight)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -219,6 +241,34 @@ struct SectionIndexTitles: View {
                 )
             }
             Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func indexLabel(for title: String, isActive: Bool) -> some View {
+        let color = isActive ? Color.white : Color.blue
+        switch title {
+        case "★":
+            Image(systemName: "star.fill")
+                .font(.caption2)
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(color)
+        case "♥":
+            Image(systemName: "heart.fill")
+                .font(.caption2)
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(color)
+        case "m":
+            // Multireddit icon instead of the letter "m"
+            Image(systemName: "rectangle.3.group.fill")
+                .font(.caption2)
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(color)
+        default:
+            Text(title)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(color)
         }
     }
 }
