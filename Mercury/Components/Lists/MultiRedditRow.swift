@@ -23,11 +23,12 @@ struct MultiRedditRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("m/\(multi.displayName)")
-                        .font(.body)
-                        .fontWeight(.medium)
+                        .appFont(.body, weight: .medium)
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     Text("\(multi.subreddits.count) subreddits")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -54,4 +55,3 @@ struct MultiRedditRow: View {
         }
     }
 }
-

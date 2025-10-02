@@ -242,8 +242,7 @@ struct PostRowView: View {
     private var postTitle: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(post.title)
-                .font(.title3)
-                .fontWeight(.medium)
+                .appFont(.title, weight: .semibold)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
             
@@ -252,7 +251,7 @@ struct PostRowView: View {
                 if let linkFlairText = post.linkFlairText, !linkFlairText.isEmpty {
                     Pill(size: .small) {
                         Text(linkFlairText)
-                            .font(.caption2)
+                            .appFont(.small)
                             .fontWeight(.medium)
                             .foregroundStyle(flairTextColor)
                     }
@@ -290,7 +289,7 @@ struct PostRowView: View {
                 if post.postType == .link && !(post.domain?.isEmpty ?? true) {
                     Pill(size: .small) {
                         Text(shortenedDomain)
-                            .font(.caption2)
+                            .appFont(.small)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -305,7 +304,7 @@ struct PostRowView: View {
                             
                             if post.gilded > 1 {
                                 Text("\(post.gilded)")
-                                    .font(.caption2)
+                                    .appFont(.small)
                                     .fontWeight(.medium)
                                     .foregroundStyle(.secondary)
                             }

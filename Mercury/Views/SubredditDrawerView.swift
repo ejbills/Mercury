@@ -11,6 +11,8 @@ struct SubredditDrawerView: View {
     @Default(.favoriteSubreddits) private var favoriteSubreddits
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var searchText: String = ""
+    @State private var showingMultiEditor = false
+    @State private var editingMulti: MultiReddit? = nil
     
     var body: some View {
         Group {
@@ -37,6 +39,9 @@ struct SubredditDrawerView: View {
                         let path = "user/\(username)/m/\(multi.name)"
                         navigationPath.navigate(to: .subredditFeed(subreddit: path))
                     },
+                    onCreateMulti: { showingMultiEditor = true },
+                    onEditMulti: { m in editingMulti = m },
+                    onDeleteMulti: { m in Task { await deleteMulti(m) } },
                     favoriteSubreddits: favoriteSubreddits,
                     onFavoriteToggle: { subreddit in
                         toggleFavorite(subreddit)
@@ -56,6 +61,16 @@ struct SubredditDrawerView: View {
             }
         }
         .searchable(text: $searchText)
+        .sheet(isPresented: $showingMultiEditor) {
+            MultiEditorView(mode: .create, apiService: apiService, availableSubreddits: subreddits) { created in
+                Task { await refreshMultis() }
+            }
+        }
+        .sheet(item: $editingMulti) { m in
+            MultiEditorView(mode: .edit(existing: m), apiService: apiService, availableSubreddits: subreddits) { updated in
+                Task { await refreshMultis() }
+            }
+        }
     }
     
     
@@ -283,6 +298,26 @@ struct SubredditDrawerView: View {
             }
             self.isLoading = false
             self.hasInitiallyLoaded = true
+        }
+    }
+
+    @MainActor
+    private func refreshMultis() async {
+        do {
+            let ms = try await apiService.fetchUserMultiredditsCached(forceRefresh: true)
+            self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+        } catch {
+            // ignore
+        }
+    }
+
+    private func deleteMulti(_ multi: MultiReddit) async {
+        guard let username = apiService.userInfo?.name else { return }
+        do {
+            try await apiService.deleteMultireddit(username: username, name: multi.name)
+            await refreshMultis()
+        } catch {
+            // ignore for now; could show toast
         }
     }
     

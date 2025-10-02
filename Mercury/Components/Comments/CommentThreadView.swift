@@ -107,10 +107,10 @@ struct CommentThreadView: View {
                         },
                     )
                     .id(flatComment.comment.id)
-                    .padding(.leading, CGFloat(flatComment.depth * 24))
+                    .padding(.leading, CGFloat(flatComment.depth * 12))
                     .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
                     .padding(.vertical, 4)
-                    .modifier(RootCommentWidthModifier(isRootComment: flatComment.depth == 0))
+                    // Root comments now expand naturally to available width.
                 } else {
                     EmptyView()
                 }
@@ -133,10 +133,10 @@ struct CommentThreadView: View {
                         },
                         depthColor: depthColor(for: flatMoreComments.depth)
                     )
-                    .padding(.leading, CGFloat(flatMoreComments.depth * 24))
+                    .padding(.leading, CGFloat(flatMoreComments.depth * 12))
                     .padding(.horizontal, flatMoreComments.depth == 0 ? 0 : 8)
                     .padding(.vertical, 4)
-                    .modifier(RootCommentWidthModifier(isRootComment: flatMoreComments.depth == 0))
+                    // Root-level load-more rows also expand naturally.
                 } else {
                     EmptyView()
                 }
@@ -416,18 +416,4 @@ struct FlatMoreComments: Identifiable {
     let parentId: String?
 }
 
-// Custom modifier to apply post card width to root comments only
-struct RootCommentWidthModifier: ViewModifier {
-    let isRootComment: Bool
-    
-    func body(content: Content) -> some View {
-        if isRootComment {
-            content
-                .containerRelativeFrame(.horizontal) { width, _ in
-                    width - 32
-                    }
-        } else {
-            content
-        }
-    }
-}
+// Removed custom width modifier; root comments now use container padding.

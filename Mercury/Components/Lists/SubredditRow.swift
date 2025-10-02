@@ -38,18 +38,19 @@ struct SubredditRow: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(subreddit.displayNamePrefixed)
-                        .font(.body)
-                        .fontWeight(.medium)
+                        .appFont(.body, weight: .medium)
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     
                     HStack(spacing: 4) {
                         Text("\(subreddit.memberCountText) members")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                         
                         if subreddit.isNsfw {
                             Text("NSFW")
-                                .font(.caption2)
+                                .appFont(.small)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 4)

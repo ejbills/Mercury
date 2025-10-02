@@ -48,6 +48,11 @@ extension Defaults.Keys {
     static let proxyPort = Key<Int?>("proxyPort", default: nil)
     static let proxyUsername = Key<String?>("proxyUsername", default: nil)
     static let proxyPassword = Key<String?>("proxyPassword", default: nil)
+
+    // Text sizing (independent of AX size)
+    static let titleTextScale = Key<Double>("titleTextScale", default: 1.0)
+    static let bodyTextScale = Key<Double>("bodyTextScale", default: 1.0)
+    static let captionTextScale = Key<Double>("captionTextScale", default: 1.0)
 }
 
 enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {

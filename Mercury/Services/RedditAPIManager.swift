@@ -219,6 +219,18 @@ class RedditAPIManager {
         try await contentService.fetchMultiPosts(username: username, multi: multi, sort: sort, timeFrame: timeFrame, after: after, limit: limit)
     }
 
+    func createMultireddit(displayName: String, subreddits: [String], descriptionMd: String? = nil) async throws -> MultiReddit {
+        try await contentService.createMultireddit(displayName: displayName, subreddits: subreddits, descriptionMd: descriptionMd)
+    }
+
+    func updateMultireddit(username: String, name: String, displayName: String? = nil, subreddits: [String]? = nil, descriptionMd: String? = nil) async throws -> MultiReddit {
+        try await contentService.updateMultireddit(username: username, name: name, displayName: displayName, subreddits: subreddits, descriptionMd: descriptionMd)
+    }
+
+    func deleteMultireddit(username: String, name: String) async throws {
+        try await contentService.deleteMultireddit(username: username, name: name)
+    }
+
     // Cached variant for user's multireddits
     func fetchUserMultiredditsCached(forceRefresh: Bool = false) async throws -> [MultiReddit] {
         let currentUser = authService.userInfo?.name

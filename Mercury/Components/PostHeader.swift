@@ -17,7 +17,9 @@ struct PostHeader: View {
             }) {
                 Text(post.displaySubreddit)
                     .foregroundStyle(colorScheme.primaryTextColor)
-                    .font(.subheadline)
+                    .appFont(.meta)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             
             Spacer()
@@ -28,12 +30,14 @@ struct PostHeader: View {
                 HStack(alignment: .center, spacing: 6) {
                     UserAvatar(username: post.author, size: 16, iconURL: post.authorIconURL)
                     Text(post.timeAgo)
-                        .font(.caption2)
+                        .appFont(.small)
                         .foregroundStyle(colorScheme.tertiaryTextColor)
                                         
                     Text(post.author)
                         .foregroundStyle(colorScheme.secondaryTextColor)
-                        .font(.subheadline)
+                        .appFont(.meta)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }

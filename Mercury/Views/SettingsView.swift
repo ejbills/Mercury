@@ -62,6 +62,12 @@ struct SettingsView: View {
                 }
                 
                 NavigationLink {
+                    TextSizeSettingsView()
+                } label: {
+                    Label("Text Size", systemImage: "textformat.size")
+                }
+
+                NavigationLink {
                     MediaSettingsView()
                 } label: {
                     Label("Media Settings", systemImage: "photo.on.rectangle.angled")

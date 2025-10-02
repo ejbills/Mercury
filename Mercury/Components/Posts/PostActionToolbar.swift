@@ -77,11 +77,12 @@ struct PostActionToolbar: View {
                         }
                     }
                 } label: {
-                    GlassMenuLabel(
-                        systemImage: "ellipsis",
-                        foreground: secondaryColor,
-                        font: .title3
-                    )
+                    Pill(size: .small) {
+                        Image(systemName: "ellipsis")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 14, height: 14)
+                    }
                 }
             }
             
@@ -160,13 +161,13 @@ struct PostActionToolbar: View {
                             }
                         }
                     } label: {
-                        GlassMenuLabel(
-                            systemImage: "ellipsis",
-                            foreground: secondaryColor,
-                            font: .title2
-                        )
+                        Pill(size: .small) {
+                            Image(systemName: "ellipsis")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 14, height: 14)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
             } else {
                 Spacer()
