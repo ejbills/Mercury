@@ -25,6 +25,7 @@ struct RedditPost: Codable, Identifiable, Hashable {
     let isVideo: Bool
     let isGallery: Bool?
     let mediaMetadata: [String: MediaMetadataItem]?
+    let galleryData: GalleryData?
     let media: MediaData?
     let secureMedia: MediaData?
     let mediaEmbed: MediaEmbed?
@@ -73,6 +74,7 @@ struct RedditPost: Codable, Identifiable, Hashable {
         case isVideo = "is_video"
         case isGallery = "is_gallery"
         case mediaMetadata = "media_metadata"
+        case galleryData = "gallery_data"
         case secureMedia = "secure_media"
         case mediaEmbed = "media_embed"
         case secureMediaEmbed = "secure_media_embed"
@@ -111,6 +113,7 @@ struct RedditPost: Codable, Identifiable, Hashable {
         isVideo = try container.decodeIfPresent(Bool.self, forKey: .isVideo) ?? false
         isGallery = try container.decodeIfPresent(Bool.self, forKey: .isGallery)
         mediaMetadata = try container.decodeIfPresent([String: MediaMetadataItem].self, forKey: .mediaMetadata)
+        galleryData = try container.decodeIfPresent(GalleryData.self, forKey: .galleryData)
         media = try container.decodeIfPresent(MediaData.self, forKey: .media)
         secureMedia = try container.decodeIfPresent(MediaData.self, forKey: .secureMedia)
         mediaEmbed = try container.decodeIfPresent(MediaEmbed.self, forKey: .mediaEmbed)
@@ -435,18 +438,38 @@ struct RedditPost: Codable, Identifiable, Hashable {
     }
     
     var galleryImages: [GalleryImage] {
+        // Prefer the explicit API order from gallery_data.items
         if let mediaMetadata = mediaMetadata, !mediaMetadata.isEmpty {
-            return Array(mediaMetadata.enumerated()).compactMap { (index, keyValue) in
-                let (_, metadata) = keyValue
+            if let items = galleryData?.items, !items.isEmpty {
+                return items.enumerated().compactMap { (orderIndex, item) in
+                    guard let metadata = mediaMetadata[item.mediaId],
+                          let source = metadata.s,
+                          let urlString = source.u,
+                          let width = source.x,
+                          let height = source.y else {
+                        return nil
+                    }
+                    let cleanURL = urlString.replacingOccurrences(of: "&amp;", with: "&")
+                    return GalleryImage(
+                        id: "\(id)_\(orderIndex)",
+                        url: cleanURL,
+                        width: width,
+                        height: height,
+                        index: orderIndex
+                    )
+                }
+            }
+            // Fallback: preserve a stable order by sorting keys
+            let sortedPairs = mediaMetadata.sorted { $0.key < $1.key }
+            return sortedPairs.enumerated().compactMap { (index, pair) in
+                let metadata = pair.value
                 guard let source = metadata.s,
                       let urlString = source.u,
                       let width = source.x,
                       let height = source.y else {
                     return nil
                 }
-                
                 let cleanURL = urlString.replacingOccurrences(of: "&amp;", with: "&")
-                
                 return GalleryImage(
                     id: "\(id)_\(index)",
                     url: cleanURL,
@@ -773,6 +796,19 @@ struct MediaMetadataItem: Codable {
         let y: Int?
         let x: Int?
         let u: String?
+    }
+}
+
+// Reddit provides ordered gallery info via `gallery_data.items`
+struct GalleryData: Codable {
+    let items: [GalleryItem]
+}
+
+struct GalleryItem: Codable {
+    let mediaId: String
+    
+    enum CodingKeys: String, CodingKey {
+        case mediaId = "media_id"
     }
 }
 

@@ -6,6 +6,9 @@ struct AlphabeticalSubredditList: View {
     let onQuickLinkTap: ((QuickLink) -> Void)?
     let multis: [MultiReddit]
     let onMultiTap: ((MultiReddit) -> Void)?
+    let onCreateMulti: (() -> Void)?
+    let onEditMulti: ((MultiReddit) -> Void)?
+    let onDeleteMulti: ((MultiReddit) -> Void)?
     let favoriteSubreddits: Set<String>
     let onFavoriteToggle: ((Subreddit) -> Void)?
     let subscribedSubreddits: Set<String>
@@ -17,6 +20,9 @@ struct AlphabeticalSubredditList: View {
         onQuickLinkTap: ((QuickLink) -> Void)? = nil,
         multis: [MultiReddit] = [],
         onMultiTap: ((MultiReddit) -> Void)? = nil,
+        onCreateMulti: (() -> Void)? = nil,
+        onEditMulti: ((MultiReddit) -> Void)? = nil,
+        onDeleteMulti: ((MultiReddit) -> Void)? = nil,
         favoriteSubreddits: Set<String> = Set(),
         onFavoriteToggle: ((Subreddit) -> Void)? = nil,
         subscribedSubreddits: Set<String> = Set(),
@@ -27,6 +33,9 @@ struct AlphabeticalSubredditList: View {
         self.onQuickLinkTap = onQuickLinkTap
         self.multis = multis
         self.onMultiTap = onMultiTap
+        self.onCreateMulti = onCreateMulti
+        self.onEditMulti = onEditMulti
+        self.onDeleteMulti = onDeleteMulti
         self.favoriteSubreddits = favoriteSubreddits
         self.onFavoriteToggle = onFavoriteToggle
         self.subscribedSubreddits = subscribedSubreddits
@@ -104,6 +113,17 @@ struct AlphabeticalSubredditList: View {
                                     MultiRedditRow(multi: multi) {
                                         onMultiTap?(multi)
                                     }
+                                    .contextMenu {
+                                        if let onMultiTap = onMultiTap {
+                                            Button("Open") { onMultiTap(multi) }
+                                        }
+                                        if let onEdit = onEditMulti {
+                                            Button("Edit") { onEdit(multi) }
+                                        }
+                                        if let onDelete = onDeleteMulti {
+                                            Button(role: .destructive) { onDelete(multi) } label: { Text("Delete") }
+                                        }
+                                    }
                                 }
                             case .favorites(let subreddits):
                                 ForEach(subreddits) { subreddit in
@@ -154,31 +174,38 @@ struct AlphabeticalSubredditList: View {
                             .font(.caption)
                             .foregroundStyle(.yellow)
                         Text("Quick Access")
-                            .font(.subheadline)
+                            .appFont(.meta)
                             .fontWeight(.semibold)
                     } else if title == "m" {
                         Image(systemName: "rectangle.3.group.fill")
                             .font(.caption)
                             .foregroundStyle(.indigo)
                         Text("Multireddits")
-                            .font(.subheadline)
+                            .appFont(.meta)
                             .fontWeight(.semibold)
                     } else if title == "♥" {
                         Image(systemName: "heart.fill")
                             .font(.caption)
                             .foregroundStyle(.red)
                         Text("Favorites")
-                            .font(.subheadline)
+                            .appFont(.meta)
                             .fontWeight(.semibold)
                     } else {
                         Text(title)
-                            .font(.subheadline)
+                            .appFont(.meta)
                             .fontWeight(.semibold)
                             .foregroundStyle(.primary)
                     }
                 }
             }
             Spacer()
+            if title == "m", let onCreate = onCreateMulti {
+                Button(action: { onCreate() }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -368,7 +395,7 @@ struct QuickAccessGrid: View {
                 }
                 
                 Text(link.rawValue)
-                    .font(.subheadline)
+                    .appFont(.meta)
                     .fontWeight(.medium)
                     .foregroundStyle(.primary)
                     .lineLimit(1)

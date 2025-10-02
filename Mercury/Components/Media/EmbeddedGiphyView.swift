@@ -9,20 +9,17 @@ struct EmbeddedGiphyView: View {
     var body: some View {
         Group {
             if let url = resolvedURL {
-                GeometryReader { proxy in
-                    FLAnimatedGifView(
-                        url: url,
-                        contentMode: .fit,
-                        cornerRadius: 12,
-                        fixedHeight: height(for: proxy.size.width)
-                    )
-                    .frame(width: proxy.size.width, height: height(for: proxy.size.width))
-                }
-                .frame(height: defaultHeight)
+                // Let the inner GIF view size itself by aspect ratio after load
+                FLAnimatedGifView(
+                    url: url,
+                    contentMode: .fit,
+                    cornerRadius: 12,
+                    fixedHeight: nil
+                )
+                .frame(maxWidth: .infinity)
             } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.quaternary.opacity(0.3))
-                    .frame(height: defaultHeight)
+                // No fixed height while resolving token; avoid locking parent
+                Color.clear
                     .overlay { ProgressView().scaleEffect(1.1) }
                     .task { await resolve() }
             }

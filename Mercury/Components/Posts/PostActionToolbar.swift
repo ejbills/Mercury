@@ -18,7 +18,6 @@ struct PostActionToolbar: View {
     let onSave: () -> Void
     let onCopyLink: (() -> Void)?
     let onOpenOriginal: (() -> Void)?
-    let onCommentsAction: (() -> Void)?
     let onDownload: (() -> Void)?
     let colorScheme: PostActionColorScheme
     let size: PostActionSize
@@ -33,73 +32,24 @@ struct PostActionToolbar: View {
         case large
     }
     
+    
     @Environment(\.navigationPathManager) private var navigationPath
     
     var body: some View {
         HStack(spacing: size == .large ? 20 : 12) {
-            // More menu (only for compact size)
             if size == .compact {
-                Menu {
-                    if let onReply = onReply, !post.locked, !post.archived {
-                        Button(action: onReply) {
-                            Label("Reply", systemImage: "arrowshape.turn.up.left")
+    
+                    Pill() {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bubble.left")
+                                .font(.callout)
+                            Text(post.commentsText)
+                                .appFont(.caption, weight: .medium)
                         }
+                        .foregroundStyle(secondaryColor)
                     }
-                    if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
-                        Button(action: onDownload) {
-                            let downloadLabel = switch post.postType {
-                            case .video: "Download Video"
-                            case .gif: "Download GIF"
-                            case .image: "Download Image"
-                            case .gallery: "Download Gallery"
-                            default: "Download"
-                            }
-                            Label(downloadLabel, systemImage: "arrow.down.circle")
-                        }
-                    }
-                    Button(action: onShare) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    
-                    Button(action: onSave) {
-                        Label(savedState ? "Unsave" : "Save", systemImage: savedState ? "bookmark.fill" : "bookmark")
-                    }
-                    
-                    if let onCopyLink = onCopyLink {
-                        Button(action: onCopyLink) {
-                            Label("Copy Link", systemImage: "link")
-                        }
-                    }
-                    
-                    if let urlString = post.url, !urlString.isEmpty, let onOpenOriginal = onOpenOriginal {
-                        Button(action: onOpenOriginal) {
-                            Label("Open Original", systemImage: "safari")
-                        }
-                    }
-                } label: {
-                    GlassMenuLabel(
-                        systemImage: "ellipsis",
-                        foreground: secondaryColor,
-                        font: .title3
-                    )
-                }
+                
             }
-            
-            // Comments button (conditional)
-            if let onCommentsAction = onCommentsAction {
-                Pill(action: onCommentsAction) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bubble.left")
-                            .font(.callout)
-                        Text(post.commentsText)
-                            .font(.callout)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundStyle(secondaryColor)
-                }
-            }
-
-            // No inline Reply pill; Reply lives in the menu only
             
             if size == .large {
                 Spacer()
@@ -135,38 +85,38 @@ struct PostActionToolbar: View {
                     }
                     .buttonStyle(.plain)
 
-                    Menu {
-                        if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
-                            Button(action: onDownload) {
-                                let downloadLabel = switch post.postType {
-                                case .video: "Download Video"
-                                case .gif: "Download GIF"
-                                case .image: "Download Image"
-                                case .gallery: "Download Gallery"
-                                default: "Download"
+                        Menu {
+                            if let onDownload = onDownload, post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
+                                Button(action: onDownload) {
+                                    let downloadLabel = switch post.postType {
+                                    case .video: "Download Video"
+                                    case .gif: "Download GIF"
+                                    case .image: "Download Image"
+                                    case .gallery: "Download Gallery"
+                                    default: "Download"
+                                    }
+                                    Label(downloadLabel, systemImage: "arrow.down.circle")
                                 }
-                                Label(downloadLabel, systemImage: "arrow.down.circle")
                             }
-                        }
-                        if let onCopyLink = onCopyLink {
-                            Button(action: onCopyLink) {
-                                Label("Copy Link", systemImage: "link")
+                            if let onCopyLink = onCopyLink {
+                                Button(action: onCopyLink) {
+                                    Label("Copy Link", systemImage: "link")
+                                }
                             }
-                        }
+                            if let urlString = post.url, !urlString.isEmpty, let onOpenOriginal = onOpenOriginal {
+                                Button(action: onOpenOriginal) {
+                                    Label("Open Original", systemImage: "safari")
+                                }
+                            }
+                        } label: {
+                            Pill(size: .small) {
+                                Image(systemName: "ellipsis")
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 14, height: 14)
+                            }
                         
-                        if let urlString = post.url, !urlString.isEmpty, let onOpenOriginal = onOpenOriginal {
-                            Button(action: onOpenOriginal) {
-                                Label("Open Original", systemImage: "safari")
-                            }
-                        }
-                    } label: {
-                        GlassMenuLabel(
-                            systemImage: "ellipsis",
-                            foreground: secondaryColor,
-                            font: .title2
-                        )
                     }
-                    .buttonStyle(.plain)
                 }
             } else {
                 Spacer()

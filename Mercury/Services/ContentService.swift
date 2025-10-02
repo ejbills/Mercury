@@ -117,6 +117,107 @@ class ContentService: BaseRedditService {
         return try await performPostRequest(request: request, endpoint: "user/\(username)/m/\(multi)")
     }
 
+    // MARK: - Create / Edit / Delete Multireddits
+
+    /// Create a new multireddit for the current user
+    func createMultireddit(displayName: String, subreddits: [String], descriptionMd: String? = nil, iconName: String? = nil, keyColor: String? = nil, visibility: String? = nil) async throws -> MultiReddit {
+        try validateAccessToken()
+        guard let username = authService?.userInfo?.name else { throw APIError.userNotFound }
+        guard let url = URL(string: "\(baseURL)/api/multi") else { throw APIError.parseError }
+
+        var request = createPOSTRequest(url: url)
+        // Build JSON model per Reddit API
+        let model: [String: Any] = {
+            var m: [String: Any] = [
+                "display_name": displayName,
+                "subreddits": subreddits.map { ["name": $0] }
+            ]
+            if let descriptionMd { m["description_md"] = descriptionMd }
+            if let iconName { m["icon_name"] = iconName }
+            if let keyColor { m["key_color"] = keyColor }
+            if let visibility { m["visibility"] = visibility }
+            return m
+        }()
+
+        let multipath = "/user/\(username)/m/\(displayName)"
+        let jsonData = try JSONSerialization.data(withJSONObject: model, options: [])
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        let body = "multipath=\(multipath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? multipath)&model=\(jsonString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? jsonString)"
+        request.httpBody = body.data(using: .utf8)
+
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+            // Response returns a labeled multi
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let labeled = try decoder.decode(LabeledMulti.self, from: data)
+            return MultiReddit(
+                name: labeled.data.name,
+                path: labeled.data.path,
+                descriptionMd: labeled.data.descriptionMd,
+                iconUrl: labeled.data.iconUrl,
+                subreddits: labeled.data.subreddits.map { $0.name }
+            )
+        } catch is URLError {
+            throw APIError.networkError
+        }
+    }
+
+    /// Update an existing multireddit
+    func updateMultireddit(username: String, name: String, displayName: String? = nil, subreddits: [String]? = nil, descriptionMd: String? = nil, iconName: String? = nil, keyColor: String? = nil, visibility: String? = nil) async throws -> MultiReddit {
+        try validateAccessToken()
+        guard let url = URL(string: "\(baseURL)/api/multi/user/\(username)/m/\(name)") else { throw APIError.parseError }
+
+        var request = createRequest(url: url)
+        request.httpMethod = "PUT"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var model: [String: Any] = [:]
+        if let displayName { model["display_name"] = displayName }
+        if let subreddits { model["subreddits"] = subreddits.map { ["name": $0] } }
+        if let descriptionMd { model["description_md"] = descriptionMd }
+        if let iconName { model["icon_name"] = iconName }
+        if let keyColor { model["key_color"] = keyColor }
+        if let visibility { model["visibility"] = visibility }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: model, options: [])
+
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let labeled = try decoder.decode(LabeledMulti.self, from: data)
+            return MultiReddit(
+                name: labeled.data.name,
+                path: labeled.data.path,
+                descriptionMd: labeled.data.descriptionMd,
+                iconUrl: labeled.data.iconUrl,
+                subreddits: labeled.data.subreddits.map { $0.name }
+            )
+        } catch is URLError {
+            throw APIError.networkError
+        }
+    }
+
+    /// Delete an existing multireddit
+    func deleteMultireddit(username: String, name: String) async throws {
+        try validateAccessToken()
+        guard let url = URL(string: "\(baseURL)/api/multi/user/\(username)/m/\(name)") else { throw APIError.parseError }
+        var request = createRequest(url: url)
+        request.httpMethod = "DELETE"
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http, allowedStatusCodes: [200, 204])
+        } catch is URLError {
+            throw APIError.networkError
+        }
+    }
+
     /// Subscribe to a subreddit
     func subscribe(to subreddit: String) async throws {
         try await performSubscribeAction(subreddit: subreddit, subscribe: true)

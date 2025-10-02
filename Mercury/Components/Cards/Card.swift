@@ -13,7 +13,7 @@ struct Card<Content: View>: View {
     let interactionMode: CardInteractionMode
     let highlightColor: Color?
     
-    @State private var isPressed = false
+    // No press state visuals; keep interactions simple and static
     
     init(
         style: CardStyle = .default,
@@ -56,22 +56,13 @@ struct Card<Content: View>: View {
                         lineWidth: style.borderWidth
                     )
             }
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isPressed)
             .clipped()
             .contentShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isPressed)
             .onTapGesture {
                 if case .tappable(let action) = interactionMode {
                     action()
                 }
             }
-            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity) { pressing in
-                if case .tappable = interactionMode {
-                    isPressed = pressing
-                }
-            } perform: {}
     }
 }
 

@@ -139,7 +139,7 @@ struct PostCommentsView: View {
                                 post: post,
                                 onReplyPosted: { _ in }
                             )
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 16)
                         }
                     }
                 }
@@ -199,6 +199,7 @@ struct PostCommentsView: View {
                 sort: commentSort,
                 scrollProxy: proxy,
             )
+            .padding(.horizontal, 16)
             
             if !threadManager.moreObjects.isEmpty {
                 LazyVStack(spacing: 8) {
@@ -239,7 +240,7 @@ struct PostCommentsView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 16)
                     }
                 }
             }

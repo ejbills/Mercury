@@ -14,40 +14,63 @@ struct FLAnimatedGifView: View {
     @State private var isLoading = false
     @State private var error: Error? = nil
     @State private var task: ImageTask? = nil
+    @State private var aspectRatio: CGFloat? = nil // height / width
 
     var body: some View {
         ZStack {
             if let data = gifData {
-                FLAnimatedImageViewRepresentable(
+                // If a fixedHeight is provided, use it; otherwise size by aspect ratio
+                let view = FLAnimatedImageViewRepresentable(
                     data: data,
                     uiContentMode: (contentMode == .fill ? .scaleAspectFill : .scaleAspectFit),
                     cornerRadius: cornerRadius
                 )
                 .id(data.hashValue)
                 .frame(maxWidth: .infinity)
-                .frame(height: fixedHeight)
                 .contentShape(Rectangle())
+
+                if let fixedHeight {
+                    view.frame(height: fixedHeight)
+                } else if let ar = aspectRatio, ar > 0 {
+                    // aspectRatio expects width/height. We have height/width.
+                    view.aspectRatio(1.0 / ar, contentMode: .fit)
+                } else {
+                    view.frame(height: 220)
+                }
             } else if isLoading {
-                placeholder
+                // Do not impose a height while loading so we don't lock the parent size
+                Color.clear
+                    .frame(maxWidth: .infinity)
                     .overlay { ProgressView().scaleEffect(1.1) }
             } else if error != nil {
-                errorView
+                // Show a lightweight error state without fixing height
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .overlay {
+                        VStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                            Text("Failed to load GIF").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
             } else {
-                placeholder
+                // Initial state: trigger load without constraining height
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .overlay { ProgressView().scaleEffect(1.1) }
                     .onAppear { startLoad() }
             }
         }
         .onDisappear { cancelLoad() }
     }
 
-    private var placeholder: some View {
+    private func placeholder(height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius)
             .fill(.quaternary.opacity(0.3))
             .frame(maxWidth: .infinity)
-            .frame(height: fixedHeight)
+            .frame(height: height)
     }
 
-    private var errorView: some View {
+    private func errorView(height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius)
             .fill(.quaternary.opacity(0.3))
             .overlay {
@@ -61,7 +84,7 @@ struct FLAnimatedGifView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: fixedHeight)
+            .frame(height: height)
     }
 
     private func startLoad() {
@@ -76,6 +99,11 @@ struct FLAnimatedGifView: View {
                 DispatchQueue.main.async {
                     self.gifData = data
                     self.isLoading = false
+                    // Derive aspect ratio from GIF frames
+                    if let animated = FLAnimatedImage(animatedGIFData: data) {
+                        let sz = animated.size
+                        if sz.width > 0 { self.aspectRatio = sz.height / sz.width }
+                    }
                     
                 }
             case .failure(let error):
