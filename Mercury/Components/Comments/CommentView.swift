@@ -91,14 +91,13 @@ struct CommentView: View {
                 }, size: .small) {
                     HStack(spacing: 4) {
                         Text(isDeletedUser ? "[deleted]" : comment.author)
-                            .font(.caption)
-                            .fontWeight(.medium)
+                            .appFont(.caption, weight: .medium)
                             .foregroundStyle(authorColor)
                             .lineLimit(1)
                         
                         if comment.isSubmitter {
                             Text("OP")
-                                .font(.caption2)
+                                .appFont(.small)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 4)
@@ -116,8 +115,7 @@ struct CommentView: View {
                 if !comment.scoreHidden {
                     Pill(size: .small) {
                         Text(scoreText)
-                            .font(.caption2)
-                            .fontWeight(.medium)
+                            .appFont(.small, weight: .medium)
                             .foregroundStyle(scoreColor)
                             .monospacedDigit()
                     }
@@ -125,7 +123,7 @@ struct CommentView: View {
                 
                 Pill(size: .small) {
                     Text(comment.timeAgo)
-                        .font(.caption2)
+                        .appFont(.small)
                         .foregroundStyle(.secondary)
                 }
                 
@@ -153,7 +151,7 @@ struct CommentView: View {
         Group {
             if wasDeleted || comment.body == "[deleted]" || comment.body == "[removed]" {
                 Text("[deleted]")
-                    .font(.subheadline)
+                    .appFont(.meta)
                     .italic()
                     .foregroundStyle(.tertiary)
             } else {

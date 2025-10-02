@@ -148,7 +148,6 @@ struct PostRowView: View {
                             onSave: handleSave,
                             onCopyLink: handleCopyLink,
                             onOpenOriginal: handleOpenOriginal,
-                            onCommentsAction: nil,
                             onDownload: handleDownload,
                             colorScheme: .light,
                             size: .large
@@ -167,13 +166,45 @@ struct PostRowView: View {
                         onSave: handleSave,
                         onCopyLink: handleCopyLink,
                         onOpenOriginal: handleOpenOriginal,
-                        onCommentsAction: {
-                            navigationPath.navigate(to: .postComments(post: currentPost))
-                        },
                         onDownload: handleDownload,
                         colorScheme: .light,
                         size: .compact
                     )
+                }
+            }
+        }
+        // Use Card's tap handler for reliable navigation on whitespace
+        .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
+        .contextMenu {
+            if !post.locked && !post.archived {
+                Button(action: { showingPostReply = true }) {
+                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                }
+            }
+            if post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery {
+                Button(action: handleDownload) {
+                    let label = switch post.postType {
+                    case .video: "Download Video"
+                    case .gif: "Download GIF"
+                    case .image: "Download Image"
+                    case .gallery: "Download Gallery"
+                    default: "Download"
+                    }
+                    Label(label, systemImage: "arrow.down.circle")
+                }
+            }
+            Button(action: handleShare) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(action: handleSave) {
+                Label(savedState ? "Unsave" : "Save", systemImage: savedState ? "bookmark.fill" : "bookmark")
+            }
+            if let urlString = post.url, !urlString.isEmpty {
+                Button(action: handleCopyLink) {
+                    Label("Copy Link", systemImage: "link")
+                }
+                Button(action: handleOpenOriginal) {
+                    Label("Open Original", systemImage: "safari")
                 }
             }
         }

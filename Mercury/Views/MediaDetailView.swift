@@ -149,7 +149,6 @@ struct MediaDetailView: View {
                 onSave: handleSave,
                 onCopyLink: nil,
                 onOpenOriginal: nil,
-                onCommentsAction: nil,
                 onDownload: handleDownload,
                 colorScheme: .dark,
                 size: .compact

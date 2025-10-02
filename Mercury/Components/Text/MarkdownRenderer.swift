@@ -2,6 +2,7 @@ import SwiftUI
 import MarkdownUI
 import NukeUI
 import Nuke
+import Defaults
 
 extension String {
     func matches(_ pattern: String) -> Bool {
@@ -16,6 +17,7 @@ struct MarkdownRenderer: View {
     let compactMode: Bool
     let showEmbeddedContent: Bool
     let attachments: [String: UIImage]?
+    @Default(.bodyTextScale) private var bodyScale
     
     init(content: String, compactMode: Bool = false, showEmbeddedContent: Bool = true, attachments: [String: UIImage]? = nil) {
         self.content = content
@@ -26,9 +28,16 @@ struct MarkdownRenderer: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Markdown(compactMode ? String("\(processedContent.prefix(150))...") : processedContent)
-                .appFont(.body)
-                .textSelection(.enabled)
+            let visible = compactMode ? String("\(processedContent.prefix(150))...") : processedContent
+            if let attributed = try? AttributedString(markdown: visible) {
+                Text(attributed)
+                    .font(.system(size: 16 * bodyScale))
+                    .textSelection(.enabled)
+            } else {
+                Text(visible)
+                    .font(.system(size: 16 * bodyScale))
+                    .textSelection(.enabled)
+            }
             if showEmbeddedContent {
                 let embedContent = extractLinks(from: content)
                 ForEach(Array(embedContent.enumerated()), id: \.offset) { index, embed in

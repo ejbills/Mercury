@@ -50,8 +50,7 @@ struct LoadMoreCommentsView: View {
                             }
                             let nextCount = max(moreComments.children.count, 25)
                             Text(isLoading ? "Loading more comments…" : "Load \(nextCount) more comments")
-                                .font(.headline)
-                                .fontWeight(.semibold)
+                                .appFont(.body, weight: .semibold)
                         }
                     }
                     .disabled(isLoading)
@@ -74,8 +73,7 @@ struct LoadMoreCommentsView: View {
                                     .fontWeight(.medium)
                             }
                             Text(isLoading ? "Loading…" : "Show more replies")
-                                .font(.callout)
-                                .fontWeight(.medium)
+                                .appFont(.caption, weight: .medium)
                         }
                     }
                     .disabled(isLoading)

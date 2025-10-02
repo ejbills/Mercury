@@ -25,15 +25,15 @@ struct AppFontModifier: ViewModifier {
     private func pointSize(for role: AppTextRole) -> CGFloat {
         switch role {
         case .title:
-            return 20 * titleScale        // baseline ~ title3
+            return 18 * titleScale        // slightly smaller default title
         case .body:
-            return 17 * bodyScale         // baseline ~ body
+            return 16 * bodyScale         // standard body size
         case .meta:
-            return 15 * captionScale      // baseline ~ subheadline
+            return 14 * captionScale      // subheadline/meta smaller by default
         case .caption:
-            return 12 * captionScale      // baseline ~ caption1
+            return 12 * captionScale      // caption
         case .small:
-            return 11 * captionScale      // baseline ~ caption2
+            return 11 * captionScale      // tiny caption
         }
     }
 }
@@ -43,4 +43,3 @@ extension View {
         modifier(AppFontModifier(role: role, weight: weight))
     }
 }
-
