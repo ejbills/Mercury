@@ -81,15 +81,13 @@ struct CompactCommentView: View {
                             UserAvatar(username: comment.author, size: 16)
                             
                             Text(isDeletedUser ? "[deleted]" : comment.author)
-                                .font(.caption)
-                                .fontWeight(.medium)
+                                .appFont(.caption, weight: .medium)
                                 .foregroundStyle(authorColor)
                                 .lineLimit(1)
                             
                             if comment.isSubmitter {
                                 Text("OP")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
+                                    .appFont(.small, weight: .bold)
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 3)
                                     .padding(.vertical, 1)
@@ -98,21 +96,20 @@ struct CompactCommentView: View {
                         }
                         
                         Text("•")
-                            .font(.caption2)
+                            .appFont(.small)
                             .foregroundStyle(.tertiary)
                         
                         Text(comment.timeAgo)
-                            .font(.caption2)
+                            .appFont(.small)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
                         if !comment.scoreHidden {
                             Text("•")
-                                .font(.caption2)
+                                .appFont(.small)
                                 .foregroundStyle(.tertiary)
                             Text(scoreText)
-                                .font(.caption)
-                                .fontWeight(.semibold)
+                                .appFont(.caption, weight: .semibold)
                                 .foregroundStyle(scoreColor)
                                 .monospacedDigit()
                                 .lineLimit(1)
@@ -166,12 +163,12 @@ struct CompactCommentView: View {
                         Group {
                             if wasDeleted || comment.body == "[deleted]" || comment.body == "[removed]" {
                                 Text("[deleted]")
-                                    .font(.caption)
+                                    .appFont(.caption)
                                     .italic()
                                     .foregroundStyle(.tertiary)
                             } else {
-                                MarkdownRenderer(content: comment.body, compactMode: true)
-                                    .font(.caption)
+                                MarkdownRenderer(content: comment.body, compactMode: false)
+                                    .appFont(.caption)
                                     .foregroundStyle(.primary)
                                     .lineSpacing(1)
                                     .multilineTextAlignment(.leading)
