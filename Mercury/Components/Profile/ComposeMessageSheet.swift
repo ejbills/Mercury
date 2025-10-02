@@ -13,36 +13,35 @@ struct ComposeMessageSheet: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                HStack {
-                    Text("To")
-                    Spacer()
-                    Text("u/\(toUsername)").foregroundStyle(.secondary)
+            Form {
+                Section {
+                    HStack {
+                        Text("To")
+                        Spacer()
+                        let display = toUsername.hasPrefix("r/") ? toUsername : "u/\(toUsername)"
+                        Text(display).foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
-                .font(.subheadline)
-                .padding(.horizontal)
-                
-                HStack(spacing: 8) {
-                    Text("Subject")
+                Section(header: Text("Subject")) {
                     TextField("Subject", text: $subject)
-                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.sentences)
+                        .autocorrectionDisabled(false)
                 }
-                .padding(.horizontal)
-                
-                ZStack(alignment: .topLeading) {
-                    MarkdownTextView(text: $bodyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
-                        .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
-                        .padding(.horizontal)
-                    if bodyText.isEmpty {
-                        Text("Message in Markdown…")
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                            .padding(.top, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                Section(header: Text("Message")) {
+                    ZStack(alignment: .topLeading) {
+                        MarkdownTextView(text: $bodyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
+                            .frame(minHeight: 220, alignment: .topLeading)
+                        if bodyText.isEmpty {
+                            Text("Write your message in Markdown…")
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
-                Spacer()
             }
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { isPresented = false }

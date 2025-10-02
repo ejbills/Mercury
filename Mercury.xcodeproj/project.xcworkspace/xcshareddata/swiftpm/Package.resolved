@@ -1,5 +1,5 @@
 {
-  "originHash" : "e3e1e118042a3753099bf70074437e51e91313c63c53aa64e5c44cb90bcd2713",
+  "originHash" : "8788272bae08fa7f456223bcc33cbe300080eb6961ae885e5dd7cc378d58d525",
   "pins" : [
     {
       "identity" : "defaults",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "00c82eff4550c87cf9c547d7e5493a6a97837061",
         "version" : "9.0.3"
+      }
+    },
+    {
+      "identity" : "flanimatedimage",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Flipboard/FLAnimatedImage.git",
+      "state" : {
+        "revision" : "d4f07b6f164d53c1212c3e54d6460738b1981e9f",
+        "version" : "1.0.17"
       }
     },
     {
@@ -62,15 +71,6 @@
       "state" : {
         "revision" : "f99ae8aa18f0cf0d53481901f88a0991dc3bd4a2",
         "version" : "601.0.1"
-      }
-    },
-    {
-      "identity" : "swiftygif",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/alexiscreuzot/SwiftyGif.git",
-      "state" : {
-        "revision" : "4430cbc148baa3907651d40562d96325426f409a",
-        "version" : "5.4.5"
       }
     },
     {

@@ -70,6 +70,8 @@ struct CompactPostRowView: View {
             return post.gifURL != nil
         case .video:
             return post.videoURL != nil
+        case .youtube:
+            return post.url != nil
         case .gallery:
             return !post.galleryImages.isEmpty
         case .link:
@@ -124,10 +126,7 @@ struct CompactPostRowView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 28, height: 28)
+                        GlassMenuLabel(systemImage: "ellipsis", foreground: .secondary, font: .caption)
                     }
                 }
                 .frame(width: 28)
@@ -176,7 +175,6 @@ struct CompactPostRowView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .contentShape(Rectangle())
-                        .onTapGesture { navigationPath.navigate(to: .postComments(post: currentPost)) }
 
                     // Badges (tags keep their own coloring)
                     HStack(spacing: 4) {
@@ -215,14 +213,6 @@ struct CompactPostRowView: View {
                         .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .contentShape(RoundedRectangle(cornerRadius: 8))
-                        .onTapGesture {
-                            switch postType {
-                            case .image, .gif, .video, .gallery:
-                                selectedPost = currentPost
-                            case .text, .link:
-                                break
-                            }
-                        }
 
                     Pill(action: {
                         navigationPath.navigate(to: .postComments(post: currentPost))
@@ -239,6 +229,8 @@ struct CompactPostRowView: View {
                 }
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { navigationPath.navigate(to: .postComments(post: currentPost)) }
         .sheet(isPresented: $showShareSheet) {
             MediaShareSheet(post: post, mediaURL: shareItem)
         }
@@ -337,6 +329,31 @@ struct CompactPostRowView: View {
                     .font(.title2)
                     .foregroundStyle(.secondary)
             }
+        case .youtube:
+            if let thumb = post.videoThumbnailURL ?? post.imageURL ?? validThumbnailURL {
+                LazyImage(url: URL(string: thumb)) { state in
+                    if let image = state.image {
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .overlay {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.white)
+                                    .background(.black.opacity(0.6), in: Circle())
+                            }
+                    } else {
+                        Image(systemName: "play.rectangle.on.rectangle")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .matchedTransitionSource(id: "\(post.id)-youtube", in: namespace)
+            } else {
+                Image(systemName: "play.rectangle.on.rectangle")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
         case .gallery:
             if let firstImage = post.galleryImages.first {
                 LazyImage(url: URL(string: firstImage.url)) { state in
@@ -373,6 +390,21 @@ struct CompactPostRowView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
+                            .overlay(alignment: .bottomLeading) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "globe")
+                                        .font(.caption2)
+                                    Text(shortenedDomain)
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .lineLimit(1)
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .padding(4)
+                            }
                     } else {
                         Image(systemName: "link")
                             .font(.title2)
@@ -380,9 +412,26 @@ struct CompactPostRowView: View {
                     }
                 }
             } else {
-                Image(systemName: "link")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
+                ZStack {
+                    Image(systemName: "link")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "globe")
+                            .font(.caption2)
+                        Text(shortenedDomain)
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(4)
+                }
             }
         }
     }
@@ -421,6 +470,12 @@ struct CompactPostRowView: View {
         return thumbnail
     }
 
+    private var shortenedDomain: String {
+        guard let domain = post.domain else { return "" }
+        if domain.hasPrefix("www.") { return String(domain.dropFirst(4)) }
+        return domain
+    }
+
     // Flair colors consistent with full post view
     private var flairBackgroundColor: Color {
         if let colorHex = post.linkFlairBackgroundColor, !colorHex.isEmpty {
@@ -439,7 +494,7 @@ struct CompactPostRowView: View {
     }
     
     private var shouldShowOpenOriginal: Bool {
-        return post.url != nil && postType == .link
+        return post.url != nil && (postType == .link || postType == .youtube)
     }
     
     // MARK: - Action Handlers

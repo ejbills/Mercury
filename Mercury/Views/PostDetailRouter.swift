@@ -11,9 +11,7 @@ struct PostDetailRouter: View {
     
     var body: some View {
         switch post.postType {
-        case .gallery:
-            GalleryDetailView(post: post, namespace: namespace)
-        case .image, .gif, .video:
+        case .gallery, .image, .gif, .video:
             MediaDetailView(
                 post: post, 
                 namespace: namespace, 

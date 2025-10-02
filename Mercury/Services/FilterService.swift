@@ -60,7 +60,11 @@ class FilterService {
     func isSubredditBlocked(_ subreddit: String) -> Bool {
         guard Defaults[.subredditBlockingEnabled] else { return false }
         let cleanSubreddit = subreddit.replacingOccurrences(of: "r/", with: "").lowercased()
-        return Defaults[.blockedSubreddits].contains(cleanSubreddit)
+        let patterns = Defaults[.blockedSubreddits]
+        // Support wildcard matching (e.g., "pol*" matches "politics", "polls", etc.)
+        return patterns.contains { pattern in
+            wildcard(pattern: pattern, matches: cleanSubreddit)
+        }
     }
     
     
@@ -134,5 +138,16 @@ class FilterService {
         return Defaults[.blockedKeywords].contains { keyword in
             lowercasedText.contains(keyword)
         }
+    }
+
+    // MARK: - Wildcard Matching Helper
+    // Simple glob matching where '*' matches any sequence of characters.
+    private func wildcard(pattern: String, matches text: String) -> Bool {
+        let loweredPattern = pattern.lowercased()
+        // Escape regex special chars, then replace escaped "*" with ".*"
+        var regexPattern = NSRegularExpression.escapedPattern(for: loweredPattern)
+        regexPattern = regexPattern.replacingOccurrences(of: "\\*", with: ".*")
+        regexPattern = "^" + regexPattern + "$"
+        return text.range(of: regexPattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 }

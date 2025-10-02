@@ -15,11 +15,13 @@ struct MarkdownRenderer: View {
     let content: String
     let compactMode: Bool
     let showEmbeddedContent: Bool
+    let attachments: [String: UIImage]?
     
-    init(content: String, compactMode: Bool = false, showEmbeddedContent: Bool = true) {
+    init(content: String, compactMode: Bool = false, showEmbeddedContent: Bool = true, attachments: [String: UIImage]? = nil) {
         self.content = content
         self.compactMode = compactMode
         self.showEmbeddedContent = showEmbeddedContent
+        self.attachments = attachments
     }
     
     var body: some View {
@@ -32,13 +34,24 @@ struct MarkdownRenderer: View {
                 ForEach(Array(embedContent.enumerated()), id: \.offset) { index, embed in
                     switch embed {
                     case .link(let url):
-                        if isImageURL(url) || isGifURL(url) {
-                            EmbeddedMediaView(url: url)
+                        if isImageURL(url) || isGifURL(url) || isGiphyLink(url) {
+                            if isGiphyLink(url) {
+                                EmbeddedGiphyView(source: url)
+                            } else {
+                                EmbeddedMediaView(url: url)
+                            }
                         } else {
                             LinkItemView(link: url)
                         }
-                    case .giphy(let giphyFormat):
-                        GiphyEmbedView(redditFormat: giphyFormat)
+                    case .giphyToken(let token):
+                        EmbeddedGiphyView(source: token)
+                    case .attachment(let key):
+                        if let image = attachments?[key] {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
                     }
                 }
             }
@@ -48,15 +61,18 @@ struct MarkdownRenderer: View {
     private func extractLinks(from text: String) -> [EmbedContent] {
         var content: [EmbedContent] = []
         var processedText = text
-        let giphyPattern = #"giphy(%7C|[|])[0-9A-Za-z]+(?:(%7C|[|])[a-zA-Z0-9_]+)?"#
-        if let giphyRegex = try? NSRegularExpression(pattern: giphyPattern, options: []) {
+        // Detect inline attachments in the form: ![alt](attachment://key)
+        let attachmentPattern = #"!\[[^\]]*\]\(attachment://([a-zA-Z0-9_\-]+)\)"#
+        if let attachmentRegex = try? NSRegularExpression(pattern: attachmentPattern, options: []) {
             let range = NSRange(location: 0, length: processedText.utf16.count)
-            let giphyMatches = giphyRegex.matches(in: processedText, options: [], range: range)
-            for match in giphyMatches.reversed() {
-                if let range = Range(match.range, in: processedText) {
-                    let giphyString = String(processedText[range])
-                    content.append(.giphy(giphyString))
-                    processedText.removeSubrange(range)
+            let matches = attachmentRegex.matches(in: processedText, options: [], range: range)
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2, let r = Range(match.range(at: 1), in: processedText) {
+                    let key = String(processedText[r])
+                    content.append(.attachment(key))
+                    if let fullRange = Range(match.range(at: 0), in: processedText) {
+                        processedText.removeSubrange(fullRange)
+                    }
                 }
             }
         }
@@ -87,29 +103,38 @@ struct MarkdownRenderer: View {
             }
             content.append(contentsOf: regularLinks)
         }
+
+        // Detect GIPHY tokens Reddit may include (e.g. giphy|ID or giphy%7CID)
+        let giphyTokenPattern = #"giphy(?:\||%7C)[^\s)\]>]+"#
+        if let giphyRegex = try? NSRegularExpression(pattern: giphyTokenPattern, options: .caseInsensitive) {
+            let range = NSRange(location: 0, length: processedText.utf16.count)
+            let matches = giphyRegex.matches(in: processedText, options: [], range: range)
+            for m in matches {
+                if let r = Range(m.range, in: processedText) {
+                    let token = String(processedText[r])
+                    content.append(.giphyToken(token))
+                }
+            }
+            // Strip tokens out of the visible markdown
+            processedText = giphyRegex.stringByReplacingMatches(in: processedText, options: [], range: range, withTemplate: "")
+        }
         return content
     }
     
     private var processedContent: String {
         var processed = content
         
-        let giphyPattern = #"!\[gif\]\(giphy[|%][0-9A-Za-z]+(?:[|%][a-zA-Z0-9_]+)?\)"#
-        processed = processed.replacingOccurrences(
-            of: giphyPattern,
-            with: "",
-            options: .regularExpression
-        )
-        let standaloneGiphyPattern = #"giphy[|%][0-9A-Za-z]+(?:[|%][a-zA-Z0-9_]+)?"#
-        processed = processed.replacingOccurrences(
-            of: standaloneGiphyPattern,
-            with: "",
-            options: .regularExpression
-        )
+        // Strip custom attachment tokens so they don't show up in Markdown
+        let attachmentPattern = #"!\[[^\]]*\]\(attachment://([a-zA-Z0-9_\-]+)\)"#
+        processed = processed.replacingOccurrences(of: attachmentPattern, with: "", options: .regularExpression)
         processed = processed.replacingOccurrences(of: "&#x200B;", with: "")
         processed = processed.replacingOccurrences(of: "&amp;", with: "&")
         processed = processed.replacingOccurrences(of: "&lt;", with: "<")
         processed = processed.replacingOccurrences(of: "&gt;", with: ">")
         processed = processed.replacingOccurrences(of: "&quot;", with: "\"")
+        // Remove any raw giphy tokens from rendered markdown
+        let giphyTokenPattern = #"giphy(?:\||%7C)[^\s)\]>]+"#
+        processed = processed.replacingOccurrences(of: giphyTokenPattern, with: "", options: .regularExpression)
         do {
             let superscriptRegex = try NSRegularExpression(pattern: "\\^(\\w+)", options: [])
             let range = NSRange(location: 0, length: processed.utf16.count)
@@ -152,7 +177,6 @@ struct MarkdownRenderer: View {
                lowercaseURL.contains("preview.redd.it") ||
                lowercaseURL.contains("external-preview.redd.it") ||
                lowercaseURL.contains("i.imgur.com") ||
-               (lowercaseURL.contains("media.giphy.com") && lowercaseURL.contains(".gif")) ||
                // Reddit images often don't have extensions but are on image domains
                (lowercaseURL.contains("redd.it") && !lowercaseURL.contains("/r/")) ||
                // Imgur images without extensions
@@ -162,118 +186,27 @@ struct MarkdownRenderer: View {
     }
     
     private func isGifURL(_ url: String) -> Bool {
-        return url.lowercased().hasSuffix(".gif") ||
-               url.contains("media.giphy.com")
+        return url.lowercased().hasSuffix(".gif")
+    }
+
+    private func isGiphyLink(_ url: String) -> Bool {
+        let lower = url.lowercased()
+        return lower.contains("media.giphy.com") || lower.contains("giphy.com/gifs/") || lower.contains("giphy.com/stickers/")
     }
 }
 
 // MARK: - Embed Content Types
 enum EmbedContent: Hashable {
     case link(String)
-    case giphy(String)
-}
-
-// MARK: - Giphy Embed View
-struct GiphyEmbedView: View {
-    let redditFormat: String
-    @State private var giphyMedia: GiphyMedia?
-    @State private var isLoading = true
-    @State private var hasError = false
-    @State private var targetHeight: CGFloat? = nil
-    @Environment(\.colorScheme) private var colorScheme
-    private let defaultHeight: CGFloat = 300
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Stable container height derived from API dimensions when available
-            Group {
-                if let giphyMedia = giphyMedia, let url = URL(string: giphyMedia.url) {
-                    AnimatedGifCard(
-                        url: url,
-                        cornerRadius: 12,
-                        apiDimensions: nil,
-                        maxHeight: targetHeight ?? defaultHeight,
-                        fixedHeight: targetHeight ?? defaultHeight
-                    )
-                    .frame(maxWidth: .infinity)
-                } else if hasError {
-                    errorView
-                } else {
-                    loadingView
-                }
-            }
-            .frame(height: targetHeight ?? defaultHeight)
-            .frame(maxWidth: .infinity)
-
-            HStack {
-                Spacer()
-                Image("GIPHY_white_text")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 16)
-                    .opacity(colorScheme == .dark ? 1 : 0)
-                    .overlay(
-                        Image("GIPHY_black_text")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(height: 16)
-                            .opacity(colorScheme == .light ? 1 : 0)
-                    )
-            }
-        }
-        .task {
-            await loadGiphyMedia()
-        }
-    }
-    
-    private var loadingView: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(.quaternary.opacity(0.3))
-            .overlay {
-                VStack(spacing: 8) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                    Text("Loading GIF...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-    }
-    
-    private var errorView: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(.quaternary.opacity(0.3))
-            .overlay {
-                VStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.orange)
-                    Text("Failed to load GIF")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-    }
-    
-    private func loadGiphyMedia() async {
-        guard let media = await GiphyService.resolveGiphyMedia(from: redditFormat) else {
-            hasError = true
-            isLoading = false
-            return
-        }
-        
-        await MainActor.run {
-            self.giphyMedia = media
-            self.isLoading = false
-            self.targetHeight = MediaLayout.height(for: media.dimensions, maxHeight: 400, fallback: 300, minHeight: 120)
-        }
-    }
+    case giphyToken(String)
+    case attachment(String)
 }
 
 // MARK: - Embedded Media View
 struct EmbeddedMediaView: View {
     let url: String
     @State private var isLoaded = false
+    private let fixedHeight: CGFloat = 300
     
     private var processedURL: String {
         var processedURL = url
@@ -313,8 +246,16 @@ struct EmbeddedMediaView: View {
     var body: some View {
         Group {
             if isGif, let gifURL = URL(string: processedURL) {
-                AnimatedGifCard(url: gifURL, cornerRadius: 12, apiDimensions: nil, maxHeight: 400)
-                    .frame(maxWidth: .infinity)
+                GeometryReader { proxy in
+                    FLAnimatedGifView(
+                        url: gifURL,
+                        contentMode: .fit,
+                        cornerRadius: 12,
+                        fixedHeight: fixedHeight
+                    )
+                    .frame(width: proxy.size.width, height: fixedHeight)
+                }
+                .frame(height: fixedHeight)
             } else {
                 imageView
             }
@@ -325,25 +266,30 @@ struct EmbeddedMediaView: View {
     private var imageView: some View {
         LazyImage(url: URL(string: processedURL)) { state in
             if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: 400)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .opacity(isLoaded ? 1 : 0)
-                    .onAppear {
-                        if !isLoaded {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isLoaded = true
+                GeometryReader { proxy in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: proxy.size.width, height: fixedHeight)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .opacity(isLoaded ? 1 : 0)
+                        .onAppear {
+                            if !isLoaded {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isLoaded = true
+                                }
                             }
+                            
                         }
-                    }
+                        
+                }
+                .frame(height: fixedHeight)
             } else if state.error != nil {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.quaternary.opacity(0.3))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 200)
+                    .frame(height: fixedHeight)
                     .overlay {
                         VStack(spacing: 8) {
                             Image(systemName: "photo")
@@ -354,15 +300,17 @@ struct EmbeddedMediaView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    
             } else {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.quaternary.opacity(0.3))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 200)
+                    .frame(height: fixedHeight)
                     .overlay {
                         ProgressView()
                             .scaleEffect(1.2)
                     }
+                    
             }
         }
         .processors([.resize(size: CGSize(width: 800, height: 600))])

@@ -34,19 +34,28 @@ struct CopiedToast: View {
 struct InlineToast: View {
     let isShowing: Bool
     let message: String
-    
-    init(isShowing: Bool, message: String = "Copied!") {
+    let icon: String
+    let tint: Color
+
+    init(
+        isShowing: Bool,
+        message: String = "Copied!",
+        icon: String = "checkmark.circle.fill",
+        tint: Color = .green
+    ) {
         self.isShowing = isShowing
         self.message = message
+        self.icon = icon
+        self.tint = tint
     }
-    
+
     var body: some View {
         if isShowing {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: icon)
                     .font(.caption)
-                    .foregroundStyle(.green)
-                
+                    .foregroundStyle(tint)
+
                 Text(message)
                     .font(.caption)
                     .fontWeight(.medium)

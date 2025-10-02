@@ -59,7 +59,7 @@ final class VideoDownloadService {
                 if let url = URL(string: candidate) {
                     var req = URLRequest(url: url)
                     req.httpMethod = "HEAD"
-                    if let (_, resp) = try? await URLSession.shared.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200 {
+                    if let (_, resp) = try? await NetworkManager.shared.session.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200 {
                         if let merged = try? await downloadAndMergeRedditAudioVideo(videoURL: candidate, preferredFilename: downloadOptions.preferredFilename, onProgress: downloadOptions.onProgress) {
                             return merged
                         }
@@ -81,7 +81,7 @@ final class VideoDownloadService {
         return try await withCheckedThrowingContinuation { continuation in
             var progressObserver: NSKeyValueObservation?
             
-            let task = URLSession.shared.downloadTask(with: url) { tempURL, response, error in
+            let task = NetworkManager.shared.session.downloadTask(with: url) { tempURL, response, error in
                 progressObserver?.invalidate()
                 
                 if error != nil {
@@ -146,7 +146,7 @@ final class VideoDownloadService {
             var audioReq = URLRequest(url: URL(string: audioCandidate)!)
             audioReq.httpMethod = "HEAD"
             
-            if let audioResp = try? await URLSession.shared.data(for: audioReq).1 as? HTTPURLResponse,
+            if let audioResp = try? await NetworkManager.shared.session.data(for: audioReq).1 as? HTTPURLResponse,
                audioResp.statusCode == 200 {
                 foundAudioURL = audioCandidate
                 break
@@ -222,4 +222,3 @@ final class VideoDownloadService {
         return outputURL
     }
 }
-

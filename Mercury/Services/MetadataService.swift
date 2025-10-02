@@ -32,10 +32,8 @@ class MetadataService {
     private let session: URLSession
     
     private init() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 15
-        self.session = URLSession(configuration: config)
+        // Use centralized proxied session
+        self.session = NetworkManager.shared.session
         
         cache.countLimit = 100
         cache.totalCostLimit = 50 * 1024 * 1024 // 50MB
@@ -51,7 +49,10 @@ class MetadataService {
     }
     
     private func fetchFromNetwork(url: String) async -> ArticleMetadata? {
-        guard let requestURL = URL(string: url) else { return nil }
+        // Normalize schemeless/relative Reddit URLs to avoid unsupported URL errors
+        let normalized = URLNormalizer.normalizeRedditURL(url)
+
+        guard let requestURL = URL(string: normalized) else { return nil }
         
         var request = URLRequest(url: requestURL)
         

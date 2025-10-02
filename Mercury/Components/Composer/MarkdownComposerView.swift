@@ -1,5 +1,6 @@
 import SwiftUI
 import MarkdownUI
+import PhotosUI
 import UIKit
 
 struct MarkdownComposerView: View {
@@ -11,84 +12,123 @@ struct MarkdownComposerView: View {
     @State private var selectedRange: NSRange = NSRange(location: 0, length: 0)
     @State private var isFirstResponder: Bool = true
     @State private var isSubmitting = false
-    @State private var showPreview = false
+    private enum Mode: String, CaseIterable, Identifiable { case write, preview; var id: String { rawValue } }
+    @State private var mode: Mode = .write
     @State private var errorMessage: String? = nil
 
     @ViewBuilder
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            toolbar
-            content
-            footer
+        NavigationStack {
+            VStack(spacing: 0) {
+                modeSwitcher
+                toolbar
+                content
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemBackground))
+            .alert("Couldn't post comment", isPresented: .constant(errorMessage != nil), actions: {
+                Button("OK") { errorMessage = nil }
+            }, message: {
+                Text(errorMessage ?? "Unknown error")
+            })
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(action: onCancel) {
+                        Label("Close", systemImage: "xmark")
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: submit) {
+                        if isSubmitting {
+                            HStack { ProgressView().controlSize(.small); Text("Post") }
+                        } else {
+                            Label("Post", systemImage: "paperplane.fill")
+                        }
+                    }
+                    .disabled(isSubmitting || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
-        .alert("Couldn't post comment", isPresented: .constant(errorMessage != nil), actions: {
-            Button("OK") { errorMessage = nil }
-        }, message: {
-            Text(errorMessage ?? "Unknown error")
-        })
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     @ViewBuilder
     private var header: some View {
-        HStack {
-            Button("Cancel") { onCancel() }
+        HStack(spacing: 12) {
+            Button(action: onCancel) {
+                Label("Cancel", systemImage: "xmark")
+                    .labelStyle(.titleAndIcon)
+                    .font(.subheadline)
+            }
+            .glassCapsule()
+
             Spacer()
             Text(title).font(.headline)
             Spacer()
+
             Button(action: submit) {
-                if isSubmitting { ProgressView().controlSize(.small) } else { Text("Post") }
+                if isSubmitting {
+                    HStack { ProgressView().controlSize(.small); Text("Posting") }
+                        .font(.subheadline)
+                } else {
+                    Label("Post", systemImage: "paperplane.fill").font(.subheadline)
+                }
             }
+            .glassCapsule()
             .disabled(isSubmitting || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity(isSubmitting || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.6 : 1)
         }
-        .padding()
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .glassEffect(.regular.tint(.white.opacity(0.18)))
     }
 
     @ViewBuilder
     private var toolbar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                pill("H1") { insertAtLineStart("# ") }
-                pill("H2") { insertAtLineStart("## ") }
-                pill("H3") { insertAtLineStart("### ") }
-                Divider().frame(height: 20)
-                pill("B") { wrap("**") }
-                pill("I") { wrap("*") }
-                pill("S") { wrap("~~") }
-                pill("Code") { wrap("`") }
-                pill("Block") { wrapBlockFence() }
-                Divider().frame(height: 20)
-                pill("Quote") { prefixLines("> ") }
-                pill("UL") { prefixLines("- ") }
-                pill("OL") { prefixLinesNumbered() }
-                pill("Link") { insertLink() }
-                pill("HR") { insert("\n\n---\n\n") }
-                Divider().frame(height: 20)
-                pill("Table") { insert("\n| Col A | Col B |\n| --- | --- |\n|  |  |\n") }
-            }
-            .padding(.vertical, 4)
-        }
-        .background(.ultraThinMaterial)
+        MarkdownToolsBar(
+            onH1: { insertAtLineStart("# ") },
+            onH2: { insertAtLineStart("## ") },
+            onH3: { insertAtLineStart("### ") },
+            onBold: { wrap("**") },
+            onItalic: { wrap("*") },
+            onStrike: { wrap("~~") },
+            onCode: { wrap("`") },
+            onBlock: { wrapBlockFence() },
+            onQuote: { prefixLines("> ") },
+            onUL: { prefixLines("- ") },
+            onOL: { prefixLinesNumbered() },
+            onLink: { insertLink() },
+            onHR: { insert("\n\n---\n\n") }
+        )
     }
 
     @ViewBuilder
     private var content: some View {
         Group {
-            if showPreview {
+            if mode == .preview {
                 ScrollView {
-                        Markdown(text)
-                            .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+                    MarkdownRenderer(content: text, compactMode: false, showEmbeddedContent: true)
+                        .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.2), lineWidth: 0.5))
                 }
             } else {
                 ZStack(alignment: .topLeading) {
                     MarkdownTextView(text: $text, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
                         .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.2), lineWidth: 0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     if text.isEmpty {
                         Text("Write your comment in Markdown…")
                             .foregroundStyle(.secondary)
+                            .padding(.top, 8)
                     }
                 }
                 .contentShape(Rectangle())
@@ -100,30 +140,28 @@ struct MarkdownComposerView: View {
     }
 
     @ViewBuilder
-    private var footer: some View {
+    private var modeSwitcher: some View {
         HStack {
-            Pill(action: {
-                showPreview.toggle()
-            }, content: {
-                Label(showPreview ? "Write" : "Preview", systemImage: showPreview ? "pencil" : "eye")
-            })
-
-            Spacer()
-            Text("\(text.count) chars")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Picker("Mode", selection: $mode) {
+                Text("Write").tag(Mode.write)
+                Text("Preview").tag(Mode.preview)
+            }
+            .pickerStyle(.segmented)
         }
-        .padding()
-        .background(.thinMaterial)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground).opacity(0.97))
     }
 
-    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+    private func toolChip(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Pill(size: .regular) {
-                Text(title).font(.caption)
-            }
+            Text(title)
+                .font(.caption)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.25), lineWidth: 0.5))
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Editing helpers
@@ -248,4 +286,6 @@ struct MarkdownComposerView: View {
             }
         }
     }
+
+    
 }

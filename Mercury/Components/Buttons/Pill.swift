@@ -51,6 +51,8 @@ struct PillButtonStyle: ButtonStyle {
     }
 }
 
+// (Reverted) Keep lightweight material-based styling for performance.
+
 enum PillSize {
     case small
     case regular

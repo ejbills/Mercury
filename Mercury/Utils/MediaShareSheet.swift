@@ -51,13 +51,7 @@ struct MediaShareSheet: UIViewControllerRepresentable {
             }
         }
         
-        // Always include the post permalink as text (this is the main thing being shared)
-        activityItems.append(post.permalinkURL)
-        
-        // Add post title for context
-        if !post.title.isEmpty {
-            activityItems.append("\(post.title)")
-        }
+        // Do not include post permalink or title when sharing downloads
         
         let activityVC = UIActivityViewController(
             activityItems: activityItems,
@@ -111,38 +105,59 @@ class SaveImageToPhotosActivity: UIActivity {
         }
     }
     
-    @MainActor
     private func saveImageToPhotos() async {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized else {
-            activityDidFinish(false)
+            await MainActor.run { activityDidFinish(false) }
             return
         }
-        
+
         do {
-            let fileExtension = fileURL.pathExtension.lowercased()
-            
-            if fileExtension == "gif" {
+            let ext = fileURL.pathExtension.lowercased()
+            if ext == "gif" {
+                // Ensure we have a local file to hand to Photos for GIFs
+                let localURL: URL
+                if fileURL.isFileURL {
+                    localURL = fileURL
+                } else {
+                    localURL = try await Self.downloadToTemporaryFile(from: fileURL, suggestedExtension: "gif")
+                }
                 try await PHPhotoLibrary.shared().performChanges {
-                    PHAssetCreationRequest.creationRequestForAssetFromImage(atFileURL: self.fileURL)
+                    PHAssetCreationRequest.creationRequestForAssetFromImage(atFileURL: localURL)
                 }
             } else {
-                // For regular images (jpg, png, etc.)
-                let imageData = try Data(contentsOf: fileURL)
-                guard let image = UIImage(data: imageData) else {
-                    activityDidFinish(false)
+                // Load image data off the main thread (supports remote and local URLs)
+                let data = try await Self.loadData(from: fileURL)
+                guard let image = UIImage(data: data) else {
+                    await MainActor.run { activityDidFinish(false) }
                     return
                 }
-                
                 try await PHPhotoLibrary.shared().performChanges {
                     PHAssetCreationRequest.creationRequestForAsset(from: image)
                 }
             }
-            
-            activityDidFinish(true)
+            await MainActor.run { activityDidFinish(true) }
         } catch {
-            activityDidFinish(false)
+            await MainActor.run { activityDidFinish(false) }
         }
+    }
+
+    // MARK: - Helpers
+     static func loadData(from url: URL) async throws -> Data {
+        if url.isFileURL {
+            return try Data(contentsOf: url)
+        } else {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            return data
+        }
+    }
+
+    private static func downloadToTemporaryFile(from url: URL, suggestedExtension: String? = nil) async throws -> URL {
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let ext = suggestedExtension ?? url.pathExtension
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext.isEmpty ? "bin" : ext)
+        try data.write(to: tmp)
+        return tmp
     }
 }
 
@@ -225,31 +240,35 @@ class SaveMultipleImagesToPhotosActivity: UIActivity {
         }
     }
     
-    @MainActor
     private func saveImagesToPhotos() async {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized else {
-            activityDidFinish(false)
+            await MainActor.run { activityDidFinish(false) }
             return
         }
-        
+
         do {
-            try await PHPhotoLibrary.shared().performChanges {
-                for fileURL in self.fileURLs {
-                    do {
-                        let imageData = try Data(contentsOf: fileURL)
-                        if let image = UIImage(data: imageData) {
-                            PHAssetCreationRequest.creationRequestForAsset(from: image)
-                        }
-                    } catch {
-                        print("Failed to load image from \(fileURL): \(error)")
-                    }
+            // Load images sequentially off the main thread
+            var images: [UIImage] = []
+            images.reserveCapacity(fileURLs.count)
+            for url in fileURLs {
+                do {
+                    let data = try await SaveImageToPhotosActivity.loadData(from: url)
+                    if let img = UIImage(data: data) { images.append(img) }
+                } catch {
+                    print("Failed to load image from \(url): \(error)")
                 }
             }
-            activityDidFinish(true)
+            // Save each image
+            for img in images {
+                try await PHPhotoLibrary.shared().performChanges {
+                    PHAssetCreationRequest.creationRequestForAsset(from: img)
+                }
+            }
+            await MainActor.run { activityDidFinish(true) }
         } catch {
             print("Failed to save images to Photos: \(error)")
-            activityDidFinish(false)
+            await MainActor.run { activityDidFinish(false) }
         }
     }
 }

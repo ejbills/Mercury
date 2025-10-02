@@ -103,7 +103,20 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     // MARK: - OAuth Flow
     
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        return ASPresentationAnchor()
+        // Prefer an existing window from a foreground UIWindowScene
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let scene = scenes.first(where: { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }) {
+            if let key = scene.windows.first(where: { $0.isKeyWindow }) { return key }
+            if let any = scene.windows.first { return any }
+            // Create a transient, scene-attached window as anchor
+            return UIWindow(windowScene: scene)
+        }
+        // Fallback to any available scene
+        if let scene = scenes.first {
+            if let any = scene.windows.first { return any }
+            return UIWindow(windowScene: scene)
+        }
+        preconditionFailure("No UIWindowScene available for ASWebAuthenticationSession presentation anchor")
     }
     
     func startOAuthFlow() {
@@ -204,7 +217,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.httpBody = bodyData
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
@@ -277,7 +290,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 await MainActor.run {
@@ -377,7 +390,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.httpBody = body.data(using: .utf8)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 await handleRefreshError("Network error during token refresh")

@@ -39,7 +39,7 @@ class InboxService: BaseRedditService {
         let request = createRequest(url: url)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
             
@@ -57,6 +57,29 @@ class InboxService: BaseRedditService {
         } catch {
             throw error
         }
+    }
+
+    // Raw private messages for conversation view
+    func fetchPrivateMessagesRaw(after: String? = nil, limit: Int = 50) async throws -> (items: [RawMessage], after: String?) {
+        try validateAccessToken()
+        var components = URLComponents(string: baseURL + Category.messages.path)!
+        var queryItems: [URLQueryItem] = [ .init(name: "limit", value: String(limit)) ]
+        if let after { queryItems.append(.init(name: "after", value: after)) }
+        components.queryItems = queryItems
+        guard let url = components.url else { throw APIError.parseError }
+        let request = createRequest(url: url)
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let listing = try decoder.decode(MessageListingResponse.self, from: data)
+            let raws = listing.data.children.compactMap { thing in thing.kind == "t4" ? thing.data : nil }
+            return (raws, listing.data.after)
+        } catch is URLError {
+            throw APIError.networkError
+        } catch { throw error }
     }
     
     private func mapThingToInboxItem(_ thing: MessageThing) -> InboxItem? {
@@ -126,7 +149,7 @@ class InboxService: BaseRedditService {
         let postData = parameters.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&").data(using: .utf8)
         request.httpBody = postData
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
         } catch is URLError {
@@ -148,12 +171,73 @@ class InboxService: BaseRedditService {
         let body = parameters.map { "\($0.key)=\(Self.urlEncode($0.value))" }.joined(separator: "&")
         request.httpBody = body.data(using: .utf8)
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
             try validateResponse(http)
         } catch is URLError {
             throw APIError.networkError
         } catch { throw error }
+    }
+    
+    /// Mark specific inbox items as read by fullname(s)
+    func markMessagesRead(fullnames: [String]) async throws {
+        try validateAccessToken()
+        guard !fullnames.isEmpty else { return }
+        guard let url = URL(string: "\(baseURL)/api/read_message") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: url)
+        let ids = fullnames.joined(separator: ",")
+        let body = "id=\(ids)"
+        request.httpBody = body.data(using: .utf8)
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError { throw APIError.networkError }
+    }
+
+    /// Mark all unread messages as read for a given category.
+    /// - Note: For `.all` and `.unread`, falls back to Reddit's `read_all_messages` endpoint.
+    func markAllRead(for category: Category) async throws {
+        switch category {
+        case .messages, .mentions, .replies:
+            try await markAllReadByPaging(category: category)
+        case .all, .unread:
+            try await readAllMessages()
+        }
+    }
+
+    /// Call Reddit's read_all_messages endpoint to mark everything as read
+    private func readAllMessages() async throws {
+        try validateAccessToken()
+        guard let url = URL(string: "\(baseURL)/api/read_all_messages") else { throw APIError.parseError }
+        let request = createPOSTRequest(url: url)
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError { throw APIError.networkError }
+    }
+
+    /// Paginate through the selected inbox category, collecting unread item fullnames and marking them read in batches.
+    private func markAllReadByPaging(category: Category) async throws {
+        var after: String? = nil
+        var collected: [String] = []
+        repeat {
+            let page = try await fetch(category: category, after: after, limit: 100)
+            let unreadIds = page.items.filter { $0.isUnread }.compactMap { $0.fullName }
+            collected.append(contentsOf: unreadIds)
+            after = page.after
+        } while after != nil
+
+        guard !collected.isEmpty else { return }
+        // Send in batches to respect potential server limits
+        let chunkSize = 100
+        var index = 0
+        while index < collected.count {
+            let chunk = Array(collected[index..<min(index + chunkSize, collected.count)])
+            try await markMessagesRead(fullnames: chunk)
+            index += chunkSize
+        }
     }
     
     private static func urlEncode(_ value: String) -> String {

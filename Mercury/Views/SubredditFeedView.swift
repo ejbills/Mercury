@@ -4,6 +4,7 @@ import Defaults
 struct SubredditFeedView: View {
     let subreddit: String
     let apiService: RedditAPIManager
+    @Environment(\.navigationPathManager) private var navigationPathManager
     @State private var posts: [RedditPost] = []
     @State private var isLoading = false
     @State private var isLoadingMore = false
@@ -12,20 +13,32 @@ struct SubredditFeedView: View {
     @State private var hasMore = true
     @State private var postSort: PostSort = .hot
     @State private var topTimeFrame: TopTimeFrame = .day
-    @State private var showingSortOptions = false
-    @State private var showingTimeFrameOptions = false
+    // Old confirmation dialogs replaced by anchored Menus
     @Namespace private var mediaNamespace
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var lastAutoRefresh: Date = .distantPast
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
     @Default(.compactMode) private var compactMode
     @Default(.hiddenPostIds) private var hiddenPostIds
+    @State private var showSidebar = false
+    @State private var hasSidebar: Bool = false
+    @State private var feedSearchText: String = ""
+    @State private var isSearching = false
+    @State private var searchResults: [RedditPost] = []
+    @State private var searchAfter: String? = nil
+    @State private var isSearchLoading = false
+    @State private var searchHasMore = true
+    @State private var searchDebounceTask: Task<Void, Never>? = nil
+    @State private var showingPostComposer = false
     
     private let pageSize = 25
     
     var body: some View {
-        let visiblePosts = posts.filter { !hiddenPostIds.contains($0.id) }
+        let base = isSearching ? searchResults : posts
+        let visiblePosts = base.filter { !hiddenPostIds.contains($0.id) }
         
         return ScrollViewReader { proxy in
             ScrollView {
@@ -34,12 +47,12 @@ struct SubredditFeedView: View {
                         .frame(height: 0)
                         .id("top")
                     
-                    if posts.isEmpty && isLoading {
+                    if (isSearching ? searchResults.isEmpty : posts.isEmpty) && (isSearching ? isSearchLoading : isLoading) {
                         skeletonLoadingView
-                    } else if posts.isEmpty && errorMessage != nil && !isLoading {
+                    } else if !isSearching && posts.isEmpty && errorMessage != nil && !isLoading {
                         errorView
                             .padding(.top, 100)
-                    } else if posts.isEmpty {
+                    } else if (!isSearching && posts.isEmpty) || (isSearching && searchResults.isEmpty && !isSearchLoading) {
                         emptyStateView
                             .padding(.top, 100)
                     } else {
@@ -78,18 +91,22 @@ struct SubredditFeedView: View {
                             }
                             .id(post.id)
                                     .onAppear {
-                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
-                                            Task {
-                                                await loadMorePosts()
+                                        if isSearching {
+                                            if post.id == searchResults.last?.id && searchHasMore && !isSearchLoading {
+                                                Task { await loadMoreSearch() }
+                                            }
+                                        } else {
+                                            if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                                Task { await loadMorePosts() }
                                             }
                                         }
                                     }
                             }
                         
-                        if hasMore {
-                            loadMoreSection
+                        if isSearching {
+                            if searchHasMore { searchLoadMoreSection } else if !searchResults.isEmpty { endOfFeedView }
                         } else {
-                            endOfFeedView
+                            if hasMore { loadMoreSection } else { endOfFeedView }
                         }
                     }
                 }
@@ -103,12 +120,32 @@ struct SubredditFeedView: View {
                     hasAppeared = true
                     Task {
                         await loadInitialPosts()
+                        await preloadSidebarFlag()
                     }
                 }
             }
         }
         .navigationTitle(subredditDisplayName)
         .navigationBarTitleDisplayMode(.large)
+        .searchable(text: $feedSearchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search \(subredditDisplayName)")
+        .onChange(of: feedSearchText) { _, newValue in
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            searchDebounceTask?.cancel()
+            if trimmed.isEmpty {
+                withAnimation { isSearching = false }
+                return
+            }
+            isSearching = true
+            isSearchLoading = true
+            searchDebounceTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if Task.isCancelled { return }
+                await performInFeedSearch(reset: true)
+            }
+        }
+        .onSubmit(of: .search) {
+            Task { await performInFeedSearch(reset: true) }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
@@ -121,6 +158,37 @@ struct SubredditFeedView: View {
                         .foregroundStyle(.primary)
                 }
                 sortButton
+            }
+            // Show sidebar button only for real subreddits and when sidebar exists
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if isRealSubreddit && hasSidebar {
+                    Button {
+                        showSidebar = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hasSidebar)
+                    .accessibilityLabel("Subreddit Sidebar")
+                }
+            }
+            // Create Post button available from any feed; composer handles subreddit entry
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingPostComposer = true
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                }
+                .accessibilityLabel("New Post")
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            let now = Date()
+            // Auto refresh on foreground if not recently refreshed and not mid-load/search
+            if now.timeIntervalSince(lastAutoRefresh) > 120, !isLoading, !isLoadingMore, !isSearching {
+                lastAutoRefresh = now
+                Task { await refreshFeed() }
             }
         }
         .fullScreenCover(item: $selectedPost) { post in
@@ -136,47 +204,62 @@ struct SubredditFeedView: View {
         .refreshable {
             await refreshFeed()
         }
-        .confirmationDialog("Sort Posts", isPresented: $showingSortOptions) {
-            ForEach(PostSort.allCases, id: \.self) { sort in
-                Button(sort.displayName) {
-                    postSort = sort
-                    if sort.supportsTimeFrame {
-                        showingTimeFrameOptions = true
-                    } else {
-                        Task {
-                            await loadInitialPosts()
-                        }
-                    }
-                }
-            }
+        .sheet(isPresented: $showSidebar) {
+            SubredditSidebarView(subreddit: subreddit, apiService: apiService)
         }
-        .confirmationDialog("Top Posts Time Frame", isPresented: $showingTimeFrameOptions) {
-            ForEach(TopTimeFrame.allCases, id: \.self) { timeFrame in
-                Button(timeFrame.displayName) {
-                    topTimeFrame = timeFrame
-                    Task {
-                        await loadInitialPosts()
-                    }
-                }
+        .sheet(isPresented: $showingPostComposer) {
+            PostComposerSheet(initialSubreddit: isRealSubreddit ? subredditDisplayName : "") {
+                Task { await refreshFeed() }
             }
-            Button("Cancel", role: .cancel) {
-                // Reset to previous sort if cancelled
-                postSort = .hot
-            }
+            .environment(\.redditAPI, apiService)
         }
+        // confirmationDialogs removed; Menu anchored to toolbar button handles sorting
     }
     
     private var subredditDisplayName: String {
         if subreddit == "popular" {
             return "Popular"
-        } else if subreddit == "all" {
+        } else if subreddit == "all" || subreddit == "r/all" {
             return "All"
         } else if subreddit == "user/saved" || subreddit == "saved" {
             return "Saved"
+        } else if subreddit.lowercased().contains("/m/") && (subreddit.hasPrefix("user/") || subreddit.hasPrefix("u/")) {
+            // Show m/<name> for multireddits
+            let comps = subreddit.split(separator: "/").map(String.init)
+            if let mIndex = comps.firstIndex(of: "m"), mIndex + 1 < comps.count {
+                return "m/\(comps[mIndex + 1])"
+            }
+            return subreddit
         } else if subreddit.hasPrefix("r/") {
             return subreddit
         } else {
             return "r/\(subreddit)"
+        }
+    }
+
+    private var isRealSubreddit: Bool {
+        let s = subreddit.lowercased()
+        if s == "popular" || s == "all" || s == "user/saved" || s == "saved" { return false }
+        if s.contains("/m/") { return false }
+        return true
+    }
+
+    private func preloadSidebarFlag() async {
+        guard isRealSubreddit else { return }
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        do {
+            let about = try await apiService.fetchSubredditAbout(subreddit: clean)
+            await MainActor.run {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    self.hasSidebar = !about.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !about.publicDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }
+            }
+        } catch {
+            await MainActor.run {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                    self.hasSidebar = false
+                }
+            }
         }
     }
     
@@ -286,25 +369,44 @@ struct SubredditFeedView: View {
     }
     
     private var sortButton: some View {
-        Button(action: {
-            showingSortOptions = true
-        }) {
-            HStack(spacing: 4) {
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(postSort.displayName)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                    
-                    if postSort.supportsTimeFrame {
-                        Text(topTimeFrame.displayName)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+        Menu {
+            // Sort options
+            ForEach(PostSort.allCases, id: \.self) { sort in
+                Button(action: {
+                    postSort = sort
+                    Task { await loadInitialPosts() }
+                }) {
+                    HStack(spacing: 8) {
+                        if postSort == sort { Image(systemName: "checkmark") }
+                        Image(systemName: sort.iconName)
+                        Text(sort.displayName)
                     }
                 }
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
             }
+            
+            if postSort.supportsTimeFrame {
+                Divider()
+                Menu("Time Frame") {
+                    ForEach(TopTimeFrame.allCases, id: \.self) { time in
+                        Button(action: {
+                            topTimeFrame = time
+                            Task { await loadInitialPosts() }
+                        }) {
+                            HStack(spacing: 8) {
+                                if topTimeFrame == time { Image(systemName: "checkmark") }
+                                Image(systemName: time.iconName)
+                                Text(time.displayName)
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: postSort.iconName)
+                .font(.callout)
+            // Let Liquid Glass handle container styling to avoid double bubble
         }
+        .buttonStyle(.plain)
     }
     
     private func loadInitialPosts() async {
@@ -324,6 +426,8 @@ struct SubredditFeedView: View {
                 self.hasMore = response.data.after != nil && !response.data.children.isEmpty
                 self.isLoading = false
             }
+            // Eagerly prefetch media for the loaded posts
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
@@ -355,6 +459,8 @@ struct SubredditFeedView: View {
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.isLoadingMore = false
             }
+            // Prefetch media for newly appended posts
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
             await MainActor.run {
                 self.isLoadingMore = false
@@ -378,15 +484,67 @@ struct SubredditFeedView: View {
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.errorMessage = nil // Clear any previous error on success
             }
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
             await MainActor.run { 
                 self.errorMessage = error.localizedDescription
             }
         }
     }
+
+    // MARK: - In-feed Search
+    @MainActor
+    private func performInFeedSearch(reset: Bool) async {
+        let clean = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
+        let query = feedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            isSearching = false
+            isSearchLoading = false
+            return
+        }
+        if reset {
+            searchAfter = nil
+            searchHasMore = true
+            searchResults = []
+        }
+        do {
+            let res = try await apiService.searchPosts(query: query, subreddit: clean, after: searchAfter, limit: pageSize, sort: "relevance", timeFrame: nil)
+            let new = res.data.children.compactMap { $0.data }
+            let unique = new.filter { n in !searchResults.contains(where: { $0.id == n.id }) }
+            searchResults.append(contentsOf: unique)
+            searchAfter = res.data.after
+            searchHasMore = res.data.after != nil && !unique.isEmpty
+            isSearchLoading = false
+            MediaPrefetcher.shared.prefetch(posts: self.searchResults)
+        } catch {
+            isSearchLoading = false
+        }
+    }
+
+    private var searchLoadMoreSection: some View {
+        Group {
+            if isSearchLoading {
+                HStack(spacing: 12) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("Loading more results…").font(.body).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                Color.clear.frame(height: 1).onAppear { Task { await loadMoreSearch() } }
+            }
+        }
+    }
+
+    private func loadMoreSearch() async {
+        guard isSearching, searchHasMore, !isSearchLoading else { return }
+        isSearchLoading = true
+        await performInFeedSearch(reset: false)
+    }
     
     private func fetchPosts(after: String?) async throws -> PostResponse {
-        switch subreddit.lowercased() {
+        let s = subreddit.lowercased()
+        switch s {
         case "popular":
             return try await apiService.fetchPopularFeed(after: after, limit: pageSize)
         case "home", "hot":
@@ -394,6 +552,19 @@ struct SubredditFeedView: View {
         case "user/saved", "saved":
             return try await apiService.fetchSavedPosts(after: after, limit: pageSize)
         default:
+            // Multireddit path: user/<username>/m/<multi>
+            if s.contains("/m/") {
+                let comps = subreddit.split(separator: "/").map(String.init)
+                if let userIndex = comps.firstIndex(where: { $0 == "user" || $0 == "u" }),
+                   userIndex + 1 < comps.count,
+                   let mIndex = comps.firstIndex(of: "m"),
+                   mIndex + 1 < comps.count {
+                    let username = comps[userIndex + 1]
+                    let multiName = comps[mIndex + 1]
+                    let timeFrame = postSort.supportsTimeFrame ? topTimeFrame : nil
+                    return try await apiService.fetchMultiPosts(username: username, multi: multiName, sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)
+                }
+            }
             let cleanSubreddit = subreddit.hasPrefix("r/") ? String(subreddit.dropFirst(2)) : subreddit
             let timeFrame = postSort.supportsTimeFrame ? topTimeFrame : nil
             return try await apiService.fetchSubredditPosts(subreddit: cleanSubreddit, sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)

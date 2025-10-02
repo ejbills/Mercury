@@ -41,19 +41,37 @@ struct MarkdownTextView: UIViewRepresentable {
         init(_ parent: MarkdownTextView) { self.parent = parent }
 
         func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text ?? ""
+            let newText = textView.text ?? ""
+            if parent.text != newText {
+                DispatchQueue.main.async {
+                    self.parent.text = newText
+                }
+            }
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
-            parent.selectedRange = textView.selectedRange
+            let newRange = textView.selectedRange
+            if parent.selectedRange != newRange {
+                DispatchQueue.main.async {
+                    self.parent.selectedRange = newRange
+                }
+            }
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            parent.isFirstResponder = true
+            if parent.isFirstResponder == false {
+                DispatchQueue.main.async {
+                    self.parent.isFirstResponder = true
+                }
+            }
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
-            parent.isFirstResponder = false
+            if parent.isFirstResponder == true {
+                DispatchQueue.main.async {
+                    self.parent.isFirstResponder = false
+                }
+            }
         }
     }
 }

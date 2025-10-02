@@ -78,7 +78,7 @@ struct CompactCommentView: View {
                     HStack(spacing: 6) {
                         // Author with badges
                         HStack(spacing: 4) {
-                            UserAvatar(username: comment.author, size: 16, disableAPIFetch: true)
+                            UserAvatar(username: comment.author, size: 16)
                             
                             Text(isDeletedUser ? "[deleted]" : comment.author)
                                 .font(.caption)

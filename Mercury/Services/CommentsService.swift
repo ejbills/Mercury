@@ -33,7 +33,7 @@ class CommentsService: BaseRedditService {
         let request = createRequest(url: url)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -107,7 +107,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -172,7 +172,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -206,7 +206,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -240,7 +240,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -274,7 +274,7 @@ class CommentsService: BaseRedditService {
         request.httpBody = postData
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -304,24 +304,21 @@ class CommentsService: BaseRedditService {
 
         var request = createPOSTRequest(url: url)
 
-        let parameters = [
+        let parameters: [String: String] = [
             "api_type": "json",
             "thing_id": parentFullname,
             "text": text
         ]
 
-        let postData = parameters
-            .map { key, value in
-                let escaped = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
-                return "\(key)=\(escaped)"
-            }
+        let body = parameters
+            .map { key, value in "\(key)=\(Self.formEncode(value))" }
             .joined(separator: "&")
-            .data(using: .utf8)
+        let postData = body.data(using: String.Encoding.utf8)
 
         request.httpBody = postData
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
@@ -332,6 +329,10 @@ class CommentsService: BaseRedditService {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
 
+            #if DEBUG
+            let preview = String(data: data.prefix(600), encoding: .utf8) ?? "<non-utf8>"
+            print("[CommentSubmit] status=\(httpResponse.statusCode) respPreview=\(preview)")
+            #endif
             let apiResponse = try decoder.decode(NewCommentAPIResponse.self, from: data)
 
             if let errors = apiResponse.json.errors, !errors.isEmpty {
@@ -348,6 +349,7 @@ class CommentsService: BaseRedditService {
             throw error
         }
     }
+
 
     private func collectUsernames(from comment: RedditComment, into usernames: inout Set<String>) {
         usernames.insert(comment.author)
@@ -397,6 +399,15 @@ class CommentsService: BaseRedditService {
         }
     }
 
+}
+
+// MARK: - Encoding helpers
+private extension CommentsService {
+    static func formEncode(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: ":#[]@!$&'()*+,;=%\" <>?{}|^`\\")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
 }
 
 // MARK: - Supporting Types

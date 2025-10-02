@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Nuke
 import NukeUI
 import AVKit
@@ -14,9 +15,11 @@ struct PostRowView: View {
     var onHidePost: ((String) -> Void)? = nil
     var onHidePostsAbove: ((String) -> Void)? = nil
     @State private var showingSafari = false
+    @State private var safariURL: URL? = nil
     @State private var isVoting = false
     @State private var showingCopiedToast = false
     @State private var shareItem: URL?
+    @State private var shareItems: [URL]?
     @State private var isOfflinePlayerPresented = false
     @State private var offlinePlayer: AVPlayer? = nil
     @State private var isDownloading = false
@@ -111,7 +114,7 @@ struct PostRowView: View {
                 if hasMediaOrTextContent {
                     postMediaContent
                         .overlay {
-                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image) {
+                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
                                 downloadProgressOverlay
                             }
                         }
@@ -197,7 +200,11 @@ struct PostRowView: View {
         }
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
         .sheet(isPresented: $showShareSheet) {
-            MediaShareSheet(post: post, mediaURL: shareItem)
+            if let urls = shareItems {
+                MediaShareSheet(post: post, mediaURLs: urls)
+            } else {
+                MediaShareSheet(post: post, mediaURL: shareItem)
+            }
         }
         .sheet(isPresented: $showingPostReply) {
             MarkdownComposerView(
@@ -210,6 +217,11 @@ struct PostRowView: View {
         }
         .sheet(isPresented: $showingSafari) {
             if let urlString = post.url, let url = URL(string: urlString) {
+                SafariView(url: url)
+            }
+        }
+        .sheet(isPresented: Binding(get: { safariURL != nil }, set: { if !$0 { safariURL = nil } })) {
+            if let url = safariURL {
                 SafariView(url: url)
             }
         }
@@ -338,16 +350,24 @@ struct PostRowView: View {
                 textPostContent
             }
         case .image:
-            if let imageURL = post.imageURL {
-                SimpleImageView(
-                    url: imageURL,
-                    mediaId: "\(post.id)-image",
-                    title: post.title,
-                    namespace: namespace,
-                    apiDimensions: post.imageDimensions,
-                    post: post,
-                    selectedPost: $selectedPost
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                if let imageURL = post.imageURL {
+                    SimpleImageView(
+                        url: imageURL,
+                        mediaId: "\(post.id)-image",
+                        title: post.title,
+                        namespace: namespace,
+                        apiDimensions: post.imageDimensions,
+                        post: post,
+                        selectedPost: $selectedPost
+                    )
+                }
+                
+                if showFullText && post.hasContent, let content = post.selftext, !content.isEmpty {
+                    MarkdownRenderer(content: content, compactMode: !showFullText, showEmbeddedContent: showFullText)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                }
             }
         case .gif:
             if let gifURL = post.gifURL, let url = URL(string: gifURL) {
@@ -383,12 +403,19 @@ struct PostRowView: View {
                 YouTubeEmbedView(url: youtubeURL)
             }
         case .gallery:
-            SimpleGalleryView(
-                post: post,
-                mediaId: "\(post.id)-gallery",
-                namespace: namespace,
-                selectedPost: $selectedPost
-            )
+            VStack(alignment: .leading, spacing: 12) {
+                SimpleGalleryView(
+                    post: post,
+                    mediaId: "\(post.id)-gallery",
+                    namespace: namespace,
+                    selectedPost: $selectedPost
+                )
+                if showFullText && post.hasContent, let content = post.selftext, !content.isEmpty {
+                    MarkdownRenderer(content: content, compactMode: !showFullText, showEmbeddedContent: showFullText)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                }
+            }
         case .link:
             if shouldShowLinkPreview {
                 linkPostContent
@@ -413,7 +440,15 @@ struct PostRowView: View {
                     if let linkedPost = linkedPost {
                         navigationPath.navigate(to: .postComments(post: linkedPost))
                     } else {
-                        showingSafari = true
+                        // Normalize to https Reddit URL and try fetch again; else open safely in Safari
+                        let normalized = URLNormalizer.normalizeRedditURL(urlString)
+                        Task {
+                            if let fetched = await RedditPostFetchService.shared.fetchPost(from: normalized) {
+                                await MainActor.run { navigationPath.navigate(to: .postComments(post: fetched)) }
+                            } else if let url = URL(string: normalized) {
+                                await MainActor.run { safariURL = url }
+                            }
+                        }
                     }
                 }
             } else {
@@ -423,11 +458,14 @@ struct PostRowView: View {
                     fallbackDomain: post.domain,
                     fallbackTitle: post.title
                 ) {
-                    showingSafari = true
+                    let normalized = URLNormalizer.normalizeRedditURL(urlString)
+                    if let url = URL(string: normalized) { safariURL = url }
                 }
             }
         }
     }
+
+    // Normalization centralized in URLNormalizer
 
     private func isRedditPostURL(_ url: String) -> Bool {
         let u = url.lowercased()
@@ -580,31 +618,44 @@ struct PostRowView: View {
     }
     
     private func handleDownload() {
-        guard post.postType == .video || post.postType == .gif || post.postType == .image else { return }
+        guard post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery else { return }
         guard !isDownloading else { return }
         isDownloading = true
         Task {
             defer { isDownloading = false }
             do {
                 let service = MediaDownloadService()
-                let fileURL = try await service.download(post: post, options: .init(
-                    preferredFilename: post.id,
-                    onProgress: { progress in
-                        Task { @MainActor in
-                            downloadProgress = progress
+                if post.postType == .gallery {
+                    let urls = try await service.downloadAllGalleryImages(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
                         }
+                    ))
+                    await MainActor.run {
+                        shareItems = urls
+                        shareItem = nil
+                        showShareSheet = true
                     }
-                ))
-                await MainActor.run {
-                    shareItem = fileURL
-                    showShareSheet = true
+                } else {
+                    let fileURL = try await service.download(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItem = fileURL
+                        shareItems = nil
+                        showShareSheet = true
+                    }
                 }
             } catch {
-                
-                await MainActor.run {
-                    shareItem = URL(string: post.permalinkURL)
-                    showShareSheet = true
-                }
+                // On failure, do not present share sheet with metadata
             }
         }
     }
@@ -665,6 +716,7 @@ struct PostRowView: View {
                     case .youtube: "Opening YouTube"
                     case .gif: "Downloading GIF"
                     case .image: "Downloading Image"
+                    case .gallery: "Downloading Gallery"
                     default: "Downloading"
                     }
                     

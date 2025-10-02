@@ -216,10 +216,11 @@ struct CommentView: View {
                     }
                 }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 20)
+                GlassMenuLabel(
+                    systemImage: "ellipsis",
+                    foreground: .secondary,
+                    font: .callout
+                )
             }
             .buttonStyle(.plain)
 

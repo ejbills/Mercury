@@ -2,6 +2,7 @@
 // Mercury
 
 import SwiftUI
+import UIKit
 import AVKit
 import AVFoundation
 
@@ -28,10 +29,14 @@ struct MediaDetailView: View {
     @State private var savedState: Bool
     @State private var originalMuteState: Bool = true
     @State private var shareItem: URL?
+    @State private var shareItems: [URL]?
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
     @State private var showShareSheet = false
     @State private var showingPostReply = false
+    @State private var currentGalleryIndex = 0
+    @State private var gifProgress: Double = 0 // 0..1 for GIF scrubbing
+    @State private var isScrubbingGestureActive: Bool = false
 
     init(post: RedditPost, namespace: Namespace.ID, videoHandoffState: VideoHandoffState? = nil, onVideoHandoffReturn: ((VideoHandoffState) -> Void)? = nil) {
         self.post = post
@@ -55,7 +60,19 @@ struct MediaDetailView: View {
             (colorScheme == .dark ? Color.black : Color.white)
                 .ignoresSafeArea()
             
-            mediaContent
+            Group {
+                if post.postType != .video {
+                    mediaContent
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isContentVisible.toggle()
+                            }
+                        }
+                } else {
+                    mediaContent
+                }
+            }
                 .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
                 .overlay {
                     if isDownloading {
@@ -63,43 +80,27 @@ struct MediaDetailView: View {
                     }
                 }
             
-            // Overlay container that handles taps
-            VStack {
-                Spacer()
-                
-                if isContentVisible {
-                    bottomContentOverlay
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: isContentVisible)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isContentVisible.toggle()
-                }
-            }
-            .allowsHitTesting(isContentVisible) // Only allow taps when overlays are visible
+            
+            
         }
+        .overlay(bottomOverlay, alignment: .bottom)
         .navigationBarHidden(true)
         .statusBarHidden(!isContentVisible)
-
         .onAppear { hasAppeared = true }
         .onDisappear {
+            // Force mute to avoid audio bleeding when navigating away
+            player?.applyMuteState(muted: true)
+
             // Return handoff state to parent if we have video
             if let player = player,
                let handoffState = videoHandoffState,
                let onReturn = onVideoHandoffReturn {
-                
-                // Restore original mute immediately before returning
-                player.applyMuteState(muted: originalMuteState)
-
                 let currentTime = player.currentTime().seconds
+                // Preserve the user's original mute preference in the returned state
                 let updatedState = handoffState.updated(time: currentTime, muted: originalMuteState)
-                
                 onReturn(updatedState)
             }
-            // Clear our reference (but don't destroy the player)
+            // Clear our reference (but don't destroy the shared player)
             self.player = nil
         }
     }
@@ -107,6 +108,22 @@ struct MediaDetailView: View {
     
     private var bottomContentOverlay: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Gallery counter (only for gallery posts)
+            if post.postType == .gallery && !post.galleryImages.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("\(currentGalleryIndex + 1) of \(post.galleryImages.count)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.4))
+                        .clipShape(Capsule())
+                    Spacer()
+                }
+            }
+            
             // Post context
             VStack(alignment: .leading, spacing: 8) {
                 PostHeader(post: post, colorScheme: .dark)
@@ -153,7 +170,11 @@ struct MediaDetailView: View {
             .ignoresSafeArea(edges: .bottom)
         )
         .sheet(isPresented: $showShareSheet) {
-            MediaShareSheet(post: post, mediaURL: shareItem)
+            if let urls = shareItems {
+                MediaShareSheet(post: post, mediaURLs: urls)
+            } else {
+                MediaShareSheet(post: post, mediaURL: shareItem)
+            }
         }
         .sheet(isPresented: $showingPostReply) {
             MarkdownComposerView(
@@ -169,6 +190,32 @@ struct MediaDetailView: View {
     private var mediaId: String {
         "\(post.id)-\(post.postType.displayName.lowercased())"
     }
+
+    private var progressBar: some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.gray.opacity(0.35))
+            Capsule()
+                .fill(Color.gray.opacity(0.8))
+                .scaleEffect(x: max(0, min(1, gifProgress)), y: 1, anchor: .leading)
+        }
+        .frame(height: 4)
+        .opacity(0.95)
+        .animation(.linear(duration: 0.05), value: gifProgress)
+    }
+    
+    private var bottomOverlay: some View {
+        Group {
+            if isContentVisible, post.postType != .video {
+                bottomContentOverlay
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: isContentVisible)
+    
+                
+            }
+        }
+    }
+
 
     private func submitRootReply(text: String) async throws {
         let parent = post.fullname
@@ -207,10 +254,50 @@ struct MediaDetailView: View {
             
         case .gif:
             if let gifURL = post.gifURL, let url = URL(string: gifURL) {
-                AnimatedGifView(url: url, contentMode: .scaleAspectFit, cornerRadius: 0)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .zoomable()
-                    .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+                    ZStack(alignment: .bottom) {
+                        ScrubbableGifView(
+                            url: url,
+                            contentMode: .fit,
+                            cornerRadius: 0,
+                            progress: $gifProgress,
+                            isScrubbing: isScrubbingGestureActive
+                        )
+                        .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+
+                        // Scrubber only at the bottom area to not block other gestures
+                        if !isContentVisible {
+                            VStack(spacing: 8) {
+                                // Let SwiftUI size the bar naturally; just add padding.
+                                GeometryReader { geo in
+                                    progressBar
+                                        .frame(height: 8)
+                                        .contentShape(Rectangle())
+                                        .highPriorityGesture(
+                                            DragGesture(minimumDistance: 2, coordinateSpace: .local)
+                                                .onChanged { value in
+                                                    // Begin scrubbing only with a drag, not a tap
+                                                    if !isScrubbingGestureActive {
+                                                        let moved = abs(value.translation.width) > 1 || abs(value.translation.height) > 6
+                                                        if !moved { return }
+                                                    }
+                                                    isScrubbingGestureActive = true
+                                                    let width = geo.size.width
+                                                    let x = max(0, min(value.location.x, width))
+                                                    gifProgress = Double(x / width)
+                                                }
+                                                .onEnded { _ in
+                                                    isScrubbingGestureActive = false
+                                                }
+                                        )
+                                }
+                                .frame(height: 8)
+                                    
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 12)
+                        }
+                    }
+            
             }
             
         case .video:
@@ -229,13 +316,11 @@ struct MediaDetailView: View {
                     }
                 }
                 .onAppear {
-                    
                     if let handoffState = videoHandoffState {
                         // Use handoff player and state
                         player = handoffState.player
-                        originalMuteState = handoffState.isMuted  // Remember original state
+                        originalMuteState = handoffState.isMuted
                         handoffState.applyTo(handoffState.player)
-                        // Temporarily unmute for detail view (will be restored on dismiss)
                         player?.applyMuteState(muted: false)
                         player?.play()
                     } else {
@@ -255,16 +340,46 @@ struct MediaDetailView: View {
                 }
             }
         case .gallery:
-            // Gallery posts should use GalleryDetailView instead
-            VStack(spacing: 16) {
-                Image(systemName: "photo.stack")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white)
-                Text("Gallery view not available")
-                    .font(.title3)
-                    .foregroundStyle(.white)
+            if !post.galleryImages.isEmpty {
+                TabView(selection: $currentGalleryIndex) {
+                    ForEach(0..<post.galleryImages.count, id: \.self) { imageIndex in
+                        LazyImage(url: URL(string: post.galleryImages[imageIndex].url)) { state in
+                            if let image = state.image {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else if state.error != nil {
+                                VStack(spacing: 16) {
+                                    Image(systemName: "photo.stack")
+                                        .font(.system(size: 48))
+                                        .foregroundStyle(.white)
+                                    Text("Failed to load image")
+                                        .font(.title3)
+                                        .foregroundStyle(.white)
+                                }
+                            } else {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.5)
+                            }
+                        }
+                        .tag(imageIndex)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.white)
+                    Text("Gallery is empty")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                }
+                .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
             }
-            .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
         case .text, .link, .youtube:
             // These shouldn't appear in media detail view
             VStack(spacing: 16) {
@@ -336,7 +451,8 @@ struct MediaDetailView: View {
     private func handleShare() {
         // Simple share always shares the post URL, not the media
         // Media sharing is handled by the download button
-        shareItem = nil  // No media file to share
+        shareItem = nil
+        shareItems = nil
         showShareSheet = true
     }
     
@@ -370,24 +486,37 @@ struct MediaDetailView: View {
             defer { isDownloading = false }
             do {
                 let service = MediaDownloadService()
-                let fileURL = try await service.download(post: post, options: .init(
-                    preferredFilename: post.id,
-                    onProgress: { progress in
-                        Task { @MainActor in
-                            downloadProgress = progress
+                if post.postType == .gallery {
+                    let urls = try await service.downloadAllGalleryImages(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
                         }
+                    ))
+                    await MainActor.run {
+                        shareItems = urls
+                        shareItem = nil
+                        showShareSheet = true
                     }
-                ))
-                await MainActor.run {
-                    shareItem = fileURL
-                    showShareSheet = true
+                } else {
+                    let fileURL = try await service.download(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItem = fileURL
+                        shareItems = nil
+                        showShareSheet = true
+                    }
                 }
             } catch {
-                await MainActor.run {
-                    // Fallback to sharing the post URL
-                    shareItem = URL(string: post.permalinkURL)
-                    showShareSheet = true
-                }
+                // On failure, do not present share sheet with metadata
             }
         }
     }

@@ -28,10 +28,22 @@ class ProfileViewModel {
     
     // Header avatar fallback
     private(set) var headerAvatarURL: URL?
+    private(set) var isFollowingUser: Bool = false
     
     init(username: String, redditAPI: RedditAPIManager) {
         self.username = username
         self.redditAPI = redditAPI
+    }
+
+    func toggleFollowUser() async {
+        guard let current = profile else { return }
+        let newState = !isFollowingUser
+        isFollowingUser = newState
+        do {
+            try await redditAPI.setUserFollow(username: current.actualName, follow: newState)
+        } catch {
+            isFollowingUser.toggle()
+        }
     }
     
     func initialLoad() async {
@@ -57,10 +69,14 @@ class ProfileViewModel {
             )
             
             self.profile = profile
+            self.isFollowingUser = profile.isFriend ?? false
             self.posts = enrichedPosts
             self.postsAfter = postsResponse.data.after
             self.comments = enrichedComments
             self.commentsAfter = commentsResponse.data.after
+            // Prefetch media for visible sections
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
+            MediaPrefetcher.shared.prefetch(comments: self.comments)
             
             if self.headerAvatarURL == nil, profile.profileIconURL == nil, let d = derivedAvatarURL {
                 self.headerAvatarURL = d
@@ -103,10 +119,13 @@ class ProfileViewModel {
             )
             
             self.profile = profile
+            self.isFollowingUser = profile.isFriend ?? false
             self.posts = enrichedPosts
             self.postsAfter = postsResponse.data.after
             self.comments = enrichedComments
             self.commentsAfter = commentsResponse.data.after
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
+            MediaPrefetcher.shared.prefetch(comments: self.comments)
             
             if self.headerAvatarURL == nil, profile.profileIconURL == nil, let d = derivedAvatarURL {
                 self.headerAvatarURL = d
@@ -140,6 +159,7 @@ class ProfileViewModel {
             let unique = newPosts.filter { np in !posts.contains(where: { $0.id == np.id }) }
             posts.append(contentsOf: unique)
             postsAfter = response.data.after
+            MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
             // Silently handle errors for pagination
         }
@@ -159,6 +179,7 @@ class ProfileViewModel {
             await ensurePostsForComments(unique)
             comments.append(contentsOf: unique)
             commentsAfter = response.data.after
+            MediaPrefetcher.shared.prefetch(comments: self.comments)
         } catch {
             // Silently handle errors for pagination
         }

@@ -38,7 +38,9 @@ struct CommentThreadView: View {
     }
     
     var body: some View {
-        LazyVStack(spacing: 0) {
+        // Use VStack instead of LazyVStack to keep comment rows in memory
+        // and preserve total content height when items scroll off-screen.
+        VStack(spacing: 0) {
             ForEach(Array(flatItems.enumerated()), id: \.element.id) { index, _ in
                 row(at: index)
             }

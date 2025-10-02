@@ -10,8 +10,11 @@ struct SafariView: UIViewControllerRepresentable {
         config.barCollapsingEnabled = true
         
         let safari = SFSafariViewController(url: url, configuration: config)
-        safari.preferredControlTintColor = UIColor.systemBlue
-        safari.preferredBarTintColor = UIColor.systemBackground
+        // Avoid deprecated tint overrides on iOS 26+
+        if #unavailable(iOS 26.0) {
+            safari.preferredControlTintColor = UIColor.systemBlue
+            safari.preferredBarTintColor = UIColor.systemBackground
+        }
         
         return safari
     }

@@ -56,6 +56,7 @@ struct RawMessage: Codable {
     let subject: String?
     let body: String?
     let author: String?
+    let dest: String?
     let subreddit: String?
     let new: Bool?
     let createdUtc: Double?

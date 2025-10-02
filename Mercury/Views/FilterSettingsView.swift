@@ -17,6 +17,17 @@ struct FilterSettingsView: View {
     @State private var showingAddUser = false
     @State private var showingAddSubreddit = false
     
+    // Stable, sorted arrays to avoid list reshuffling during state changes/typing
+    private var sortedBlockedKeywords: [String] {
+        Array(blockedKeywords).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+    private var sortedBlockedUsers: [String] {
+        Array(blockedUsers).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+    private var sortedBlockedSubreddits: [String] {
+        Array(blockedSubreddits).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+    
     var body: some View {
         NavigationView {
             List {
@@ -27,7 +38,7 @@ struct FilterSettingsView: View {
                 }
                 
                 Section {
-                    ForEach(Array(blockedKeywords), id: \.self) { keyword in
+                    ForEach(sortedBlockedKeywords, id: \.self) { keyword in
                         HStack {
                             Text(keyword)
                             Spacer()
@@ -53,7 +64,7 @@ struct FilterSettingsView: View {
                 }
                 
                 Section {
-                    ForEach(Array(blockedUsers), id: \.self) { user in
+                    ForEach(sortedBlockedUsers, id: \.self) { user in
                         HStack {
                             Text("u/\(user)")
                             Spacer()
@@ -79,7 +90,7 @@ struct FilterSettingsView: View {
                 }
                 
                 Section {
-                    ForEach(Array(blockedSubreddits), id: \.self) { subreddit in
+                    ForEach(sortedBlockedSubreddits, id: \.self) { subreddit in
                         HStack {
                             Text("r/\(subreddit)")
                             Spacer()
@@ -177,21 +188,21 @@ struct FilterSettingsView: View {
     }
     
     private func deleteKeywords(offsets: IndexSet) {
-        let keywordsArray = Array(blockedKeywords)
+        let keywordsArray = sortedBlockedKeywords
         for index in offsets {
             FilterService.shared.removeBlockedKeyword(keywordsArray[index])
         }
     }
     
     private func deleteUsers(offsets: IndexSet) {
-        let usersArray = Array(blockedUsers)
+        let usersArray = sortedBlockedUsers
         for index in offsets {
             FilterService.shared.removeBlockedUser(usersArray[index])
         }
     }
     
     private func deleteSubreddits(offsets: IndexSet) {
-        let subredditsArray = Array(blockedSubreddits)
+        let subredditsArray = sortedBlockedSubreddits
         for index in offsets {
             FilterService.shared.removeBlockedSubreddit(subredditsArray[index])
         }

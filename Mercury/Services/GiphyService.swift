@@ -33,7 +33,7 @@ struct GiphyService {
         guard let url = URL(string: urlString) else { return nil }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await NetworkManager.shared.session.data(from: url)
             let response = try JSONDecoder().decode(GiphyResponse.self, from: data)
             
             let image = response.data.images.downsized

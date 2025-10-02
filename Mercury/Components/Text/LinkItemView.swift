@@ -278,15 +278,17 @@ struct LinkItemView: View {
             if let post = post {
                 navigationPath.navigate(to: .postComments(post: post))
             } else {
-                // Fallback: try to resolve, else open in browser
+                // Fallback: try to resolve, and navigate internally for crossposts/relative links
                 Task {
-                    if let fetched = await RedditPostFetchService.shared.fetchPost(from: link) {
-                        await MainActor.run {
-                            navigationPath.navigate(to: .postComments(post: fetched))
-                        }
-                    } else if let url = URL(string: link) {
-                        await MainActor.run {
-                            UIApplication.shared.open(url)
+                    if let fetched = await RedditPostFetchService.shared.fetchPost(from: URLNormalizer.normalizeRedditURL(link)) {
+                        await MainActor.run { navigationPath.navigate(to: .postComments(post: fetched)) }
+                    } else {
+                        // Try resolving again with normalized URL
+                        let normalized = URLNormalizer.normalizeRedditURL(link)
+                        if let _ = URL(string: normalized) {
+                            if let fetched2 = await RedditPostFetchService.shared.fetchPost(from: normalized) {
+                                await MainActor.run { navigationPath.navigate(to: .postComments(post: fetched2)) }
+                            }
                         }
                     }
                 }
@@ -398,7 +400,7 @@ extension LinkItemView {
         }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await NetworkManager.shared.session.data(from: url)
             if let uiImage = UIImage(data: data) {
                 await MainActor.run {
                     self.imageStatus = .finished(Image(uiImage: uiImage))

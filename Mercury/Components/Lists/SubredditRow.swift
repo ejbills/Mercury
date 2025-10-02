@@ -5,6 +5,27 @@ import NukeUI
 struct SubredditRow: View {
     let subreddit: Subreddit
     let action: () -> Void
+    let isFavorite: Bool
+    let onFavoriteToggle: (() -> Void)?
+    let isSubscribed: Bool?
+    let onSubscribeToggle: (() -> Void)?
+    @State private var showUnsubscribeConfirm: Bool = false
+    
+    init(
+        subreddit: Subreddit,
+        action: @escaping () -> Void,
+        isFavorite: Bool = false,
+        onFavoriteToggle: (() -> Void)? = nil,
+        isSubscribed: Bool? = nil,
+        onSubscribeToggle: (() -> Void)? = nil
+    ) {
+        self.subreddit = subreddit
+        self.action = action
+        self.isFavorite = isFavorite
+        self.onFavoriteToggle = onFavoriteToggle
+        self.isSubscribed = isSubscribed
+        self.onSubscribeToggle = onSubscribeToggle
+    }
     
     var body: some View {
         Button(action: action) {
@@ -39,7 +60,69 @@ struct SubredditRow: View {
                 }
                 
                 Spacer()
-                
+
+                if let isSubscribed = isSubscribed, let onSubscribeToggle = onSubscribeToggle {
+                    if isSubscribed {
+                        HStack(spacing: 6) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) { showUnsubscribeConfirm.toggle() }
+                            } label: {
+                                Text("Subscribed")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(Color.blue.opacity(0.15)))
+                                    .foregroundStyle(.blue)
+                            }
+                            .buttonStyle(.plain)
+
+                            if showUnsubscribeConfirm {
+                                Button(role: .destructive) {
+                                    HapticManager.shared.gentleImpact()
+                                    showUnsubscribeConfirm = false
+                                    onSubscribeToggle()
+                                } label: {
+                                    Text("Unsubscribe")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Capsule().fill(Color.red.opacity(0.15)))
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                            }
+                        }
+                    } else {
+                        Button(action: {
+                            HapticManager.shared.gentleImpact()
+                            onSubscribeToggle()
+                        }) {
+                            Text("Subscribe")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(Color.blue))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                    }
+                }
+
+                if let onFavoriteToggle = onFavoriteToggle {
+                    Button(action: onFavoriteToggle) {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(isFavorite ? .yellow : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                }
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)

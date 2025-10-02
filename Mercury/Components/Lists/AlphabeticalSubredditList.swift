@@ -4,11 +4,33 @@ struct AlphabeticalSubredditList: View {
     let subreddits: [Subreddit]
     let onSubredditTap: (Subreddit) -> Void
     let onQuickLinkTap: ((QuickLink) -> Void)?
+    let multis: [MultiReddit]
+    let onMultiTap: ((MultiReddit) -> Void)?
+    let favoriteSubreddits: Set<String>
+    let onFavoriteToggle: ((Subreddit) -> Void)?
+    let subscribedSubreddits: Set<String>
+    let onSubscribeToggle: ((Subreddit) -> Void)?
     
-    init(subreddits: [Subreddit], onSubredditTap: @escaping (Subreddit) -> Void, onQuickLinkTap: ((QuickLink) -> Void)? = nil) {
+    init(
+        subreddits: [Subreddit],
+        onSubredditTap: @escaping (Subreddit) -> Void,
+        onQuickLinkTap: ((QuickLink) -> Void)? = nil,
+        multis: [MultiReddit] = [],
+        onMultiTap: ((MultiReddit) -> Void)? = nil,
+        favoriteSubreddits: Set<String> = Set(),
+        onFavoriteToggle: ((Subreddit) -> Void)? = nil,
+        subscribedSubreddits: Set<String> = Set(),
+        onSubscribeToggle: ((Subreddit) -> Void)? = nil
+    ) {
         self.subreddits = subreddits
         self.onSubredditTap = onSubredditTap
         self.onQuickLinkTap = onQuickLinkTap
+        self.multis = multis
+        self.onMultiTap = onMultiTap
+        self.favoriteSubreddits = favoriteSubreddits
+        self.onFavoriteToggle = onFavoriteToggle
+        self.subscribedSubreddits = subscribedSubreddits
+        self.onSubscribeToggle = onSubscribeToggle
     }
     
     private var allSections: [(String, SectionType)] {
@@ -19,7 +41,18 @@ struct AlphabeticalSubredditList: View {
             sections.append(("★", .quickAccess(QuickLink.allCases)))
         }
         
-        // Add subreddit sections
+        // Add Multireddits if provided
+        if onMultiTap != nil && !multis.isEmpty {
+            sections.append(("m", .multis(multis)))
+        }
+
+        // Add favorites section if there are any favorites
+        let favoriteSubs = subreddits.filter { favoriteSubreddits.contains($0.displayName) }
+        if !favoriteSubs.isEmpty {
+            sections.append(("♥", .favorites(favoriteSubs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() })))
+        }
+        
+        // Add regular subreddit sections
         let subredditSections = groupedSubreddits.map { ($0.0, SectionType.subreddits($0.1)) }
         sections.append(contentsOf: subredditSections)
         
@@ -51,6 +84,8 @@ struct AlphabeticalSubredditList: View {
     
     private enum SectionType {
         case quickAccess([QuickLink])
+        case multis([MultiReddit])
+        case favorites([Subreddit])
         case subreddits([Subreddit])
     }
     
@@ -64,11 +99,33 @@ struct AlphabeticalSubredditList: View {
                             case .quickAccess(let quickLinks):
                                 QuickAccessGrid(quickLinks: quickLinks, onQuickLinkTap: onQuickLinkTap)
                                     .listRowSeparator(.hidden)
+                            case .multis(let items):
+                                ForEach(items, id: \.id) { multi in
+                                    MultiRedditRow(multi: multi) {
+                                        onMultiTap?(multi)
+                                    }
+                                }
+                            case .favorites(let subreddits):
+                                ForEach(subreddits) { subreddit in
+                                    SubredditRow(
+                                        subreddit: subreddit,
+                                        action: { onSubredditTap(subreddit) },
+                                        isFavorite: true, // Always true for favorites section
+                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil,
+                                        isSubscribed: onSubscribeToggle != nil ? subscribedSubreddits.contains(subreddit.displayName) : nil,
+                                        onSubscribeToggle: onSubscribeToggle != nil ? { onSubscribeToggle!(subreddit) } : nil
+                                    )
+                                }
                             case .subreddits(let subreddits):
                                 ForEach(subreddits) { subreddit in
-                                    SubredditRow(subreddit: subreddit) {
-                                        onSubredditTap(subreddit)
-                                    }
+                                    SubredditRow(
+                                        subreddit: subreddit,
+                                        action: { onSubredditTap(subreddit) },
+                                        isFavorite: favoriteSubreddits.contains(subreddit.displayName),
+                                        onFavoriteToggle: onFavoriteToggle != nil ? { onFavoriteToggle!(subreddit) } : nil,
+                                        isSubscribed: onSubscribeToggle != nil ? subscribedSubreddits.contains(subreddit.displayName) : nil,
+                                        onSubscribeToggle: onSubscribeToggle != nil ? { onSubscribeToggle!(subreddit) } : nil
+                                    )
                                 }
                             }
                         }
@@ -99,6 +156,20 @@ struct AlphabeticalSubredditList: View {
                         Text("Quick Access")
                             .font(.subheadline)
                             .fontWeight(.semibold)
+                    } else if title == "m" {
+                        Image(systemName: "rectangle.3.group.fill")
+                            .font(.caption)
+                            .foregroundStyle(.indigo)
+                        Text("Multireddits")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                    } else if title == "♥" {
+                        Image(systemName: "heart.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        Text("Favorites")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                     } else {
                         Text(title)
                             .font(.subheadline)
@@ -119,35 +190,98 @@ struct AlphabeticalSubredditList: View {
 struct SectionIndexTitles: View {
     let proxy: ScrollViewProxy
     let titles: [String]
+    @State private var currentIndex: Int? = nil
+    
+    private let itemHeight: CGFloat = 16
+    private let itemSpacing: CGFloat = 2
+    private let horizontalPadding: CGFloat = 2
+    private let verticalPadding: CGFloat = 4
     
     var body: some View {
         VStack {
             Spacer()
             HStack {
                 Spacer()
-                VStack(spacing: 2) {
-                    ForEach(titles, id: \.self) { title in
-                        Button(action: {
-                            proxy.animatedScrollTo(title, anchor: UnitPoint.top)
-                        }) {
-                            Text(title)
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.blue)
-                                .frame(width: 20, height: 16)
-                        }
-                        .buttonStyle(.plain)
+                VStack(spacing: itemSpacing) {
+                    ForEach(Array(titles.enumerated()), id: \.0) { idx, title in
+                        indexLabel(for: title, isActive: currentIndex == idx)
+                            .frame(width: 20, height: itemHeight)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                currentIndex = idx
+                                proxy.animatedScrollTo(title, anchor: UnitPoint.top)
+                            }
                     }
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 2)
+                .padding(.vertical, verticalPadding)
+                .padding(.horizontal, horizontalPadding)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(.regularMaterial)
-                        .shadow(radius: 2)
+                        .fill(.clear)
+                        .modifier(GlassContainer())
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            // Map local Y to index using fixed metrics
+                            let localY = value.location.y - verticalPadding
+                            let stride = itemHeight + itemSpacing
+                            var idx = Int(floor(localY / stride))
+                            idx = max(0, min(titles.count - 1, idx))
+                            if currentIndex != idx {
+                                currentIndex = idx
+                                HapticManager.shared.gentleImpact()
+                                let title = titles[idx]
+                                proxy.animatedScrollTo(title, anchor: UnitPoint.top)
+                            }
+                        }
+                        .onEnded { _ in
+                            // No-op; keep size and layout unchanged
+                        }
                 )
             }
             Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func indexLabel(for title: String, isActive: Bool) -> some View {
+        let color = isActive ? Color.white : Color.blue
+        switch title {
+        case "★":
+            Image(systemName: "star.fill")
+                .font(.caption2)
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(color)
+        case "♥":
+            Image(systemName: "heart.fill")
+                .font(.caption2)
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(color)
+        case "m":
+            // Multireddit icon instead of the letter "m"
+            Image(systemName: "rectangle.3.group.fill")
+                .font(.caption2)
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(color)
+        default:
+            Text(title)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(color)
+        }
+    }
+}
+
+private struct GlassContainer: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular.tint(Color.blue.opacity(0.22)))
+        } else {
+            content
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.25), lineWidth: 0.8))
         }
     }
 }
@@ -277,4 +411,3 @@ struct QuickAccessGrid: View {
         }
     }
 }
-

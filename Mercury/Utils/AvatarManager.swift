@@ -66,7 +66,7 @@ class AvatarManager: BaseRedditService {
         }
         
         let request = createRequest(url: url)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
         
         try validateResponse(http)

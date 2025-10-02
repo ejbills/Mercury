@@ -26,6 +26,9 @@ struct SimpleVideoPlayer: UIViewRepresentable {
         view.clipsToBounds = true
         view.layer.masksToBounds = true
         
+        // Configure audio session to mix with other apps
+        configureAudioSession()
+        
         if showControls {
             let controller = AVPlayerViewController()
             controller.player = player
@@ -116,6 +119,17 @@ struct SimpleVideoPlayer: UIViewRepresentable {
         
         deinit {
             NotificationCenter.default.removeObserver(self)
+        }
+    }
+    
+    // Configure audio session to mix with other apps instead of interrupting
+    private func configureAudioSession() {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            try audioSession.setActive(true)
+        } catch {
+            // Silent failure for audio session configuration
         }
     }
 }
