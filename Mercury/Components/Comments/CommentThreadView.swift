@@ -110,7 +110,7 @@ struct CommentThreadView: View {
                     .padding(.leading, CGFloat(flatComment.depth * 12))
                     .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
                     .padding(.vertical, 4)
-                    // Root comments now expand naturally to available width.
+                    // Root comments now expand naturally to available width. depth=\(flatComment.depth)")
                 } else {
                     EmptyView()
                 }
@@ -136,7 +136,7 @@ struct CommentThreadView: View {
                     .padding(.leading, CGFloat(flatMoreComments.depth * 12))
                     .padding(.horizontal, flatMoreComments.depth == 0 ? 0 : 8)
                     .padding(.vertical, 4)
-                    // Root-level load-more rows also expand naturally.
+                    // Root-level load-more rows also expand naturally. depth=\(flatMoreComments.depth)")
                 } else {
                     EmptyView()
                 }

@@ -29,15 +29,11 @@ struct MarkdownRenderer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             let visible = compactMode ? String("\(processedContent.prefix(150))...") : processedContent
-            if let attributed = try? AttributedString(markdown: visible) {
-                Text(attributed)
-                    .font(.system(size: 16 * bodyScale))
-                    .textSelection(.enabled)
-            } else {
-                Text(visible)
-                    .font(.system(size: 16 * bodyScale))
-                    .textSelection(.enabled)
-            }
+            Markdown(visible)
+                .markdownTextStyle() {
+                    FontSize(16 * bodyScale)
+                }
+                .textSelection(.enabled)
             if showEmbeddedContent {
                 let embedContent = extractLinks(from: content)
                 ForEach(Array(embedContent.enumerated()), id: \.offset) { index, embed in
@@ -181,17 +177,24 @@ struct MarkdownRenderer: View {
             return true
         }
         
-        // Check for known image hosting domains
-        return lowercaseURL.contains("i.redd.it") ||
-               lowercaseURL.contains("preview.redd.it") ||
-               lowercaseURL.contains("external-preview.redd.it") ||
-               lowercaseURL.contains("i.imgur.com") ||
-               // Reddit images often don't have extensions but are on image domains
-               (lowercaseURL.contains("redd.it") && !lowercaseURL.contains("/r/")) ||
-               // Imgur images without extensions
-               lowercaseURL.matches(#"https?://imgur\.com/[a-zA-Z0-9]+"#) ||
-               // Imgur galleries/albums
-               lowercaseURL.matches(#"https?://imgur\.com/(a|gallery)/[a-zA-Z0-9]+"#)
+        // Known direct image hosts
+        if lowercaseURL.contains("i.redd.it") ||
+           lowercaseURL.contains("preview.redd.it") ||
+           lowercaseURL.contains("external-preview.redd.it") ||
+           lowercaseURL.contains("i.imgur.com") ||
+           (lowercaseURL.contains("redd.it") && !lowercaseURL.contains("/r/")) {
+            return true
+        }
+
+        // Imgur: allow bare image pages (imgur.com/<id>) but NOT albums/galleries
+        if lowercaseURL.matches(#"https?://imgur\.com/[a-zA-Z0-9]+$"#) {
+            return true
+        }
+        if lowercaseURL.matches(#"https?://imgur\.com/(a|gallery)/[a-zA-Z0-9]+"#) {
+            return false
+        }
+
+        return false
     }
     
     private func isGifURL(_ url: String) -> Bool {
@@ -215,37 +218,36 @@ enum EmbedContent: Hashable {
 struct EmbeddedMediaView: View {
     let url: String
     @State private var isLoaded = false
-    private let fixedHeight: CGFloat = 300
+    private let placeholderHeight: CGFloat = 220
     
     private var processedURL: String {
-        var processedURL = url
-        
-        // Convert preview.redd.it to i.redd.it and strip parameters
-        if processedURL.contains("preview.redd.it") {
-            processedURL = processedURL.replacingOccurrences(of: "preview.redd.it", with: "i.redd.it")
-            
-            // Strip URL parameters (everything after ?)
-            if let urlComponents = URLComponents(string: processedURL) {
-                var components = urlComponents
-                components.query = nil
-                processedURL = components.string ?? processedURL
-            }
+        var out = url
+
+        // Convert preview.redd.it to i.redd.it and strip parameters/fragments
+        if out.contains("preview.redd.it") {
+            out = out.replacingOccurrences(of: "preview.redd.it", with: "i.redd.it")
         }
         
-        // Convert Imgur gallery/album URLs to direct image URLs
-        if processedURL.matches(#"https?://imgur\.com/(a|gallery)/[a-zA-Z0-9]+"#) {
-            // Extract the ID and convert to direct image URL
-            if let range = processedURL.range(of: #"/(a|gallery)/"#, options: .regularExpression) {
-                let afterSlash = processedURL[range.upperBound...]
-                let imageId = String(afterSlash).components(separatedBy: "/").first ?? ""
-                if !imageId.isEmpty {
-                    // Try the most common image format first
-                    processedURL = "https://i.imgur.com/\(imageId).jpg"
+        // Imgur conversion: only for bare image pages (not albums/galleries)
+        if out.matches(#"https?://imgur\.com/[a-zA-Z0-9]+($|\?.*|#.*)"#) &&
+           !out.matches(#"https?://imgur\.com/(a|gallery)/[a-zA-Z0-9]+"#) {
+            if let comps = URLComponents(string: out) {
+                var id = comps.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                if let slash = id.firstIndex(of: "/") { id = String(id[..<slash]) }
+                if !id.isEmpty {
+                    out = "https://i.imgur.com/\(id).jpg"
                 }
             }
         }
-        
-        return processedURL
+
+        // Strip any fragments/queries for image hosts that dislike them
+        if var comps = URLComponents(string: out) {
+            comps.query = nil
+            comps.fragment = nil
+            out = comps.string ?? out
+        }
+
+        return out
     }
     
     private var isGif: Bool {
@@ -255,50 +257,35 @@ struct EmbeddedMediaView: View {
     var body: some View {
         Group {
             if isGif, let gifURL = URL(string: processedURL) {
-                GeometryReader { proxy in
-                    FLAnimatedGifView(
-                        url: gifURL,
-                        contentMode: .fit,
-                        cornerRadius: 12,
-                        fixedHeight: fixedHeight
-                    )
-                    .frame(width: proxy.size.width, height: fixedHeight)
-                }
-                .frame(height: fixedHeight)
+                FLAnimatedGifView(
+                    url: gifURL,
+                    contentMode: .fit,
+                    cornerRadius: 12,
+                    fixedHeight: nil
+                )
             } else {
                 imageView
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
     
     private var imageView: some View {
         LazyImage(url: URL(string: processedURL)) { state in
             if let image = state.image {
-                GeometryReader { proxy in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: proxy.size.width, height: fixedHeight)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .opacity(isLoaded ? 1 : 0)
-                        .onAppear {
-                            if !isLoaded {
-                                withAnimation(.easeOut(duration: 0.3)) {
-                                    isLoaded = true
-                                }
-                            }
-                            
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .opacity(isLoaded ? 1 : 0)
+                    .onAppear {
+                        if !isLoaded {
+                            withAnimation(.easeOut(duration: 0.3)) { isLoaded = true }
                         }
-                        
-                }
-                .frame(height: fixedHeight)
+                    }
             } else if state.error != nil {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.quaternary.opacity(0.3))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: fixedHeight)
+                // Do not impose a height while loading/errors to avoid locking parent size
+                Color.clear
                     .overlay {
                         VStack(spacing: 8) {
                             Image(systemName: "photo")
@@ -309,54 +296,12 @@ struct EmbeddedMediaView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    
             } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.quaternary.opacity(0.3))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: fixedHeight)
-                    .overlay {
-                        ProgressView()
-                            .scaleEffect(1.2)
-                    }
-                    
+                Color.clear
+                    .overlay { ProgressView().scaleEffect(1.2) }
             }
         }
-        .processors([.resize(size: CGSize(width: 800, height: 600))])
         .priority(.high)
         .transition(.opacity)
-    }
-}
-
-#Preview {
-    ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-            MarkdownRenderer(
-                content: """
-                # Heading 1
-                ## Heading 2
-                
-                This is **bold** and *italic* text.
-                
-                Check out r/SwiftUI and u/developer for more info.
-                
-                Here's an image: https://i.imgur.com/example.jpg
-                
-                And a [link](https://reddit.com).
-                """,
-                compactMode: false,
-                showEmbeddedContent: true
-            )
-            .padding()
-            
-            Divider()
-            
-            MarkdownRenderer(
-                content: "Compact mode with **formatting** and `code`.",
-                compactMode: true,
-                showEmbeddedContent: true
-            )
-            .padding()
-        }
     }
 }
