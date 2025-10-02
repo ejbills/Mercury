@@ -148,15 +148,6 @@ struct SubredditFeedView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    withAnimation(.snappy(duration: 0.2)) {
-                        compactMode.toggle()
-                    }
-                }) {
-                    Image(systemName: compactMode ? "list.bullet" : "square.grid.2x2")
-                        .font(.callout)
-                        .foregroundStyle(.primary)
-                }
                 sortButton
             }
             // Show sidebar button only for real subreddits and when sidebar exists

@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct SearchView: View {
     let apiService: RedditAPIManager
@@ -217,6 +218,7 @@ struct SearchView: View {
     
     @ViewBuilder
     private var postsResultsView: some View {
+        @Default(.compactMode) var compactMode
         if searchResults.isEmpty && !isLoading {
             Text("No posts found")
                 .font(.body)
@@ -224,11 +226,17 @@ struct SearchView: View {
                 .padding(.top, 40)
         } else {
             ForEach(searchResults) { post in
-                    PostRowView(
-                        post: post, 
-                        namespace: mediaNamespace, 
-                        selectedPost: $selectedPost,
-                    )
+                    Group {
+                        if compactMode {
+                            CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                        } else {
+                            PostRowView(
+                                post: post, 
+                                namespace: mediaNamespace, 
+                                selectedPost: $selectedPost
+                            )
+                        }
+                    }
                     .onAppear {
                         if post.id == searchResults.last?.id && hasMore && !isLoading {
                         Task {

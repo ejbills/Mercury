@@ -38,6 +38,9 @@ struct PostRowView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     
+    @Default(.titleTextScale) private var titleScale
+    @Default(.captionTextScale) private var captionScale
+
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
@@ -105,7 +108,7 @@ struct PostRowView: View {
     
     var body: some View {
         Card {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
                 VStack(alignment: .leading, spacing: 8) {
                     postHeader
                     postTitle
@@ -272,23 +275,24 @@ struct PostRowView: View {
     
     private var postTitle: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(post.title)
-                .appFont(.title, weight: .semibold)
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-            
-            
+            InlineTitleLabel(
+                title: post.title,
+                flairText: post.linkFlairText,
+                isNSFW: post.isNsfw,
+                isSpoiler: post.isSpoiler,
+                showDomain: (postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true),
+                domainText: shortenedDomain,
+                flairBackground: UIColor(flairBackgroundColor),
+                flairTextColor: UIColor(flairTextColor),
+                textColor: UIColor.label,
+                titlePointSize: CGFloat(18) * CGFloat(titleScale),
+                titleWeight: .semibold,
+                pillPointSize: CGFloat(12) * CGFloat(captionScale),
+                pillWeight: .medium
+            )
+            .fixedSize(horizontal: false, vertical: true)
+
             HStack(spacing: 6) {
-                if let linkFlairText = post.linkFlairText, !linkFlairText.isEmpty {
-                    Pill(size: .small) {
-                        Text(linkFlairText)
-                            .appFont(.small)
-                            .fontWeight(.medium)
-                            .foregroundStyle(flairTextColor)
-                    }
-                    .background(flairBackgroundColor, in: Capsule())
-                }
-                
                 if post.isPinned || post.isStickied {
                     Pill(size: .small) {
                         Image(systemName: "pin.fill")
@@ -296,43 +300,12 @@ struct PostRowView: View {
                             .foregroundStyle(.green)
                     }
                 }
-                
-                if post.isNsfw {
-                    Pill(size: .small) {
-                        Text("NSFW")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
-                    .background(.red, in: Capsule())
-                }
-                
-                if post.isSpoiler {
-                    Pill(size: .small) {
-                        Text("SPOILER")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
-                    .background(.orange, in: Capsule())
-                }
-                
-                if post.postType == .link && !(post.domain?.isEmpty ?? true) {
-                    Pill(size: .small) {
-                        Text(shortenedDomain)
-                            .appFont(.small)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                
                 if post.gilded > 0 {
                     Pill(size: .small) {
                         HStack(spacing: 3) {
                             Image(systemName: "seal.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.yellow)
-                            
                             if post.gilded > 1 {
                                 Text("\(post.gilded)")
                                     .appFont(.small)
@@ -342,7 +315,6 @@ struct PostRowView: View {
                         }
                     }
                 }
-                
                 if post.locked {
                     Pill(size: .small) {
                         Image(systemName: "lock.fill")
@@ -350,7 +322,6 @@ struct PostRowView: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                
                 if post.archived {
                     Pill(size: .small) {
                         Image(systemName: "archivebox.fill")
@@ -358,7 +329,6 @@ struct PostRowView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                
                 Spacer()
             }
         }

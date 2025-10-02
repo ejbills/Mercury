@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct SubredditSearchResultsView: View {
     let subreddit: String
@@ -30,7 +31,13 @@ struct SubredditSearchResultsView: View {
                         Text("No results").foregroundStyle(.secondary).padding(.top, 80)
                     } else {
                         ForEach(posts) { post in
-                            PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                            Group {
+                                if Defaults[.compactMode] {
+                                    CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                                } else {
+                                    PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                                }
+                            }
                                 .onAppear {
                                     if post.id == posts.last?.id && hasMore && !isLoading {
                                         Task { await loadMore() }
@@ -92,4 +99,3 @@ struct SubredditSearchResultsView: View {
         }
     }
 }
-

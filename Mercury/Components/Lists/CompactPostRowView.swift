@@ -9,6 +9,8 @@ import SwiftUI
 import Nuke
 import NukeUI
 import AVKit
+import UIKit
+import Defaults
 
 struct CompactPostRowView: View {
     @State var post: RedditPost
@@ -29,6 +31,9 @@ struct CompactPostRowView: View {
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
+    // no-op
+    @Default(.titleTextScale) private var titleScale
+    @Default(.captionTextScale) private var captionScale
     
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil) {
         self.post = post
@@ -89,7 +94,7 @@ struct CompactPostRowView: View {
     var body: some View {
         Card(style: .minimal) {
             HStack(alignment: .top, spacing: 10) {
-                // Left: vertical voting + bottom ellipsis
+                // Left: vertical voting
                 VStack(spacing: 4) {
                     VoteButton(
                         direction: .up,
@@ -109,6 +114,7 @@ struct CompactPostRowView: View {
 
                     Spacer(minLength: 0)
 
+                    // Ellipsis menu (original placement)
                     Menu {
                         Button(action: { handleSave() }) {
                             Label(post.saved ? "Unsave" : "Save",
@@ -132,91 +138,85 @@ struct CompactPostRowView: View {
                 .frame(width: 28)
 
                 // Middle: content
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     // Meta + inline score
                     HStack(spacing: 6) {
-                        Text(subredditDisplayName)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        // Subreddit + icon
+                        HStack(spacing: 4) {
+                            SubredditIcon(iconURL: post.subredditIconURL, displayName: post.subreddit, size: 14)
+                            Text(subredditDisplayName)
+                                .appFont(.caption, weight: .medium)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
 
-                        Text("•").font(.caption2).foregroundStyle(.tertiary)
+                        Text("•").appFont(.small).foregroundStyle(.tertiary)
 
-                        Text(post.author)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        // Author + avatar
+                        HStack(spacing: 4) {
+                            UserAvatar(username: post.author, size: 14, iconURL: post.authorIconURL)
+                            Text(post.author)
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
 
-                        Text("•").font(.caption2).foregroundStyle(.tertiary)
+                        Text("•").appFont(.small).foregroundStyle(.tertiary)
 
                         Text(post.timeAgo)
-                            .font(.caption2)
+                            .appFont(.small)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
-                        Text("•").font(.caption2).foregroundStyle(.tertiary)
+                        Text("•").appFont(.small).foregroundStyle(.tertiary)
 
-                        Text(scoreText)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(scoreColor)
-                            .monospacedDigit()
-                            .lineLimit(1)
+                        Button(action: { handleVote(.upvoted) }) {
+                            Text(scoreText)
+                                .appFont(.small, weight: .semibold)
+                                .foregroundStyle(scoreColor)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
 
                         Spacer(minLength: 0)
                     }
 
-                    // Title navigates to post/comments page
-                    Text(post.title)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .contentShape(Rectangle())
+                    // Inline title + pills via UIKit-backed label for robust wrapping
+                    InlineTitleLabel(
+                        title: post.title,
+                        flairText: post.linkFlairText,
+                        isNSFW: post.isNsfw,
+                        isSpoiler: post.isSpoiler,
+                        showDomain: (postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true),
+                        domainText: shortenedDomain,
+                        flairBackground: UIColor(flairBackgroundColor),
+                        flairTextColor: UIColor(flairTextColor),
+                        textColor: UIColor.label,
+                        titlePointSize: CGFloat(14) * CGFloat(titleScale),
+                        titleWeight: .medium,
+                        pillPointSize: CGFloat(12) * CGFloat(captionScale),
+                        pillWeight: .medium
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                    
 
-                    // Badges (tags keep their own coloring)
-                    HStack(spacing: 4) {
-                        if let linkFlairText = post.linkFlairText, !linkFlairText.isEmpty {
-                            Text(linkFlairText)
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundStyle(flairTextColor)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(flairBackgroundColor, in: Capsule())
-                        }
-                        if post.isNsfw {
-                            Text("NSFW")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(.red, in: Capsule())
-                        }
-                        if post.isPinned || post.isStickied {
-                            Image(systemName: "pin.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.green)
-                        }
-                        Spacer(minLength: 0)
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Right: tappable media + comments button underneath
-                VStack(spacing: 6) {
+                // Right: tappable media
+                VStack(spacing: 4) {
                     compactThumbnail
                         .frame(width: 60, height: 60)
                         .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(alignment: .center) { mediaBadge }
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .contentShape(RoundedRectangle(cornerRadius: 8))
+                        .highPriorityGesture(TapGesture().onEnded { handleThumbnailTap() })
 
-                    Pill(action: {
-                        navigationPath.navigate(to: .postComments(post: currentPost))
-                    }, size: .small) {
+                    Pill(size: .small) {
                         HStack(spacing: 4) {
                             Image(systemName: "bubble.left")
                                 .font(.caption2)
@@ -229,8 +229,7 @@ struct CompactPostRowView: View {
                 }
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { navigationPath.navigate(to: .postComments(post: currentPost)) }
+        .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
         .sheet(isPresented: $showShareSheet) {
             MediaShareSheet(post: post, mediaURL: shareItem)
         }
@@ -311,12 +310,6 @@ struct CompactPostRowView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .overlay {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.title)
-                                    .foregroundStyle(.white)
-                                    .background(.black.opacity(0.6), in: Circle())
-                            }
                     } else {
                         Image(systemName: "play.rectangle")
                             .font(.title2)
@@ -336,12 +329,6 @@ struct CompactPostRowView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .overlay {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.title)
-                                    .foregroundStyle(.white)
-                                    .background(.black.opacity(0.6), in: Circle())
-                            }
                     } else {
                         Image(systemName: "play.rectangle.on.rectangle")
                             .font(.title2)
@@ -361,16 +348,6 @@ struct CompactPostRowView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .overlay(alignment: .bottomTrailing) {
-                                Text("\(post.galleryImages.count)")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 2)
-                                    .background(.black.opacity(0.7), in: Capsule())
-                                    .padding(4)
-                            }
                     } else {
                         Image(systemName: "photo.stack")
                             .font(.title2)
@@ -384,27 +361,12 @@ struct CompactPostRowView: View {
                     .foregroundStyle(.secondary)
             }
         case .link:
-            if let thumbnail = validThumbnailURL {
-                LazyImage(url: URL(string: thumbnail)) { state in
+            if let previewURL = post.imageURL ?? validThumbnailURL, let url = URL(string: previewURL) {
+                LazyImage(url: url) { state in
                     if let image = state.image {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .overlay(alignment: .bottomLeading) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "globe")
-                                        .font(.caption2)
-                                    Text(shortenedDomain)
-                                        .font(.caption2)
-                                        .fontWeight(.semibold)
-                                        .lineLimit(1)
-                                }
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .background(.ultraThinMaterial, in: Capsule())
-                                .padding(4)
-                            }
                     } else {
                         Image(systemName: "link")
                             .font(.title2)
@@ -412,26 +374,9 @@ struct CompactPostRowView: View {
                     }
                 }
             } else {
-                ZStack {
-                    Image(systemName: "link")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                }
-                .overlay(alignment: .bottomLeading) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "globe")
-                            .font(.caption2)
-                        Text(shortenedDomain)
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(4)
-                }
+                Image(systemName: "link")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -497,7 +442,60 @@ struct CompactPostRowView: View {
         return post.url != nil && (postType == .link || postType == .youtube)
     }
     
+    // Subtle corner media badge for compact thumbnails
+    @ViewBuilder
+    private var mediaBadge: some View {
+        switch postType {
+        case .video:
+            badgeBackground {
+                Image(systemName: "play.fill").font(.caption2).fontWeight(.bold)
+            }
+        case .youtube:
+            badgeBackground {
+                Image(systemName: "play.rectangle.fill").font(.caption2)
+            }
+        case .gif:
+            badgeBackground {
+                Text("GIF").font(.caption2).fontWeight(.heavy)
+            }
+        case .gallery:
+            badgeBackground {
+                HStack(spacing: 3) {
+                    Image(systemName: "photo.on.rectangle").font(.caption2)
+                    Text("\(max(1, post.galleryImages.count))").font(.caption2).fontWeight(.bold)
+                }
+            }
+        case .link:
+            badgeBackground {
+                Image(systemName: "link").font(.caption2)
+            }
+        default:
+            EmptyView()
+        }
+    }
+    
+    @ViewBuilder
+    private func badgeBackground<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.black.opacity(0.55), in: Capsule())
+            .padding(4)
+    }
+    
     // MARK: - Action Handlers
+    
+    private func handleThumbnailTap() {
+        switch postType {
+        case .image, .gif, .video, .gallery, .youtube:
+            selectedPost = post
+        case .link:
+            showingSafari = true
+        case .text:
+            navigationPath.navigate(to: .postComments(post: currentPost))
+        }
+    }
     
     private func handleVote(_ newVoteState: RedditPost.VoteState) {
         guard !isVoting else { return }
@@ -614,3 +612,5 @@ struct CompactPostRowView: View {
         }
     }
 }
+
+// Moved InlineTitleLabel to a shared component for reuse

@@ -17,7 +17,7 @@ struct PostHeader: View {
             }) {
                 Text(post.displaySubreddit)
                     .foregroundStyle(colorScheme.primaryTextColor)
-                    .appFont(.meta)
+                    .appFont(.caption)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -35,7 +35,7 @@ struct PostHeader: View {
                                         
                     Text(post.author)
                         .foregroundStyle(colorScheme.secondaryTextColor)
-                        .appFont(.meta)
+                        .appFont(.caption)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }

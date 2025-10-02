@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct ProfilePostsSection: View {
     let posts: [RedditPost]
@@ -22,11 +23,15 @@ struct ProfilePostsSection: View {
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(posts) { post in
-                        PostRowView(
-                            post: post, 
-                            namespace: mediaNamespace, 
-                            selectedPost: $selectedPost
-                        )
+                        if Defaults[.compactMode] {
+                            CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                        } else {
+                            PostRowView(
+                                post: post, 
+                                namespace: mediaNamespace, 
+                                selectedPost: $selectedPost
+                            )
+                        }
                     }
                 }
                 if postsAfter != nil {
