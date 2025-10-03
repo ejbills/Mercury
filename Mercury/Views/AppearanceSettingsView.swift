@@ -57,6 +57,12 @@ struct AppearanceSettingsView: View {
     @Namespace private var previewNamespace
     @State private var previewSelectedPost: RedditPost? = nil
     @State private var showingResetConfirm = false
+    // Disclosure state
+    @State private var expandPostsNormal = false
+    @State private var expandPostsCompact = false
+    @State private var expandCommentsNormal = false
+    @State private var expandCommentsCompact = false
+    // Tuning group state (removed consolidated tuning groups)
     // Tuning
     @Default(.feedItemSpacing) private var feedItemSpacing
     @Default(.commentRowVerticalPadding) private var commentRowVerticalPadding
@@ -69,25 +75,34 @@ struct AppearanceSettingsView: View {
         List {
             // Post preview
             Section("Post Preview") {
-                Group {
-                    if postLayoutStyle == .compact {
-                        CompactPostRowView(
-                            post: samplePost,
-                            namespace: previewNamespace,
-                            selectedPost: $previewSelectedPost
-                        )
-                        .allowsHitTesting(false)
-                    } else {
-                        PostRowView(
-                            post: samplePost,
-                            namespace: previewNamespace,
-                            selectedPost: $previewSelectedPost,
-                            showLargeToolbar: false,
-                            showFullText: false
-                        )
-                        .allowsHitTesting(false)
+                VStack(alignment: .leading, spacing: 8) {
+                    Group {
+                        if postLayoutStyle == .compact {
+                            CompactPostRowView(
+                                post: samplePost,
+                                namespace: previewNamespace,
+                                selectedPost: $previewSelectedPost
+                            )
+                            .allowsHitTesting(false)
+                        } else {
+                            PostRowView(
+                                post: samplePost,
+                                namespace: previewNamespace,
+                                selectedPost: $previewSelectedPost,
+                                showLargeToolbar: false,
+                                showFullText: false
+                            )
+                            .allowsHitTesting(false)
+                        }
                     }
                 }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(UIColor.secondarySystemBackground))
+                )
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowSeparator(.hidden)
             }
 
             Section("Posts") {
@@ -96,50 +111,69 @@ struct AppearanceSettingsView: View {
                         Text(style.displayName).tag(style)
                     }
                 }
+                .pickerStyle(.segmented)
                 .onChange(of: postLayoutStyle) { _, newValue in
                     // Bridge to legacy compactMode for older code paths
                     legacyCompactMode = (newValue == .compact)
                 }
-            }
 
-            Section("Posts (Normal)") {
-                Toggle("Show Subreddit", isOn: $postNormalShowSubreddit)
-                Toggle("Show Subreddit Icon", isOn: $postNormalShowSubredditIcon)
-                Toggle("Show Author", isOn: $postNormalShowAuthor)
-                Toggle("Show Author Avatar", isOn: $postNormalShowAvatar)
-                Toggle("Show Time", isOn: $postNormalShowTime)
-                Toggle("Show Domain (Links)", isOn: $postNormalShowDomain)
-                Toggle("Show Flair", isOn: $postNormalShowFlair)
-                Toggle("Show Score", isOn: $postNormalShowScore)
-                Toggle("Show Comment Count", isOn: $postNormalShowCommentCount)
-                Toggle("Show Upvote/Downvote Buttons", isOn: $postNormalShowVoting)
-                Toggle("Show Action Bar", isOn: $postNormalShowActions)
-            }
+                DisclosureGroup(isExpanded: $expandPostsNormal) {
+                    Toggle("Show Subreddit", isOn: $postNormalShowSubreddit)
+                    Toggle("Show Subreddit Icon", isOn: $postNormalShowSubredditIcon)
+                    Toggle("Show Author", isOn: $postNormalShowAuthor)
+                    Toggle("Show Author Avatar", isOn: $postNormalShowAvatar)
+                    Toggle("Show Time", isOn: $postNormalShowTime)
+                    Toggle("Show Domain (Links)", isOn: $postNormalShowDomain)
+                    Toggle("Show Flair", isOn: $postNormalShowFlair)
+                    Toggle("Show Score", isOn: $postNormalShowScore)
+                    Toggle("Show Comment Count", isOn: $postNormalShowCommentCount)
+                    Toggle("Show Upvote/Downvote Buttons", isOn: $postNormalShowVoting)
+                    Toggle("Show Action Bar", isOn: $postNormalShowActions)
+                    TuningSliderRow(
+                        title: "Card Corner Radius",
+                        value: $postNormalCorner,
+                        range: 0...30,
+                        step: 1
+                    )
+                } label: {
+                    Label("Normal Options", systemImage: "rectangle.grid.1x2")
+                }
 
-            Section("Posts (Compact)") {
-                Picker("Thumbnail Position", selection: $postCompactThumbPosition) {
-                    ForEach(ThumbnailPosition.allCases, id: \.self) { pos in
-                        Text(pos.displayName).tag(pos)
+                DisclosureGroup(isExpanded: $expandPostsCompact) {
+                    Picker("Thumbnail Position", selection: $postCompactThumbPosition) {
+                        ForEach(ThumbnailPosition.allCases, id: \.self) { pos in
+                            Text(pos.displayName).tag(pos)
+                        }
                     }
-                }
-                Picker("Thumbnail Size", selection: $postCompactThumbSize) {
-                    ForEach(ThumbnailSize.allCases, id: \.self) { size in
-                        Text(size.displayName).tag(size)
+                    .pickerStyle(.segmented)
+                    Picker("Thumbnail Size", selection: $postCompactThumbSize) {
+                        ForEach(ThumbnailSize.allCases, id: \.self) { size in
+                            Text(size.displayName).tag(size)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    Toggle("Show Thumbnails", isOn: $postCompactShowThumbnail)
+                    Toggle("Hide Thumbnails For Text Posts", isOn: $postCompactHideTextThumbs)
+                    Toggle("Show Subreddit", isOn: $postCompactShowSubreddit)
+                    Toggle("Show Subreddit Icon", isOn: $postCompactShowSubredditIcon)
+                    Toggle("Show Author", isOn: $postCompactShowAuthor)
+                    Toggle("Show Author Avatar", isOn: $postCompactShowAvatar)
+                    Toggle("Show Time", isOn: $postCompactShowTime)
+                    Toggle("Show Domain (Links)", isOn: $postCompactShowDomain)
+                    Toggle("Show Flair", isOn: $postCompactShowFlair)
+                    Toggle("Show Score", isOn: $postCompactShowScore)
+                    Toggle("Show Comment Count", isOn: $postCompactShowCommentCount)
+                    Toggle("Show Upvote/Downvote Buttons", isOn: $postCompactShowVoting)
+                    Toggle("Show Action Bar", isOn: $postCompactShowActions)
+                    TuningSliderRow(
+                        title: "Card Corner Radius",
+                        value: $postCompactCorner,
+                        range: 0...30,
+                        step: 1
+                    )
+                } label: {
+                    Label("Compact Options", systemImage: "square.grid.3x2")
                 }
-                Toggle("Show Thumbnails", isOn: $postCompactShowThumbnail)
-                Toggle("Hide Thumbnails For Text Posts", isOn: $postCompactHideTextThumbs)
-                Toggle("Show Subreddit", isOn: $postCompactShowSubreddit)
-                Toggle("Show Subreddit Icon", isOn: $postCompactShowSubredditIcon)
-                Toggle("Show Author", isOn: $postCompactShowAuthor)
-                Toggle("Show Author Avatar", isOn: $postCompactShowAvatar)
-                Toggle("Show Time", isOn: $postCompactShowTime)
-                Toggle("Show Domain (Links)", isOn: $postCompactShowDomain)
-                Toggle("Show Flair", isOn: $postCompactShowFlair)
-                Toggle("Show Score", isOn: $postCompactShowScore)
-                Toggle("Show Comment Count", isOn: $postCompactShowCommentCount)
-                Toggle("Show Upvote/Downvote Buttons", isOn: $postCompactShowVoting)
-                Toggle("Show Action Bar", isOn: $postCompactShowActions)
             }
 
             // Comment preview
@@ -175,28 +209,74 @@ struct AppearanceSettingsView: View {
                         Text(style.displayName).tag(style)
                     }
                 }
+                .pickerStyle(.segmented)
+
+                DisclosureGroup(isExpanded: $expandCommentsNormal) {
+                    Toggle("Show Author", isOn: $commentNormalShowAuthor)
+                    Toggle("Show Author Avatar", isOn: $commentNormalShowAvatar)
+                    Toggle("Show Time", isOn: $commentNormalShowTime)
+                    Toggle("Show Score", isOn: $commentNormalShowScore)
+                    Toggle("Show Upvote/Downvote Buttons", isOn: $commentNormalShowVoteButtons)
+                    Toggle("Show Action Buttons", isOn: $commentNormalShowActions)
+                    TuningSliderRow(
+                        title: "Root Card Corner",
+                        value: $commentRootCorner,
+                        range: 0...30,
+                        step: 1
+                    )
+                    TuningSliderRow(
+                        title: "Child Card Corner",
+                        value: $commentChildCorner,
+                        range: 0...30,
+                        step: 1
+                    )
+                } label: {
+                    Label("Normal Options", systemImage: "text.bubble")
+                }
+
+                DisclosureGroup(isExpanded: $expandCommentsCompact) {
+                    Toggle("Show Author", isOn: $commentCompactShowAuthor)
+                    Toggle("Show Author Avatar", isOn: $commentCompactShowAvatar)
+                    Toggle("Show Time", isOn: $commentCompactShowTime)
+                    Toggle("Show Score", isOn: $commentCompactShowScore)
+                    Toggle("Show Upvote/Downvote Buttons", isOn: $commentCompactShowVoteButtons)
+                    Toggle("Show Action Buttons", isOn: $commentCompactShowActions)
+                    TuningSliderRow(
+                        title: "Root Card Corner",
+                        value: $commentRootCorner,
+                        range: 0...30,
+                        step: 1
+                    )
+                    TuningSliderRow(
+                        title: "Child Card Corner",
+                        value: $commentChildCorner,
+                        range: 0...30,
+                        step: 1
+                    )
+                } label: {
+                    Label("Compact Options", systemImage: "text.bubble.fill")
+                }
             }
 
-            Section("Comments (Normal)") {
-                Toggle("Show Author", isOn: $commentNormalShowAuthor)
-                Toggle("Show Author Avatar", isOn: $commentNormalShowAvatar)
-                Toggle("Show Time", isOn: $commentNormalShowTime)
-                Toggle("Show Score", isOn: $commentNormalShowScore)
-                Toggle("Show Upvote/Downvote Buttons", isOn: $commentNormalShowVoteButtons)
-                Toggle("Show Action Buttons", isOn: $commentNormalShowActions)
+            // Spacing controls
+            Section("Spacing") {
+                TuningSliderRow(
+                    title: "Post Spacing",
+                    value: $feedItemSpacing,
+                    range: 0...24,
+                    step: 1
+                )
+                TuningSliderRow(
+                    title: "Comment Spacing",
+                    value: $commentRowVerticalPadding,
+                    range: 0...12,
+                    step: 1
+                )
             }
 
-            Section("Comments (Compact)") {
-                Toggle("Show Author", isOn: $commentCompactShowAuthor)
-                Toggle("Show Author Avatar", isOn: $commentCompactShowAvatar)
-                Toggle("Show Time", isOn: $commentCompactShowTime)
-                Toggle("Show Score", isOn: $commentCompactShowScore)
-                Toggle("Show Upvote/Downvote Buttons", isOn: $commentCompactShowVoteButtons)
-                Toggle("Show Action Buttons", isOn: $commentCompactShowActions)
-            }
-
+            // Reset
             Section {
-                Button(role: .destructive) {
+                Button {
                     showingResetConfirm = true
                 } label: {
                     Label("Reset Appearance to Defaults", systemImage: "arrow.counterclockwise")
@@ -205,38 +285,10 @@ struct AppearanceSettingsView: View {
                 Text("Resets post and comment appearance options to their default values.")
                     .font(.footnote)
             }
-
-            Section("Layout Tuning") {
-                // Feed spacing
-                HStack {
-                    Text("Feed Spacing")
-                    Spacer()
-                    Text("\(Int(feedItemSpacing)) pt").foregroundStyle(.secondary)
-                }
-                Slider(value: $feedItemSpacing, in: 0...24, step: 1)
-
-                // Comment row padding
-                HStack {
-                    Text("Comment Spacing")
-                    Spacer()
-                    Text("\(Int(commentRowVerticalPadding)) pt").foregroundStyle(.secondary)
-                }
-                Slider(value: $commentRowVerticalPadding, in: 0...12, step: 1)
-
-                // Card corner radii
-                Group {
-                    HStack { Text("Post Corner (Normal)"); Spacer(); Text("\(Int(postNormalCorner)) pt").foregroundStyle(.secondary) }
-                    Slider(value: $postNormalCorner, in: 0...30, step: 1)
-                    HStack { Text("Post Corner (Compact)"); Spacer(); Text("\(Int(postCompactCorner)) pt").foregroundStyle(.secondary) }
-                    Slider(value: $postCompactCorner, in: 0...30, step: 1)
-                    HStack { Text("Comment Corner (Root)"); Spacer(); Text("\(Int(commentRootCorner)) pt").foregroundStyle(.secondary) }
-                    Slider(value: $commentRootCorner, in: 0...30, step: 1)
-                    HStack { Text("Comment Corner (Child)"); Spacer(); Text("\(Int(commentChildCorner)) pt").foregroundStyle(.secondary) }
-                    Slider(value: $commentChildCorner, in: 0...30, step: 1)
-                }
-            }
         }
         .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
+        .listStyle(.insetGrouped)
         .onAppear {
             // Initialize from legacy compact toggle if user had set it
             if legacyCompactMode, postLayoutStyle == .normal {
@@ -245,7 +297,7 @@ struct AppearanceSettingsView: View {
         }
         .alert("Reset Appearance?", isPresented: $showingResetConfirm) {
             Button("Cancel", role: .cancel) {}
-            Button("Reset", role: .destructive) { resetAppearance() }
+            Button("Reset") { resetAppearance() }
         } message: {
             Text("This will restore all appearance settings for posts and comments.")
         }
@@ -254,6 +306,29 @@ struct AppearanceSettingsView: View {
 
 #Preview {
     NavigationStack { AppearanceSettingsView() }
+}
+
+// MARK: - Reusable rows
+
+private struct TuningSliderRow: View {
+    let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step: Double = 1
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(Int(value)) pt")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Slider(value: $value, in: range, step: step)
+        }
+        .padding(.vertical, 2)
+    }
 }
 
 // MARK: - Local sample data
