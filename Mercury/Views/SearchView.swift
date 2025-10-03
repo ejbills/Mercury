@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct SearchView: View {
     let apiService: RedditAPIManager
@@ -27,6 +28,8 @@ struct SearchView: View {
     @State private var selectedPost: RedditPost?
     @Environment(\.navigationPathManager) private var navigationPath
     @FocusState private var isSearchFocused: Bool
+    @Default(.feedItemSpacing) private var feedItemSpacing
+    @Default(.postLayoutStyle) private var postLayoutStyle
     
     @State private var debounceTask: Task<Void, Never>? = nil
     
@@ -198,7 +201,7 @@ struct SearchView: View {
     @ViewBuilder
     private var searchResultsView: some View {
         ScrollView {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                 switch selectedTab {
                 case .posts:
                     postsResultsView
@@ -224,11 +227,17 @@ struct SearchView: View {
                 .padding(.top, 40)
         } else {
             ForEach(searchResults) { post in
-                    PostRowView(
-                        post: post, 
-                        namespace: mediaNamespace, 
-                        selectedPost: $selectedPost,
-                    )
+                    Group {
+                        if postLayoutStyle == .compact {
+                            CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                        } else {
+                            PostRowView(
+                                post: post, 
+                                namespace: mediaNamespace, 
+                                selectedPost: $selectedPost
+                            )
+                        }
+                    }
                     .onAppear {
                         if post.id == searchResults.last?.id && hasMore && !isLoading {
                         Task {

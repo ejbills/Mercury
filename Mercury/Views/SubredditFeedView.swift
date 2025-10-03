@@ -21,6 +21,7 @@ struct SubredditFeedView: View {
     @State private var lastAutoRefresh: Date = .distantPast
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
+    @Default(.postLayoutStyle) private var postLayoutStyle
     @Default(.hiddenPostIds) private var hiddenPostIds
     @State private var showSidebar = false
     @State private var hasSidebar: Bool = false
@@ -34,6 +35,7 @@ struct SubredditFeedView: View {
     @State private var showingPostComposer = false
     
     private let pageSize = 25
+    @Default(.feedItemSpacing) private var feedItemSpacing
     
     var body: some View {
         let base = isSearching ? searchResults : posts
@@ -41,7 +43,7 @@ struct SubredditFeedView: View {
         
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                     Color.clear
                         .frame(height: 0)
                         .id("top")
@@ -56,24 +58,38 @@ struct SubredditFeedView: View {
                             .padding(.top, 100)
                     } else {
                         ForEach(visiblePosts) { post in
-                            PostRowView(
-                                post: post,
-                                namespace: mediaNamespace,
-                                selectedPost: $selectedPost,
-                                onVideoHandoff: { handoffState in
-                                    videoHandoffState = handoffState
-                                },
-                                onHidePost: { id in
-                                    hiddenPostIds.insert(id)
-                                },
-                                onHidePostsAbove: { id in
-                                    if let index = posts.firstIndex(where: { $0.id == id }) {
-                                        let ids = posts.prefix(index).map { $0.id }
-                                        hiddenPostIds.formUnion(ids)
-                                        proxy.animatedScrollTo("top", anchor: .top)
+                            Group {
+                            if postLayoutStyle == .compact {
+                                CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                                    .id(post.id) // Important for scroll position tracking
+                                    .onAppear {
+                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                            Task {
+                                                await loadMorePosts()
+                                            }
+                                        }
                                     }
-                                }
-                            )
+                            } else {
+                                PostRowView(
+                                    post: post,
+                                    namespace: mediaNamespace,
+                                    selectedPost: $selectedPost,
+                                    onVideoHandoff: { handoffState in
+                                        videoHandoffState = handoffState
+                                    },
+                                    onHidePost: { id in
+                                        hiddenPostIds.insert(id)
+                                    },
+                                    onHidePostsAbove: { id in
+                                        if let index = posts.firstIndex(where: { $0.id == id }) {
+                                            let ids = posts.prefix(index).map { $0.id }
+                                            hiddenPostIds.formUnion(ids)
+                                            proxy.animatedScrollTo("top", anchor: .top)
+                                        }
+                                    }
+                                )
+                            }
+                            }
                             .id(post.id)
                                     .onAppear {
                                         if isSearching {

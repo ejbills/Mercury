@@ -5,6 +5,7 @@
 //
 
 import SwiftUI
+import Defaults
 
 struct CommentThreadView: View {
     let comments: [RedditComment]
@@ -17,6 +18,8 @@ struct CommentThreadView: View {
     @State private var loadingMoreIds: Set<String> = []
     @State private var collapsedComments: Set<String> = []
     @State private var itemVisibility: [Bool] = []
+    @Default(.commentLayoutStyle) private var commentLayoutStyle
+    @Default(.commentRowVerticalPadding) private var commentRowVerticalPadding
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -74,7 +77,26 @@ struct CommentThreadView: View {
             switch item {
             case .comment(let flatComment):
                 if isIndexVisible(index) {
-                    CommentView(
+                    Group {
+                        if commentLayoutStyle == .compact {
+                            CompactCommentView(
+                                comment: flatComment.comment,
+                                depth: flatComment.depth,
+                                post: post,
+                                isCollapsed: collapsedComments.contains(flatComment.comment.id),
+                                onCollapseToggle: {
+                                    if collapsedComments.contains(flatComment.comment.id) {
+                                        collapsedComments.remove(flatComment.comment.id)
+                                    } else {
+                                        collapsedComments.insert(flatComment.comment.id)
+                                    }
+                                },
+                                onReplyPosted: { newComment in
+                                    insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
+                                }
+                            )
+                        } else {
+                            CommentView(
                         comment: flatComment.comment,
                         depth: flatComment.depth,
                         post: post,
@@ -106,11 +128,13 @@ struct CommentThreadView: View {
                             insertReply(newComment, underParentId: flatComment.comment.id, parentDepth: flatComment.depth)
                         },
                     )
+                    
+                        }
+                    }
                     .id(flatComment.comment.id)
                     .padding(.leading, CGFloat(flatComment.depth * 12))
                     .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
-                    .padding(.vertical, 4)
-                    // Root comments now expand naturally to available width. depth=\(flatComment.depth)")
+                    .padding(.vertical, CGFloat(commentRowVerticalPadding))
                 } else {
                     EmptyView()
                 }
@@ -135,7 +159,7 @@ struct CommentThreadView: View {
                     )
                     .padding(.leading, CGFloat(flatMoreComments.depth * 12))
                     .padding(.horizontal, flatMoreComments.depth == 0 ? 0 : 8)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, CGFloat(commentRowVerticalPadding))
                     // Root-level load-more rows also expand naturally. depth=\(flatMoreComments.depth)")
                 } else {
                     EmptyView()

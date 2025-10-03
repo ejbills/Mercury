@@ -138,6 +138,21 @@ struct CardStyle {
     }
 }
 
+extension CardStyle {
+    func withCornerRadius(_ radius: CGFloat) -> CardStyle {
+        CardStyle(
+            padding: self.padding,
+            cornerRadius: radius,
+            backgroundColor: self.backgroundColor,
+            borderColor: self.borderColor,
+            borderWidth: self.borderWidth,
+            accentColor: self.accentColor,
+            accentWidth: self.accentWidth,
+            accentPosition: self.accentPosition
+        )
+    }
+}
+
 /// Card interaction modes
 enum CardInteractionMode {
     case none

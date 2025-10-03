@@ -54,6 +54,7 @@ struct RedditPost: Codable, Identifiable, Hashable {
     var currentVoteState: VoteState = .neutral
     var displayScore: Int
     var authorIconURL: URL? = nil
+    var subredditIconURL: URL? = nil
     
     enum VoteState {
         case upvoted

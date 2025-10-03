@@ -5,6 +5,7 @@
 //
 
 import SwiftUI
+import Defaults
 
 struct PostActionToolbar: View {
     let post: RedditPost
@@ -34,6 +35,7 @@ struct PostActionToolbar: View {
     
     
     @Environment(\.navigationPathManager) private var navigationPath
+    @Default(.postNormalShowVoting) private var postShowVoting
     
     var body: some View {
         HStack(spacing: size == .large ? 20 : 12) {
@@ -122,15 +124,17 @@ struct PostActionToolbar: View {
                 Spacer()
                 
                 // Voting cluster for compact size
-                VotingCluster(
-                    post: post,
-                    voteState: $voteState,
-                    displayScore: $displayScore,
-                    isVoting: $isVoting,
-                    onVote: onVote,
-                    colorScheme: colorScheme == .dark ? .dark : .light,
-                    size: .compact
-                )
+                if postShowVoting {
+                    VotingCluster(
+                        post: post,
+                        voteState: $voteState,
+                        displayScore: $displayScore,
+                        isVoting: $isVoting,
+                        onVote: onVote,
+                        colorScheme: colorScheme == .dark ? .dark : .light,
+                        size: .compact
+                    )
+                }
             }
         }
     }

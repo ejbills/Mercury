@@ -15,10 +15,10 @@ struct CommentView: View {
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
-    @Default(.commentLeftShortSwipeAction) private var commentLeftShortSwipeAction
-    @Default(.commentLeftLongSwipeAction) private var commentLeftLongSwipeAction
-    @Default(.commentRightShortSwipeAction) private var commentRightShortSwipeAction
-    @Default(.commentRightLongSwipeAction) private var commentRightLongSwipeAction
+    @Default(.commentRightSwipeAction1) private var commentRightAction1
+    @Default(.commentRightSwipeAction2) private var commentRightAction2
+    @Default(.commentRightSwipeAction3) private var commentRightAction3
+    @Default(.commentRightSwipeAction4) private var commentRightAction4
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -29,6 +29,13 @@ struct CommentView: View {
     @State private var wasDeleted = false
     @State private var shareItem: ShareItem?
     @State private var savedState: Bool
+    // Appearance (Normal)
+    @Default(.commentNormalShowAuthor) private var commentShowAuthor
+    @Default(.commentNormalShowAvatar) private var commentShowAvatar
+    @Default(.commentNormalShowTime) private var commentShowTime
+    @Default(.commentNormalShowScore) private var commentShowScore
+    @Default(.commentNormalShowVoteButtons) private var commentShowVoteButtons
+    @Default(.commentNormalShowActions) private var commentShowActions
 
     init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onCollapseParent: @escaping () -> Void = {}, onScrollToParent: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
@@ -46,7 +53,8 @@ struct CommentView: View {
     
     var body: some View {
         Card(
-                style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
+                style: CardStyle.comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil)))
+                    .withCornerRadius(CGFloat(depth == 0 ? Defaults[.commentRootCardCornerRadius] : Defaults[.commentChildCardCornerRadius])),
                 highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
             ) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -59,22 +67,33 @@ struct CommentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+        .onAppear {
+            // Backwards-compat: fall back to legacy right short/long if new slots are empty
+            if commentRightAction1 == .none {
+                let legacy1 = Defaults[.commentRightShortSwipeAction]
+                if legacy1 != .none { commentRightAction1 = legacy1 }
+            }
+            if commentRightAction2 == .none {
+                let legacy2 = Defaults[.commentRightLongSwipeAction]
+                if legacy2 != .none { commentRightAction2 = legacy2 }
+            }
+        }
         .customSwipeGesture(
-            leftShort: commentLeftShortSwipeAction != .none ? SwipeAction(
-                type: commentLeftShortSwipeAction,
-                action: { await handleSwipeAction(commentLeftShortSwipeAction) }
+            right1: commentRightAction1 != .none ? SwipeAction(
+                type: commentRightAction1,
+                action: { await handleSwipeAction(commentRightAction1) }
             ) : nil,
-            leftLong: commentLeftLongSwipeAction != .none ? SwipeAction(
-                type: commentLeftLongSwipeAction,
-                action: { await handleSwipeAction(commentLeftLongSwipeAction) }
+            right2: commentRightAction2 != .none ? SwipeAction(
+                type: commentRightAction2,
+                action: { await handleSwipeAction(commentRightAction2) }
             ) : nil,
-            rightShort: commentRightShortSwipeAction != .none ? SwipeAction(
-                type: commentRightShortSwipeAction,
-                action: { await handleSwipeAction(commentRightShortSwipeAction) }
+            right3: commentRightAction3 != .none ? SwipeAction(
+                type: commentRightAction3,
+                action: { await handleSwipeAction(commentRightAction3) }
             ) : nil,
-            rightLong: commentRightLongSwipeAction != .none ? SwipeAction(
-                type: commentRightLongSwipeAction,
-                action: { await handleSwipeAction(commentRightLongSwipeAction) }
+            right4: commentRightAction4 != .none ? SwipeAction(
+                type: commentRightAction4,
+                action: { await handleSwipeAction(commentRightAction4) }
             ) : nil
         )
     }
@@ -82,37 +101,38 @@ struct CommentView: View {
     private var commentHeader: some View {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
-                UserAvatar(username: comment.author, size: 20, iconURL: comment.authorIconURL)
-                
-                Pill(action: {
-                    if !isDeletedUser {
-                        navigationPath.navigate(to: .userProfile(username: comment.author))
-                    }
-                }, size: .small) {
-                    HStack(spacing: 4) {
-                        Text(isDeletedUser ? "[deleted]" : comment.author)
-                            .appFont(.caption, weight: .medium)
-                            .foregroundStyle(authorColor)
-                            .lineLimit(1)
-                        
-                        if comment.isSubmitter {
-                            Text("OP")
-                                .appFont(.small)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(.blue, in: Capsule())
+                if commentShowAvatar { UserAvatar(username: comment.author, size: 20, iconURL: comment.authorIconURL) }
+
+                if commentShowAuthor {
+                    Pill(action: {
+                        if !isDeletedUser {
+                            navigationPath.navigate(to: .userProfile(username: comment.author))
                         }
-                        
+                    }, size: .small) {
+                        HStack(spacing: 4) {
+                            Text(isDeletedUser ? "[deleted]" : comment.author)
+                                .appFont(.caption, weight: .medium)
+                                .foregroundStyle(authorColor)
+                                .lineLimit(1)
+
+                            if comment.isSubmitter {
+                                Text("OP")
+                                    .appFont(.small)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(.blue, in: Capsule())
+                            }
+                        }
                     }
                 }
             }
-            
+
             Spacer()
-            
+
             HStack(spacing: 4) {
-                if !comment.scoreHidden {
+                if commentShowScore && !comment.scoreHidden {
                     Pill(size: .small) {
                         Text(scoreText)
                             .appFont(.small, weight: .medium)
@@ -120,13 +140,15 @@ struct CommentView: View {
                             .monospacedDigit()
                     }
                 }
-                
-                Pill(size: .small) {
-                    Text(comment.timeAgo)
-                        .appFont(.small)
-                        .foregroundStyle(.secondary)
+
+                if commentShowTime {
+                    Pill(size: .small) {
+                        Text(comment.timeAgo)
+                            .appFont(.small)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                
+
                 Pill(action: {
                     withAnimation(.snappy(duration: 0.125)) {
                         onCollapseToggle()
@@ -166,62 +188,66 @@ struct CommentView: View {
     
     private var commentActions: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                VoteButton(
-                    direction: .up,
-                    isActive: voteState == .upvoted,
-                    size: .small,
-                    colorScheme: .light,
-                    disabled: isVoting || !comment.canVote
-                ) {
-                    handleVote(.upvoted)
-                }
-                VoteButton(
-                    direction: .down,
-                    isActive: voteState == .downvoted,
-                    size: .small,
-                    colorScheme: .light,
-                    disabled: isVoting || !comment.canVote
-                ) {
-                    handleVote(.downvoted)
+            if commentShowVoteButtons {
+                HStack(spacing: 4) {
+                    VoteButton(
+                        direction: .up,
+                        isActive: voteState == .upvoted,
+                        size: .small,
+                        colorScheme: .light,
+                        disabled: isVoting || !comment.canVote
+                    ) {
+                        handleVote(.upvoted)
+                    }
+                    VoteButton(
+                        direction: .down,
+                        isActive: voteState == .downvoted,
+                        size: .small,
+                        colorScheme: .light,
+                        disabled: isVoting || !comment.canVote
+                    ) {
+                        handleVote(.downvoted)
+                    }
                 }
             }
 
-            Button(action: { showingReply = true }) {
-                Image(systemName: "arrowshape.turn.up.left")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 20)
-            }
-            .buttonStyle(.plain)
-
-            Menu {
-                Button(action: { handleSave() }) {
-                    Label(savedState ? "Unsave" : "Save",
-                          systemImage: savedState ? "bookmark.fill" : "bookmark")
-                }
-                if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
-                    ShareLink(item: url) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    Button(action: { UIPasteboard.general.string = url.absoluteString }) {
-                        Label("Copy Link", systemImage: "link")
-                    }
-                }
-                if canDeleteComment {
-                    Button(role: .destructive, action: { showingDeleteConfirm = true }) {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
-            } label: {
-                Pill(size: .small) {
-                    Image(systemName: "ellipsis")
+            if commentShowActions {
+                Button(action: { showingReply = true }) {
+                    Image(systemName: "arrowshape.turn.up.left")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .frame(width: 14, height: 14)
+                        .frame(width: 20, height: 20)
                 }
+                .buttonStyle(.plain)
+
+                Menu {
+                    Button(action: { handleSave() }) {
+                        Label(savedState ? "Unsave" : "Save",
+                              systemImage: savedState ? "bookmark.fill" : "bookmark")
+                    }
+                    if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                        ShareLink(item: url) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        Button(action: { UIPasteboard.general.string = url.absoluteString }) {
+                            Label("Copy Link", systemImage: "link")
+                        }
+                    }
+                    if canDeleteComment {
+                        Button(role: .destructive, action: { showingDeleteConfirm = true }) {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Pill(size: .small) {
+                        Image(systemName: "ellipsis")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 14, height: 14)
+                    }
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             Spacer()
         }

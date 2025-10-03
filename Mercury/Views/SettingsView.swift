@@ -62,6 +62,12 @@ struct SettingsView: View {
                 }
                 
                 NavigationLink {
+                    AppearanceSettingsView()
+                } label: {
+                    Label("Appearance", systemImage: "paintbrush")
+                }
+                
+                NavigationLink {
                     TextSizeSettingsView()
                 } label: {
                     Label("Text Size", systemImage: "textformat.size")

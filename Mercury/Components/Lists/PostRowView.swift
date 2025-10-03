@@ -30,14 +30,22 @@ struct PostRowView: View {
     @State private var savedState: Bool
     @State private var showingPostReply = false
     @State private var videoHandoffState: VideoHandoffState? = nil
-    @Default(.postLeftShortSwipeAction) private var postLeftShortSwipeAction
-    @Default(.postLeftLongSwipeAction) private var postLeftLongSwipeAction
-    @Default(.postRightShortSwipeAction) private var postRightShortSwipeAction
-    @Default(.postRightLongSwipeAction) private var postRightLongSwipeAction
+    @Default(.postRightSwipeAction1) private var postRightAction1
+    @Default(.postRightSwipeAction2) private var postRightAction2
+    @Default(.postRightSwipeAction3) private var postRightAction3
+    @Default(.postRightSwipeAction4) private var postRightAction4
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     
+    @Default(.titleTextScale) private var titleScale
+    @Default(.captionTextScale) private var captionScale
+    // Appearance (Normal mode)
+    @Default(.postNormalShowDomain) private var postShowDomain
+    @Default(.postNormalShowFlair) private var postShowFlair
+    @Default(.postNormalShowVoting) private var postShowVoting
+    @Default(.postNormalShowActions) private var postShowActions
+
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
@@ -104,8 +112,8 @@ struct PostRowView: View {
     }
     
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
+        Card(style: CardStyle.default.withCornerRadius(CGFloat(Defaults[.postNormalCardCornerRadius]))) {
+            VStack(alignment: .leading, spacing: 4) {
                 VStack(alignment: .leading, spacing: 8) {
                     postHeader
                     postTitle
@@ -124,18 +132,41 @@ struct PostRowView: View {
                 
                 if showLargeToolbar {
                     HStack(spacing: 20) {
-                        VotingCluster(
-                            post: currentPost,
-                            voteState: $voteState,
-                            displayScore: $displayScore,
-                            isVoting: $isVoting,
-                            onVote: handleVote,
-                            colorScheme: .light,
-                            size: .large
-                        )
-                        
+                        if postShowVoting {
+                            VotingCluster(
+                                post: currentPost,
+                                voteState: $voteState,
+                                displayScore: $displayScore,
+                                isVoting: $isVoting,
+                                onVote: handleVote,
+                                colorScheme: .light,
+                                size: .large
+                            )
+                        }
+
                         Spacer()
-                        
+
+                        if postShowActions {
+                            PostActionToolbar(
+                                post: currentPost,
+                                voteState: $voteState,
+                                displayScore: $displayScore,
+                                isVoting: $isVoting,
+                                savedState: $savedState,
+                                onVote: handleVote,
+                                onReply: { showingPostReply = true },
+                                onShare: handleShare,
+                                onSave: handleSave,
+                                onCopyLink: handleCopyLink,
+                                onOpenOriginal: handleOpenOriginal,
+                                onDownload: handleDownload,
+                                colorScheme: .light,
+                                size: .large
+                            )
+                        }
+                    }
+                } else {
+                    if postShowActions {
                         PostActionToolbar(
                             post: currentPost,
                             voteState: $voteState,
@@ -150,31 +181,25 @@ struct PostRowView: View {
                             onOpenOriginal: handleOpenOriginal,
                             onDownload: handleDownload,
                             colorScheme: .light,
-                            size: .large
+                            size: .compact
                         )
                     }
-                } else {
-                    PostActionToolbar(
-                        post: currentPost,
-                        voteState: $voteState,
-                        displayScore: $displayScore,
-                        isVoting: $isVoting,
-                        savedState: $savedState,
-                        onVote: handleVote,
-                        onReply: { showingPostReply = true },
-                        onShare: handleShare,
-                        onSave: handleSave,
-                        onCopyLink: handleCopyLink,
-                        onOpenOriginal: handleOpenOriginal,
-                        onDownload: handleDownload,
-                        colorScheme: .light,
-                        size: .compact
-                    )
                 }
             }
         }
         // Use Card's tap handler for reliable navigation on whitespace
         .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
+        // Backwards-compat: if new right actions are unset, fall back to legacy right short/long
+        .onAppear {
+            if postRightAction1 == .none {
+                let legacy1 = Defaults[.postRightShortSwipeAction]
+                if legacy1 != .none { postRightAction1 = legacy1 }
+            }
+            if postRightAction2 == .none {
+                let legacy2 = Defaults[.postRightLongSwipeAction]
+                if legacy2 != .none { postRightAction2 = legacy2 }
+            }
+        }
         .contextMenu {
             if !post.locked && !post.archived {
                 Button(action: { showingPostReply = true }) {
@@ -209,21 +234,21 @@ struct PostRowView: View {
             }
         }
         .customSwipeGesture(
-            leftShort: postLeftShortSwipeAction != .none ? SwipeAction(
-                type: postLeftShortSwipeAction,
-                action: { await handleSwipeAction(postLeftShortSwipeAction) }
+            right1: postRightAction1 != .none ? SwipeAction(
+                type: postRightAction1,
+                action: { await handleSwipeAction(postRightAction1) }
             ) : nil,
-            leftLong: postLeftLongSwipeAction != .none ? SwipeAction(
-                type: postLeftLongSwipeAction,
-                action: { await handleSwipeAction(postLeftLongSwipeAction) }
+            right2: postRightAction2 != .none ? SwipeAction(
+                type: postRightAction2,
+                action: { await handleSwipeAction(postRightAction2) }
             ) : nil,
-            rightShort: postRightShortSwipeAction != .none ? SwipeAction(
-                type: postRightShortSwipeAction,
-                action: { await handleSwipeAction(postRightShortSwipeAction) }
+            right3: postRightAction3 != .none ? SwipeAction(
+                type: postRightAction3,
+                action: { await handleSwipeAction(postRightAction3) }
             ) : nil,
-            rightLong: postRightLongSwipeAction != .none ? SwipeAction(
-                type: postRightLongSwipeAction,
-                action: { await handleSwipeAction(postRightLongSwipeAction) }
+            right4: postRightAction4 != .none ? SwipeAction(
+                type: postRightAction4,
+                action: { await handleSwipeAction(postRightAction4) }
             ) : nil
         )
         .containerRelativeFrame(.horizontal) { width, _ in
@@ -272,23 +297,24 @@ struct PostRowView: View {
     
     private var postTitle: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(post.title)
-                .appFont(.title, weight: .semibold)
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-            
-            
+            InlineTitleLabel(
+                title: post.title,
+                flairText: postShowFlair ? post.linkFlairText : nil,
+                isNSFW: post.isNsfw,
+                isSpoiler: post.isSpoiler,
+                showDomain: postShowDomain && ((postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true)),
+                domainText: shortenedDomain,
+                flairBackground: UIColor(flairBackgroundColor),
+                flairTextColor: UIColor(flairTextColor),
+                textColor: UIColor.label,
+                titlePointSize: CGFloat(18) * CGFloat(titleScale),
+                titleWeight: .semibold,
+                pillPointSize: CGFloat(12) * CGFloat(captionScale),
+                pillWeight: .medium
+            )
+            .fixedSize(horizontal: false, vertical: true)
+
             HStack(spacing: 6) {
-                if let linkFlairText = post.linkFlairText, !linkFlairText.isEmpty {
-                    Pill(size: .small) {
-                        Text(linkFlairText)
-                            .appFont(.small)
-                            .fontWeight(.medium)
-                            .foregroundStyle(flairTextColor)
-                    }
-                    .background(flairBackgroundColor, in: Capsule())
-                }
-                
                 if post.isPinned || post.isStickied {
                     Pill(size: .small) {
                         Image(systemName: "pin.fill")
@@ -296,43 +322,12 @@ struct PostRowView: View {
                             .foregroundStyle(.green)
                     }
                 }
-                
-                if post.isNsfw {
-                    Pill(size: .small) {
-                        Text("NSFW")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
-                    .background(.red, in: Capsule())
-                }
-                
-                if post.isSpoiler {
-                    Pill(size: .small) {
-                        Text("SPOILER")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
-                    .background(.orange, in: Capsule())
-                }
-                
-                if post.postType == .link && !(post.domain?.isEmpty ?? true) {
-                    Pill(size: .small) {
-                        Text(shortenedDomain)
-                            .appFont(.small)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                
                 if post.gilded > 0 {
                     Pill(size: .small) {
                         HStack(spacing: 3) {
                             Image(systemName: "seal.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.yellow)
-                            
                             if post.gilded > 1 {
                                 Text("\(post.gilded)")
                                     .appFont(.small)
@@ -342,7 +337,6 @@ struct PostRowView: View {
                         }
                     }
                 }
-                
                 if post.locked {
                     Pill(size: .small) {
                         Image(systemName: "lock.fill")
@@ -350,7 +344,6 @@ struct PostRowView: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                
                 if post.archived {
                     Pill(size: .small) {
                         Image(systemName: "archivebox.fill")
@@ -358,7 +351,6 @@ struct PostRowView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                
                 Spacer()
             }
         }
