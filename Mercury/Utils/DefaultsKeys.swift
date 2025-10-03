@@ -25,6 +25,7 @@ extension Defaults.Keys {
     static let postNormalShowCommentCount = Key<Bool>("postNormalShowCommentCount", default: true)
     static let postNormalShowVoting = Key<Bool>("postNormalShowVoting", default: true)
     static let postNormalShowActions = Key<Bool>("postNormalShowActions", default: true)
+    static let postNormalUseCardStyle = Key<Bool>("postNormalUseCardStyle", default: true)
     // Compact layout options
     static let postCompactThumbnailSize = Key<ThumbnailSize>("postCompactThumbnailSize", default: .medium)
     static let postCompactThumbnailPosition = Key<ThumbnailPosition>("postCompactThumbnailPosition", default: .right)
@@ -41,7 +42,8 @@ extension Defaults.Keys {
     static let postCompactShowCommentCount = Key<Bool>("postCompactShowCommentCount", default: true)
     static let postCompactShowVoting = Key<Bool>("postCompactShowVoting", default: true)
     static let postCompactShowActions = Key<Bool>("postCompactShowActions", default: true)
-    
+    static let postCompactUseCardStyle = Key<Bool>("postCompactUseCardStyle", default: true)
+
     // Appearance - Comments
     static let commentLayoutStyle = Key<CommentLayoutStyle>("commentLayoutStyle", default: .normal)
     // Normal comment layout options
@@ -51,6 +53,7 @@ extension Defaults.Keys {
     static let commentNormalShowScore = Key<Bool>("commentNormalShowScore", default: true)
     static let commentNormalShowVoteButtons = Key<Bool>("commentNormalShowVoteButtons", default: true)
     static let commentNormalShowActions = Key<Bool>("commentNormalShowActions", default: true)
+    static let commentNormalUseCardStyle = Key<Bool>("commentNormalUseCardStyle", default: true)
     // Compact comment layout options
     static let commentCompactShowAuthor = Key<Bool>("commentCompactShowAuthor", default: true)
     static let commentCompactShowAvatar = Key<Bool>("commentCompactShowAvatar", default: true)
@@ -58,7 +61,8 @@ extension Defaults.Keys {
     static let commentCompactShowScore = Key<Bool>("commentCompactShowScore", default: true)
     static let commentCompactShowVoteButtons = Key<Bool>("commentCompactShowVoteButtons", default: true)
     static let commentCompactShowActions = Key<Bool>("commentCompactShowActions", default: true)
-    
+    static let commentCompactUseCardStyle = Key<Bool>("commentCompactUseCardStyle", default: true)
+
     static let blockedKeywords = Key<Set<String>>("blockedKeywords", default: Set())
     static let blockedUsers = Key<Set<String>>("blockedUsers", default: Set())
     static let blockedSubreddits = Key<Set<String>>("blockedSubreddits", default: Set())
@@ -115,7 +119,13 @@ extension Defaults.Keys {
     static let captionTextScale = Key<Double>("captionTextScale", default: 1.0)
 
     // Global appearance tuning
+    static let appColorScheme = Key<AppColorSchemePreference>("appColorScheme", default: .system)
+    static let feedBackgroundStyle = Key<FeedBackgroundStyle>("feedBackgroundStyle", default: .system)
     static let feedItemSpacing = Key<Double>("feedItemSpacing", default: 8.0)
+    static let postHorizontalPadding = Key<Double>("postHorizontalPadding", default: 12.0)
+    static let commentHorizontalPadding = Key<Double>("commentHorizontalPadding", default: 12.0)
+    static let feedHorizontalPadding = Key<Double>("feedHorizontalPadding", default: 12.0) // Legacy shim
+    static let customFeedBackgroundColor = Key<SerializableColor?>("customFeedBackgroundColor")
     static let commentRowVerticalPadding = Key<Double>("commentRowVerticalPadding", default: 4.0)
 
     static let postNormalCardCornerRadius = Key<Double>("postNormalCardCornerRadius", default: 16.0)
@@ -267,6 +277,61 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         switch self {
         case .subreddit, .hide, .hideAbove: return false
         default: return true
+        }
+    }
+}
+
+enum AppColorSchemePreference: String, CaseIterable, Codable, Defaults.Serializable {
+    case system
+    case light
+    case dark
+
+    var displayName: String {
+        switch self {
+        case .system: return "Match System"
+        case .light: return "Always Light"
+        case .dark: return "Always Dark"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
+enum FeedBackgroundStyle: String, CaseIterable, Codable, Defaults.Serializable {
+    case system
+    case soft
+    case paper
+    case midnight
+    case custom
+
+    var displayName: String {
+        switch self {
+        case .system: return "System Default"
+        case .soft: return "Soft Gray"
+        case .paper: return "Warm Paper"
+        case .midnight: return "Midnight"
+        case .custom: return "Custom"
+        }
+    }
+
+    func resolveColor(custom: Color?) -> Color {
+        switch self {
+        case .system:
+            return Color(UIColor.systemBackground)
+        case .soft:
+            return Color(red: 0.94, green: 0.95, blue: 0.97)
+        case .paper:
+            return Color(red: 0.96, green: 0.94, blue: 0.88)
+        case .midnight:
+            return Color(red: 0.09, green: 0.10, blue: 0.14)
+        case .custom:
+            return custom ?? Color(UIColor.systemBackground)
         }
     }
 }

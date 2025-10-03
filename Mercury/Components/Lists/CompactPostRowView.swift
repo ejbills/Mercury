@@ -50,6 +50,8 @@ struct CompactPostRowView: View {
     @Default(.postCompactShowVoting) private var postShowVoting
     @Default(.postCompactThumbnailPosition) private var postThumbPosition
     @Default(.postCompactShowActions) private var postShowActions
+    @Default(.postCompactUseCardStyle) private var postUseCardStyle
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
     // Right-side swipe actions (compact)
     @Default(.postRightSwipeAction1) private var postRightAction1
     @Default(.postRightSwipeAction2) private var postRightAction2
@@ -111,24 +113,50 @@ struct CompactPostRowView: View {
         updatedPost.displayScore = displayScore
         return updatedPost
     }
-    
-    var body: some View {
-        Card(style: CardStyle.minimal.withCornerRadius(CGFloat(Defaults[.postCompactCardCornerRadius]))) {
-            HStack(alignment: .top, spacing: 10) {
-                if postThumbPosition == .left {
-                    // Thumbnail on left, votes/ellipsis on right
-                    if shouldShowCompactThumbnail { thumbnailColumn }
-                    contentColumn
-                    if postShowVoting { votingColumn }
-                } else {
-                    // Thumbnail on right, votes/ellipsis on left
-                    if postShowVoting { votingColumn }
-                    contentColumn
-                    if shouldShowCompactThumbnail { thumbnailColumn }
-                }
+
+    private var resolvedCardStyle: CardStyle {
+        CardStyle.minimal.withCornerRadius(CGFloat(Defaults[.postCompactCardCornerRadius]))
+    }
+
+    private var nonCardContentInsets: EdgeInsets {
+        EdgeInsets(
+            top: resolvedCardStyle.padding.top,
+            leading: 0,
+            bottom: resolvedCardStyle.padding.bottom,
+            trailing: 0
+        )
+    }
+
+    @ViewBuilder
+    private var compactRowBody: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if postThumbPosition == .left {
+                if shouldShowCompactThumbnail { thumbnailColumn }
+                contentColumn
+                if postShowVoting { votingColumn }
+            } else {
+                if postShowVoting { votingColumn }
+                contentColumn
+                if shouldShowCompactThumbnail { thumbnailColumn }
             }
         }
-        .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
+    }
+    
+    var body: some View {
+        Group {
+            if postUseCardStyle {
+                Card(style: resolvedCardStyle) {
+                    compactRowBody
+                }
+                .onTap { navigateToComments() }
+            } else {
+                compactRowBody
+                    .padding(nonCardContentInsets)
+                    .contentShape(Rectangle())
+                    .onTapGesture { navigateToComments() }
+            }
+        }
+        .padding(.horizontal, CGFloat(postHorizontalPadding))
         .customSwipeGesture(
             right1: postRightAction1 != .none ? SwipeAction(
                 type: postRightAction1,
@@ -171,6 +199,10 @@ struct CompactPostRowView: View {
                     .ignoresSafeArea()
             }
         }
+    }
+
+    private func navigateToComments() {
+        navigationPath.navigate(to: .postComments(post: currentPost))
     }
     
     @ViewBuilder
@@ -322,29 +354,6 @@ struct CompactPostRowView: View {
             ) { handleVote(.downvoted) }
 
             Spacer(minLength: 0)
-
-            // Ellipsis menu (hide when actions are disabled)
-            if postShowActions {
-                Menu {
-                    Button(action: { handleSave() }) {
-                        Label(post.saved ? "Unsave" : "Save",
-                              systemImage: post.saved ? "bookmark.fill" : "bookmark")
-                    }
-                    Button(action: { handleShare() }) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    Button(action: { handleCopyLink() }) {
-                        Label("Copy Link", systemImage: "link")
-                    }
-                    if shouldShowOpenOriginal {
-                        Button(action: { handleOpenOriginal() }) {
-                            Label("Open Original", systemImage: "arrow.up.right.square")
-                        }
-                    }
-                } label: {
-                    GlassMenuLabel(systemImage: "ellipsis", foreground: .secondary, font: .caption)
-                }
-            }
         }
         .frame(width: 28)
     }
@@ -352,7 +361,7 @@ struct CompactPostRowView: View {
     private var contentColumn: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Meta + inline score
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if postShowSubreddit {
                     // Subreddit + icon
                     HStack(spacing: 4) {
@@ -364,7 +373,6 @@ struct CompactPostRowView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    Text("•").appFont(.small).foregroundStyle(.tertiary)
                 }
 
                 if postShowAuthor {
@@ -376,7 +384,6 @@ struct CompactPostRowView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    Text("•").appFont(.small).foregroundStyle(.tertiary)
                 }
 
                 if postShowTime {
@@ -384,7 +391,6 @@ struct CompactPostRowView: View {
                         .appFont(.small)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    Text("•").appFont(.small).foregroundStyle(.tertiary)
                 }
 
                 if postShowScore {
@@ -399,7 +405,16 @@ struct CompactPostRowView: View {
                 }
 
                 Spacer(minLength: 0)
+
+                if postShowCommentCount {
+                    commentBadge
+                }
+
+                if postShowActions {
+                    overflowMenu
+                }
             }
+            .lineLimit(1)
 
             // Inline title + pills via UIKit-backed label for robust wrapping
             InlineTitleLabel(
@@ -423,6 +438,39 @@ struct CompactPostRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var commentBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "bubble.left")
+                .font(.caption2)
+            Text("\(post.numComments)")
+                .font(.caption2)
+                .fontWeight(.medium)
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    private var overflowMenu: some View {
+        Menu {
+            Button(action: { handleSave() }) {
+                Label(post.saved ? "Unsave" : "Save",
+                      systemImage: post.saved ? "bookmark.fill" : "bookmark")
+            }
+            Button(action: { handleShare() }) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(action: { handleCopyLink() }) {
+                Label("Copy Link", systemImage: "link")
+            }
+            if shouldShowOpenOriginal {
+                Button(action: { handleOpenOriginal() }) {
+                    Label("Open Original", systemImage: "arrow.up.right.square")
+                }
+            }
+        } label: {
+            GlassMenuLabel(systemImage: "ellipsis", foreground: .secondary, font: .caption)
+        }
+    }
+
     private var thumbnailColumn: some View {
         VStack(spacing: 4) {
             if shouldShowCompactThumbnail {
@@ -433,21 +481,6 @@ struct CompactPostRowView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .contentShape(RoundedRectangle(cornerRadius: 8))
                     .highPriorityGesture(TapGesture().onEnded { handleThumbnailTap() })
-            }
-
-            if postShowActions && postShowCommentCount {
-            
-                    Pill(size: .small) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bubble.left")
-                                .font(.caption2)
-                            Text("\(post.numComments)")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                
             }
         }
     }

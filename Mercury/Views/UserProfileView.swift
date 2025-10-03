@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct UserProfileView: View {
     let username: String
@@ -16,6 +17,8 @@ struct UserProfileView: View {
     @State private var shareItem: ShareItem?
     @Namespace private var sectionNamespace
     @State private var hasBoundAPI = false
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
     
     init(username: String) {
         self.username = username
@@ -91,6 +94,7 @@ struct UserProfileView: View {
                     }
                 }
             }
+            .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
             .refreshable { await viewModel.refreshAll() }
         }
         .task {

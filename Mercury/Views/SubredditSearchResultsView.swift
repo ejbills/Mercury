@@ -14,22 +14,32 @@ struct SubredditSearchResultsView: View {
     @Namespace private var mediaNamespace
     @State private var selectedPost: RedditPost?
     @Default(.feedItemSpacing) private var feedItemSpacing
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                     if posts.isEmpty && isLoading {
-                        ProgressView().padding(.top, 80)
+                        ProgressView()
+                            .padding(.top, 80)
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                     } else if let errorMessage, posts.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                             Text("Search failed").font(.headline)
                             Text(errorMessage).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                             Button("Try Again") { Task { await loadInitial() } }.buttonStyle(.bordered)
-                        }.padding(.top, 60)
+                        }
+                        .padding(.horizontal, CGFloat(postHorizontalPadding))
+                        .padding(.top, 60)
                     } else if posts.isEmpty {
-                        Text("No results").foregroundStyle(.secondary).padding(.top, 80)
+                        Text("No results")
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 80)
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                     } else {
                         ForEach(posts) { post in
                             Group {
@@ -49,13 +59,15 @@ struct SubredditSearchResultsView: View {
                             HStack(spacing: 8) {
                                 ProgressView().scaleEffect(0.8)
                                 Text("Loading more…").foregroundStyle(.secondary)
-                            }.padding(.vertical, 20)
+                            }
+                            .padding(.vertical, 20)
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                         }
                     }
                 }
-                .padding(.horizontal, 12)
                 .padding(.top, 8)
             }
+            .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
             .navigationTitle("r/\(subreddit) • \(query)")
             .navigationBarTitleDisplayMode(.inline)
             .task { await loadInitial() }

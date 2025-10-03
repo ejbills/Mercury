@@ -29,6 +29,9 @@ struct SearchView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     @FocusState private var isSearchFocused: Bool
     @Default(.feedItemSpacing) private var feedItemSpacing
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
     @Default(.postLayoutStyle) private var postLayoutStyle
     
     @State private var debounceTask: Task<Void, Never>? = nil
@@ -123,6 +126,7 @@ struct SearchView: View {
                 emptyStateView
             }
         }
+        .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarItems }
@@ -211,7 +215,7 @@ struct SearchView: View {
                     usersResultsView
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, CGFloat(postHorizontalPadding))
             .padding(.top, 12)
             // Dismiss focus without stealing taps from children
             .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
@@ -240,11 +244,11 @@ struct SearchView: View {
                     }
                     .onAppear {
                         if post.id == searchResults.last?.id && hasMore && !isLoading {
-                        Task {
-                            await loadMorePosts()
+                            Task {
+                                await loadMorePosts()
+                            }
                         }
                     }
-                }
             }
             
             if hasMore && !searchResults.isEmpty {

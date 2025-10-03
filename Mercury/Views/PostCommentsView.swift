@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct PostCommentsView: View {
     let post: RedditPost
@@ -21,6 +22,10 @@ struct PostCommentsView: View {
     @State private var filteredComments: [RedditComment] = []
     @State private var isSearchLoading: Bool = false
     @State private var searchDebounceTask: Task<Void, Never>? = nil
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
+    @Default(.commentHorizontalPadding) private var commentHorizontalPadding
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
@@ -31,7 +36,7 @@ struct PostCommentsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                        PostRowView(
+                    PostRowView(
                         post: post, 
                         namespace: mediaNamespace, 
                         selectedPost: $selectedPost,
@@ -44,13 +49,19 @@ struct PostCommentsView: View {
                             videoHandoffState = handoffState
                         },
                     )
-                        if targetCommentId != nil { modePicker }
-                        commentsSection(proxy: proxy)
 
+                    if targetCommentId != nil {
+                        modePicker
+                            .padding(.horizontal, CGFloat(commentHorizontalPadding))
                     }
+
+                    commentsSection(proxy: proxy)
+
+                }
                 .padding(.top, 8)
                 .padding(.bottom, 20)
             }
+            .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
             .onChange(of: threadManager.commentThreads.count) { _, _ in
                 scrollToTargetIfNeeded(proxy: proxy)
             }
@@ -127,9 +138,11 @@ struct PostCommentsView: View {
         Group {
             if (isSearching && isSearchLoading) {
                 loadingView
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if isSearching {
                 if filteredComments.isEmpty {
                     emptyCommentsView
+                        .padding(.horizontal, CGFloat(commentHorizontalPadding))
                 } else {
                     VStack(spacing: 8) {
                         ForEach(filteredComments, id: \.id) { c in
@@ -139,16 +152,19 @@ struct PostCommentsView: View {
                                 post: post,
                                 onReplyPosted: { _ in }
                             )
-                            .padding(.horizontal, 16)
                         }
                     }
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
                 }
             } else if isLoading && threadManager.commentThreads.isEmpty {
                 loadingView
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if let errorMessage = errorMessage, threadManager.commentThreads.isEmpty {
                 errorView(message: errorMessage)
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if threadManager.commentThreads.isEmpty {
                 emptyCommentsView
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else {
                 commentsListView(proxy: proxy)
             }
@@ -156,51 +172,50 @@ struct PostCommentsView: View {
     }
     
     private var modePicker: some View {
-            HStack(spacing: 8) {
-                Pill(action: {
-                    guard !singleThreadMode else { return }
-                    singleThreadMode = true
-                    Task { await loadComments() }
-                }, size: .regular) {
-                    HStack(spacing: 6) {
-                        Image(systemName: singleThreadMode ? "checkmark.circle.fill" : "text.bubble")
-                            .foregroundStyle(singleThreadMode ? .blue : .secondary)
-                        Text("Single comment thread")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
+        HStack(spacing: 8) {
+            Pill(action: {
+                guard !singleThreadMode else { return }
+                singleThreadMode = true
+                Task { await loadComments() }
+            }, size: .regular) {
+                HStack(spacing: 6) {
+                    Image(systemName: singleThreadMode ? "checkmark.circle.fill" : "text.bubble")
+                        .foregroundStyle(singleThreadMode ? .blue : .secondary)
+                    Text("Single comment thread")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                 }
-                
-                Pill(action: {
-                    guard singleThreadMode else { return }
-                    singleThreadMode = false
-                    Task { await loadComments() }
-                }, size: .regular) {
-                    HStack(spacing: 6) {
-                        Image(systemName: !singleThreadMode ? "checkmark.circle.fill" : "text.bubble.fill")
-                            .foregroundStyle(!singleThreadMode ? .blue : .secondary)
-                        Text("See full discussion")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
+
+            Pill(action: {
+                guard singleThreadMode else { return }
+                singleThreadMode = false
+                Task { await loadComments() }
+            }, size: .regular) {
+                HStack(spacing: 6) {
+                    Image(systemName: !singleThreadMode ? "checkmark.circle.fill" : "text.bubble.fill")
+                        .foregroundStyle(!singleThreadMode ? .blue : .secondary)
+                    Text("See full discussion")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+            }
+            Spacer(minLength: 0)
+        }
         }
     
     private func commentsListView(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
-            
+
             CommentThreadView(
                 comments: allComments,
                 post: post,
                 sort: commentSort,
-                scrollProxy: proxy,
+                scrollProxy: proxy
             )
-            .padding(.horizontal, 16)
-            
+            .padding(.horizontal, CGFloat(commentHorizontalPadding))
+
             if !threadManager.moreObjects.isEmpty {
                 LazyVStack(spacing: 8) {
                     ForEach(threadManager.moreObjects, id: \.id) { more in
@@ -240,9 +255,9 @@ struct PostCommentsView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 16)
                     }
                 }
+                .padding(.horizontal, CGFloat(commentHorizontalPadding))
             }
         }
     }
@@ -283,7 +298,7 @@ struct PostCommentsView: View {
             .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, CGFloat(commentHorizontalPadding))
         .padding(.top, 60)
     }
     
@@ -303,7 +318,7 @@ struct PostCommentsView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, CGFloat(commentHorizontalPadding))
         .padding(.top, 60)
     }
     

@@ -36,6 +36,9 @@ struct SubredditFeedView: View {
     
     private let pageSize = 25
     @Default(.feedItemSpacing) private var feedItemSpacing
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
     
     var body: some View {
         let base = isSearching ? searchResults : posts
@@ -50,11 +53,14 @@ struct SubredditFeedView: View {
                     
                     if (isSearching ? searchResults.isEmpty : posts.isEmpty) && (isSearching ? isSearchLoading : isLoading) {
                         skeletonLoadingView
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                     } else if !isSearching && posts.isEmpty && errorMessage != nil && !isLoading {
                         errorView
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                             .padding(.top, 100)
                     } else if (!isSearching && posts.isEmpty) || (isSearching && searchResults.isEmpty && !isSearchLoading) {
                         emptyStateView
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                             .padding(.top, 100)
                     } else {
                         ForEach(visiblePosts) { post in
@@ -105,15 +111,27 @@ struct SubredditFeedView: View {
                             }
                         
                         if isSearching {
-                            if searchHasMore { searchLoadMoreSection } else if !searchResults.isEmpty { endOfFeedView }
+                            if searchHasMore {
+                                searchLoadMoreSection
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            } else if !searchResults.isEmpty {
+                                endOfFeedView
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            }
                         } else {
-                            if hasMore { loadMoreSection } else { endOfFeedView }
+                            if hasMore {
+                                loadMoreSection
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            } else {
+                                endOfFeedView
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            }
                         }
                     }
                 }
-                .padding(.horizontal, 12)
                 .padding(.top, 6)
             }
+            .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
             .scrollPosition(id: $scrollPosition)
             
             .onAppear {

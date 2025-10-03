@@ -133,7 +133,6 @@ struct CommentThreadView: View {
                     }
                     .id(flatComment.comment.id)
                     .padding(.leading, CGFloat(flatComment.depth * 12))
-                    .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
                     .padding(.vertical, CGFloat(commentRowVerticalPadding))
                 } else {
                     EmptyView()
@@ -158,7 +157,6 @@ struct CommentThreadView: View {
                         depthColor: depthColor(for: flatMoreComments.depth)
                     )
                     .padding(.leading, CGFloat(flatMoreComments.depth * 12))
-                    .padding(.horizontal, flatMoreComments.depth == 0 ? 0 : 8)
                     .padding(.vertical, CGFloat(commentRowVerticalPadding))
                     // Root-level load-more rows also expand naturally. depth=\(flatMoreComments.depth)")
                 } else {
