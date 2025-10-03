@@ -14,6 +14,7 @@ struct PostRowView: View {
     let onVideoHandoff: ((VideoHandoffState) -> Void)?
     var onHidePost: ((String) -> Void)? = nil
     var onHidePostsAbove: ((String) -> Void)? = nil
+    let allowsNavigation: Bool
     @State private var showingSafari = false
     @State private var safariURL: URL? = nil
     @State private var isVoting = false
@@ -48,7 +49,7 @@ struct PostRowView: View {
     @Default(.postNormalUseCardStyle) private var postUseCardStyle
     @Default(.postHorizontalPadding) private var postHorizontalPadding
 
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil, allowsNavigation: Bool = true) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
@@ -58,6 +59,7 @@ struct PostRowView: View {
         self.onVideoHandoff = onVideoHandoff
         self.onHidePost = onHidePost
         self.onHidePostsAbove = onHidePostsAbove
+        self.allowsNavigation = allowsNavigation
         self.postType = post.postType
         let isRedditPostLink: Bool = {
             if let u = post.url?.lowercased() {
@@ -206,15 +208,9 @@ struct PostRowView: View {
     var body: some View {
         Group {
             if postUseCardStyle {
-                Card(style: resolvedCardStyle) {
-                    postCardBody
-                }
-                .onTap { navigateToComments() }
+                cardContainer
             } else {
-                postCardBody
-                    .padding(nonCardContentInsets)
-                    .contentShape(Rectangle())
-                    .onTapGesture { navigateToComments() }
+                nonCardContainer
             }
         }
         .padding(.horizontal, CGFloat(postHorizontalPadding))
@@ -322,6 +318,32 @@ struct PostRowView: View {
 
     private func navigateToComments() {
         navigationPath.navigate(to: .postComments(post: currentPost))
+    }
+
+    @ViewBuilder
+    private var cardContainer: some View {
+        let card = Card(style: resolvedCardStyle) {
+            postCardBody
+        }
+        if allowsNavigation {
+            card
+                .onTap { navigateToComments() }
+        } else {
+            card
+        }
+    }
+
+    @ViewBuilder
+    private var nonCardContainer: some View {
+        let content = postCardBody
+            .padding(nonCardContentInsets)
+            .contentShape(Rectangle())
+        if allowsNavigation {
+            content
+                .onTapGesture { navigateToComments() }
+        } else {
+            content
+        }
     }
     
     private var postHeader: some View {

@@ -32,6 +32,7 @@ struct CompactPostRowView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     // no-op
+    let allowsNavigation: Bool
     @Default(.titleTextScale) private var titleScale
     @Default(.captionTextScale) private var captionScale
     // Appearance (Compact)
@@ -58,11 +59,12 @@ struct CompactPostRowView: View {
     @Default(.postRightSwipeAction3) private var postRightAction3
     @Default(.postRightSwipeAction4) private var postRightAction4
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil, allowsNavigation: Bool = true) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
         self.onRootReplyPosted = onRootReplyPosted
+        self.allowsNavigation = allowsNavigation
         self.postType = post.postType
         // Detect reddit post links (crossposts/embedded posts) regardless of thumbnail
         let isRedditPostLink: Bool = {
@@ -145,15 +147,9 @@ struct CompactPostRowView: View {
     var body: some View {
         Group {
             if postUseCardStyle {
-                Card(style: resolvedCardStyle) {
-                    compactRowBody
-                }
-                .onTap { navigateToComments() }
+                cardContainer
             } else {
-                compactRowBody
-                    .padding(nonCardContentInsets)
-                    .contentShape(Rectangle())
-                    .onTapGesture { navigateToComments() }
+                nonCardContainer
             }
         }
         .padding(.horizontal, CGFloat(postHorizontalPadding))
@@ -203,6 +199,32 @@ struct CompactPostRowView: View {
 
     private func navigateToComments() {
         navigationPath.navigate(to: .postComments(post: currentPost))
+    }
+
+    @ViewBuilder
+    private var cardContainer: some View {
+        let card = Card(style: resolvedCardStyle) {
+            compactRowBody
+        }
+        if allowsNavigation {
+            card
+                .onTap { navigateToComments() }
+        } else {
+            card
+        }
+    }
+
+    @ViewBuilder
+    private var nonCardContainer: some View {
+        let content = compactRowBody
+            .padding(nonCardContentInsets)
+            .contentShape(Rectangle())
+        if allowsNavigation {
+            content
+                .onTapGesture { navigateToComments() }
+        } else {
+            content
+        }
     }
     
     @ViewBuilder
@@ -599,7 +621,9 @@ struct CompactPostRowView: View {
         case .link:
             showingSafari = true
         case .text:
-            navigationPath.navigate(to: .postComments(post: currentPost))
+            if allowsNavigation {
+                navigationPath.navigate(to: .postComments(post: currentPost))
+            }
         }
     }
     

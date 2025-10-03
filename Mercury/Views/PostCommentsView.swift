@@ -26,6 +26,7 @@ struct PostCommentsView: View {
     @Default(.feedBackgroundStyle) private var feedBackgroundStyle
     @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
     @Default(.commentHorizontalPadding) private var commentHorizontalPadding
+    @Default(.postLayoutStyle) private var postLayoutStyle
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
@@ -36,19 +37,39 @@ struct PostCommentsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    PostRowView(
-                        post: post, 
-                        namespace: mediaNamespace, 
-                        selectedPost: $selectedPost,
-                        showLargeToolbar: true,
-                        showFullText: true,
-                        onRootReplyPosted: { newComment in
-                            threadManager.addRootComment(newComment)
-                        },
-                        onVideoHandoff: { handoffState in
-                            videoHandoffState = handoffState
-                        },
-                    )
+                    if postLayoutStyle == .compact {
+                        VStack(alignment: .leading, spacing: 8) {
+                            CompactPostRowView(
+                                post: post,
+                                namespace: mediaNamespace,
+                                selectedPost: $selectedPost,
+                                onRootReplyPosted: { newComment in
+                                    threadManager.addRootComment(newComment)
+                                },
+                                allowsNavigation: false
+                            )
+
+                            if let bodyText = post.selftext, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            }
+                        }
+                    } else {
+                        PostRowView(
+                            post: post,
+                            namespace: mediaNamespace,
+                            selectedPost: $selectedPost,
+                            showLargeToolbar: true,
+                            showFullText: true,
+                            onRootReplyPosted: { newComment in
+                                threadManager.addRootComment(newComment)
+                            },
+                            onVideoHandoff: { handoffState in
+                                videoHandoffState = handoffState
+                            },
+                            allowsNavigation: false
+                        )
+                    }
 
                     if targetCommentId != nil {
                         modePicker

@@ -138,9 +138,7 @@ struct AppearanceSettingsView: View {
                             .allowsHitTesting(false)
                         }
                     }
-                    .padding(.horizontal, CGFloat(postHorizontalPadding))
                 }
-                .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color(UIColor.secondarySystemBackground))
