@@ -21,7 +21,7 @@ struct SubredditFeedView: View {
     @State private var lastAutoRefresh: Date = .distantPast
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
-    @Default(.compactMode) private var compactMode
+    @Default(.postLayoutStyle) private var postLayoutStyle
     @Default(.hiddenPostIds) private var hiddenPostIds
     @State private var showSidebar = false
     @State private var hasSidebar: Bool = false
@@ -35,6 +35,7 @@ struct SubredditFeedView: View {
     @State private var showingPostComposer = false
     
     private let pageSize = 25
+    @Default(.feedItemSpacing) private var feedItemSpacing
     
     var body: some View {
         let base = isSearching ? searchResults : posts
@@ -42,7 +43,7 @@ struct SubredditFeedView: View {
         
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                     Color.clear
                         .frame(height: 0)
                         .id("top")
@@ -58,7 +59,7 @@ struct SubredditFeedView: View {
                     } else {
                         ForEach(visiblePosts) { post in
                             Group {
-                            if compactMode {
+                            if postLayoutStyle == .compact {
                                 CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                                     .id(post.id) // Important for scroll position tracking
                                     .onAppear {

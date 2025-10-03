@@ -18,7 +18,8 @@ struct CommentThreadView: View {
     @State private var loadingMoreIds: Set<String> = []
     @State private var collapsedComments: Set<String> = []
     @State private var itemVisibility: [Bool] = []
-    @Default(.compactMode) private var compactMode
+    @Default(.commentLayoutStyle) private var commentLayoutStyle
+    @Default(.commentRowVerticalPadding) private var commentRowVerticalPadding
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -77,7 +78,7 @@ struct CommentThreadView: View {
             case .comment(let flatComment):
                 if isIndexVisible(index) {
                     Group {
-                        if compactMode {
+                        if commentLayoutStyle == .compact {
                             CompactCommentView(
                                 comment: flatComment.comment,
                                 depth: flatComment.depth,
@@ -133,8 +134,7 @@ struct CommentThreadView: View {
                     .id(flatComment.comment.id)
                     .padding(.leading, CGFloat(flatComment.depth * 12))
                     .padding(.horizontal, flatComment.depth == 0 ? 0 : 8)
-                    .padding(.vertical, 4)
-                    // Root comments now expand naturally to available width. depth=\(flatComment.depth)")
+                    .padding(.vertical, CGFloat(commentRowVerticalPadding))
                 } else {
                     EmptyView()
                 }
@@ -159,7 +159,7 @@ struct CommentThreadView: View {
                     )
                     .padding(.leading, CGFloat(flatMoreComments.depth * 12))
                     .padding(.horizontal, flatMoreComments.depth == 0 ? 0 : 8)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, CGFloat(commentRowVerticalPadding))
                     // Root-level load-more rows also expand naturally. depth=\(flatMoreComments.depth)")
                 } else {
                     EmptyView()

@@ -5,7 +5,6 @@ struct SettingsView: View {
     let apiService: RedditAPIManager
     @Default(.clientId) private var clientId
     @Default(.isSetupComplete) private var isSetupComplete
-    @Default(.compactMode) private var compactMode
     @State private var showingSignOutConfirm = false
 
     var body: some View {
@@ -61,11 +60,12 @@ struct SettingsView: View {
                 } label: {
                     Label("Content Filters", systemImage: "line.3.horizontal.decrease.circle")
                 }
-
-                Toggle(isOn: $compactMode) {
-                    Label("Compact Mode", systemImage: "square.grid.2x2")
+                
+                NavigationLink {
+                    AppearanceSettingsView()
+                } label: {
+                    Label("Appearance", systemImage: "paintbrush")
                 }
-                .accessibilityLabel("Compact Mode")
                 
                 NavigationLink {
                     TextSizeSettingsView()

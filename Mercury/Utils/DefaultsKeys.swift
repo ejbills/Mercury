@@ -11,6 +11,53 @@ extension Defaults.Keys {
     static let isSetupComplete = Key<Bool>("isSetupComplete", default: false)
     static let lastLoginDate = Key<Date?>("lastLoginDate")
     static let compactMode = Key<Bool>("compactMode", default: false)
+    // Appearance - Posts
+    static let postLayoutStyle = Key<PostLayoutStyle>("postLayoutStyle", default: .normal)
+    // Normal layout options
+    static let postNormalShowSubreddit = Key<Bool>("postNormalShowSubreddit", default: true)
+    static let postNormalShowSubredditIcon = Key<Bool>("postNormalShowSubredditIcon", default: true)
+    static let postNormalShowAuthor = Key<Bool>("postNormalShowAuthor", default: true)
+    static let postNormalShowAvatar = Key<Bool>("postNormalShowAvatar", default: true)
+    static let postNormalShowTime = Key<Bool>("postNormalShowTime", default: true)
+    static let postNormalShowDomain = Key<Bool>("postNormalShowDomain", default: true)
+    static let postNormalShowFlair = Key<Bool>("postNormalShowFlair", default: true)
+    static let postNormalShowScore = Key<Bool>("postNormalShowScore", default: true)
+    static let postNormalShowCommentCount = Key<Bool>("postNormalShowCommentCount", default: true)
+    static let postNormalShowVoting = Key<Bool>("postNormalShowVoting", default: true)
+    static let postNormalShowActions = Key<Bool>("postNormalShowActions", default: true)
+    // Compact layout options
+    static let postCompactThumbnailSize = Key<ThumbnailSize>("postCompactThumbnailSize", default: .medium)
+    static let postCompactThumbnailPosition = Key<ThumbnailPosition>("postCompactThumbnailPosition", default: .right)
+    static let postCompactShowThumbnail = Key<Bool>("postCompactShowThumbnail", default: true)
+    static let postCompactHideTextThumbnails = Key<Bool>("postCompactHideTextThumbnails", default: false)
+    static let postCompactShowSubreddit = Key<Bool>("postCompactShowSubreddit", default: true)
+    static let postCompactShowSubredditIcon = Key<Bool>("postCompactShowSubredditIcon", default: true)
+    static let postCompactShowAuthor = Key<Bool>("postCompactShowAuthor", default: true)
+    static let postCompactShowAvatar = Key<Bool>("postCompactShowAvatar", default: true)
+    static let postCompactShowTime = Key<Bool>("postCompactShowTime", default: true)
+    static let postCompactShowDomain = Key<Bool>("postCompactShowDomain", default: true)
+    static let postCompactShowFlair = Key<Bool>("postCompactShowFlair", default: true)
+    static let postCompactShowScore = Key<Bool>("postCompactShowScore", default: true)
+    static let postCompactShowCommentCount = Key<Bool>("postCompactShowCommentCount", default: true)
+    static let postCompactShowVoting = Key<Bool>("postCompactShowVoting", default: true)
+    static let postCompactShowActions = Key<Bool>("postCompactShowActions", default: true)
+    
+    // Appearance - Comments
+    static let commentLayoutStyle = Key<CommentLayoutStyle>("commentLayoutStyle", default: .normal)
+    // Normal comment layout options
+    static let commentNormalShowAuthor = Key<Bool>("commentNormalShowAuthor", default: true)
+    static let commentNormalShowAvatar = Key<Bool>("commentNormalShowAvatar", default: true)
+    static let commentNormalShowTime = Key<Bool>("commentNormalShowTime", default: true)
+    static let commentNormalShowScore = Key<Bool>("commentNormalShowScore", default: true)
+    static let commentNormalShowVoteButtons = Key<Bool>("commentNormalShowVoteButtons", default: true)
+    static let commentNormalShowActions = Key<Bool>("commentNormalShowActions", default: true)
+    // Compact comment layout options
+    static let commentCompactShowAuthor = Key<Bool>("commentCompactShowAuthor", default: true)
+    static let commentCompactShowAvatar = Key<Bool>("commentCompactShowAvatar", default: true)
+    static let commentCompactShowTime = Key<Bool>("commentCompactShowTime", default: true)
+    static let commentCompactShowScore = Key<Bool>("commentCompactShowScore", default: true)
+    static let commentCompactShowVoteButtons = Key<Bool>("commentCompactShowVoteButtons", default: true)
+    static let commentCompactShowActions = Key<Bool>("commentCompactShowActions", default: true)
     
     static let blockedKeywords = Key<Set<String>>("blockedKeywords", default: Set())
     static let blockedUsers = Key<Set<String>>("blockedUsers", default: Set())
@@ -54,6 +101,73 @@ extension Defaults.Keys {
     static let titleTextScale = Key<Double>("titleTextScale", default: 1.0)
     static let bodyTextScale = Key<Double>("bodyTextScale", default: 1.0)
     static let captionTextScale = Key<Double>("captionTextScale", default: 1.0)
+
+    // Global appearance tuning
+    static let feedItemSpacing = Key<Double>("feedItemSpacing", default: 8.0)
+    static let commentRowVerticalPadding = Key<Double>("commentRowVerticalPadding", default: 4.0)
+
+    static let postNormalCardCornerRadius = Key<Double>("postNormalCardCornerRadius", default: 16.0)
+    static let postCompactCardCornerRadius = Key<Double>("postCompactCardCornerRadius", default: 8.0)
+    static let commentRootCardCornerRadius = Key<Double>("commentRootCardCornerRadius", default: 16.0)
+    static let commentChildCardCornerRadius = Key<Double>("commentChildCardCornerRadius", default: 12.0)
+}
+
+enum PostLayoutStyle: String, CaseIterable, Codable, Defaults.Serializable {
+    case normal
+    case compact
+    
+    var displayName: String {
+        switch self {
+        case .normal: return "Normal"
+        case .compact: return "Compact"
+        }
+    }
+}
+
+enum CommentLayoutStyle: String, CaseIterable, Codable, Defaults.Serializable {
+    case normal
+    case compact
+    
+    var displayName: String {
+        switch self {
+        case .normal: return "Normal"
+        case .compact: return "Compact"
+        }
+    }
+}
+
+enum ThumbnailSize: String, CaseIterable, Codable, Defaults.Serializable {
+    case small
+    case medium
+    case large
+    
+    var displayName: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        }
+    }
+    
+    var dimension: CGFloat {
+        switch self {
+        case .small: return 48
+        case .medium: return 60
+        case .large: return 80
+        }
+    }
+}
+
+enum ThumbnailPosition: String, CaseIterable, Codable, Defaults.Serializable {
+    case left
+    case right
+
+    var displayName: String {
+        switch self {
+        case .left: return "Left"
+        case .right: return "Right"
+        }
+    }
 }
 
 enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {

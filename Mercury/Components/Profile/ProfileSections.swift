@@ -11,6 +11,7 @@ struct ProfilePostsSection: View {
     @Binding var selectedPost: RedditPost?
     let onRefresh: () async -> Void
     let onLoadMore: () async -> Void
+    @Default(.feedItemSpacing) private var feedItemSpacing
     
     var body: some View {
         Group {
@@ -21,9 +22,9 @@ struct ProfilePostsSection: View {
             } else if posts.isEmpty {
                 ProfileEmptyState(title: "No Posts", message: "This user hasn't posted yet.")
             } else {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                     ForEach(posts) { post in
-                        if Defaults[.compactMode] {
+                        if Defaults[.postLayoutStyle] == .compact {
                             CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                         } else {
                             PostRowView(

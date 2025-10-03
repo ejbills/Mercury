@@ -34,6 +34,22 @@ struct CompactPostRowView: View {
     // no-op
     @Default(.titleTextScale) private var titleScale
     @Default(.captionTextScale) private var captionScale
+    // Appearance (Compact)
+    @Default(.postCompactThumbnailSize) private var postThumbSize
+    @Default(.postCompactShowThumbnail) private var postShowThumbnail
+    @Default(.postCompactHideTextThumbnails) private var postHideTextThumbs
+    @Default(.postCompactShowSubreddit) private var postShowSubreddit
+    @Default(.postCompactShowSubredditIcon) private var postShowSubredditIcon
+    @Default(.postCompactShowAuthor) private var postShowAuthor
+    @Default(.postCompactShowAvatar) private var postShowAvatar
+    @Default(.postCompactShowTime) private var postShowTime
+    @Default(.postCompactShowDomain) private var postShowDomain
+    @Default(.postCompactShowFlair) private var postShowFlair
+    @Default(.postCompactShowScore) private var postShowScore
+    @Default(.postCompactShowCommentCount) private var postShowCommentCount
+    @Default(.postCompactShowVoting) private var postShowVoting
+    @Default(.postCompactThumbnailPosition) private var postThumbPosition
+    @Default(.postCompactShowActions) private var postShowActions
     
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil) {
         self.post = post
@@ -92,140 +108,18 @@ struct CompactPostRowView: View {
     }
     
     var body: some View {
-        Card(style: .minimal) {
+        Card(style: CardStyle.minimal.withCornerRadius(CGFloat(Defaults[.postCompactCardCornerRadius]))) {
             HStack(alignment: .top, spacing: 10) {
-                // Left: vertical voting
-                VStack(spacing: 4) {
-                    VoteButton(
-                        direction: .up,
-                        isActive: voteState == .upvoted,
-                        size: .small,
-                        colorScheme: .light,
-                        disabled: isVoting
-                    ) { handleVote(.upvoted) }
-
-                    VoteButton(
-                        direction: .down,
-                        isActive: voteState == .downvoted,
-                        size: .small,
-                        colorScheme: .light,
-                        disabled: isVoting
-                    ) { handleVote(.downvoted) }
-
-                    Spacer(minLength: 0)
-
-                    // Ellipsis menu (original placement)
-                    Menu {
-                        Button(action: { handleSave() }) {
-                            Label(post.saved ? "Unsave" : "Save",
-                                  systemImage: post.saved ? "bookmark.fill" : "bookmark")
-                        }
-                        Button(action: { handleShare() }) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                        }
-                        Button(action: { handleCopyLink() }) {
-                            Label("Copy Link", systemImage: "link")
-                        }
-                        if shouldShowOpenOriginal {
-                            Button(action: { handleOpenOriginal() }) {
-                                Label("Open Original", systemImage: "arrow.up.right.square")
-                            }
-                        }
-                    } label: {
-                        GlassMenuLabel(systemImage: "ellipsis", foreground: .secondary, font: .caption)
-                    }
-                }
-                .frame(width: 28)
-
-                // Middle: content
-                VStack(alignment: .leading, spacing: 4) {
-                    // Meta + inline score
-                    HStack(spacing: 6) {
-                        // Subreddit + icon
-                        HStack(spacing: 4) {
-                            SubredditIcon(iconURL: post.subredditIconURL, displayName: post.subreddit, size: 14)
-                            Text(subredditDisplayName)
-                                .appFont(.caption, weight: .medium)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Text("•").appFont(.small).foregroundStyle(.tertiary)
-
-                        // Author + avatar
-                        HStack(spacing: 4) {
-                            UserAvatar(username: post.author, size: 14, iconURL: post.authorIconURL)
-                            Text(post.author)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Text("•").appFont(.small).foregroundStyle(.tertiary)
-
-                        Text(post.timeAgo)
-                            .appFont(.small)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-
-                        Text("•").appFont(.small).foregroundStyle(.tertiary)
-
-                        Button(action: { handleVote(.upvoted) }) {
-                            Text(scoreText)
-                                .appFont(.small, weight: .semibold)
-                                .foregroundStyle(scoreColor)
-                                .monospacedDigit()
-                                .lineLimit(1)
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer(minLength: 0)
-                    }
-
-                    // Inline title + pills via UIKit-backed label for robust wrapping
-                    InlineTitleLabel(
-                        title: post.title,
-                        flairText: post.linkFlairText,
-                        isNSFW: post.isNsfw,
-                        isSpoiler: post.isSpoiler,
-                        showDomain: (postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true),
-                        domainText: shortenedDomain,
-                        flairBackground: UIColor(flairBackgroundColor),
-                        flairTextColor: UIColor(flairTextColor),
-                        textColor: UIColor.label,
-                        titlePointSize: CGFloat(14) * CGFloat(titleScale),
-                        titleWeight: .medium,
-                        pillPointSize: CGFloat(12) * CGFloat(captionScale),
-                        pillWeight: .medium
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                
-                    
-
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Right: tappable media
-                VStack(spacing: 4) {
-                    compactThumbnail
-                        .frame(width: 60, height: 60)
-                        .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(alignment: .center) { mediaBadge }
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .contentShape(RoundedRectangle(cornerRadius: 8))
-                        .highPriorityGesture(TapGesture().onEnded { handleThumbnailTap() })
-
-                    Pill(size: .small) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bubble.left")
-                                .font(.caption2)
-                            Text("\(post.numComments)")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
+                if postThumbPosition == .left {
+                    // Thumbnail on left, votes/ellipsis on right
+                    if shouldShowCompactThumbnail { thumbnailColumn }
+                    contentColumn
+                    if postShowVoting { votingColumn }
+                } else {
+                    // Thumbnail on right, votes/ellipsis on left
+                    if postShowVoting { votingColumn }
+                    contentColumn
+                    if shouldShowCompactThumbnail { thumbnailColumn }
                 }
             }
         }
@@ -384,6 +278,156 @@ struct CompactPostRowView: View {
     private var subredditDisplayName: String {
         return "r/\(post.subreddit)"
     }
+
+    // MARK: - Column Builders
+    private var votingColumn: some View {
+        VStack(spacing: 4) {
+            VoteButton(
+                direction: .up,
+                isActive: voteState == .upvoted,
+                size: .small,
+                colorScheme: .light,
+                disabled: isVoting
+            ) { handleVote(.upvoted) }
+
+            VoteButton(
+                direction: .down,
+                isActive: voteState == .downvoted,
+                size: .small,
+                colorScheme: .light,
+                disabled: isVoting
+            ) { handleVote(.downvoted) }
+
+            Spacer(minLength: 0)
+
+            // Ellipsis menu (hide when actions are disabled)
+            if postShowActions {
+                Menu {
+                    Button(action: { handleSave() }) {
+                        Label(post.saved ? "Unsave" : "Save",
+                              systemImage: post.saved ? "bookmark.fill" : "bookmark")
+                    }
+                    Button(action: { handleShare() }) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button(action: { handleCopyLink() }) {
+                        Label("Copy Link", systemImage: "link")
+                    }
+                    if shouldShowOpenOriginal {
+                        Button(action: { handleOpenOriginal() }) {
+                            Label("Open Original", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                } label: {
+                    GlassMenuLabel(systemImage: "ellipsis", foreground: .secondary, font: .caption)
+                }
+            }
+        }
+        .frame(width: 28)
+    }
+
+    private var contentColumn: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Meta + inline score
+            HStack(spacing: 6) {
+                if postShowSubreddit {
+                    // Subreddit + icon
+                    HStack(spacing: 4) {
+                        if postShowSubredditIcon {
+                            SubredditIcon(iconURL: post.subredditIconURL, displayName: post.subreddit, size: 14)
+                        }
+                        Text(subredditDisplayName)
+                            .appFont(.caption, weight: .medium)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Text("•").appFont(.small).foregroundStyle(.tertiary)
+                }
+
+                if postShowAuthor {
+                    // Author + avatar
+                    HStack(spacing: 4) {
+                        if postShowAvatar { UserAvatar(username: post.author, size: 14, iconURL: post.authorIconURL) }
+                        Text(post.author)
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Text("•").appFont(.small).foregroundStyle(.tertiary)
+                }
+
+                if postShowTime {
+                    Text(post.timeAgo)
+                        .appFont(.small)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text("•").appFont(.small).foregroundStyle(.tertiary)
+                }
+
+                if postShowScore {
+                    Button(action: { handleVote(.upvoted) }) {
+                        Text(scoreText)
+                            .appFont(.small, weight: .semibold)
+                            .foregroundStyle(scoreColor)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            // Inline title + pills via UIKit-backed label for robust wrapping
+            InlineTitleLabel(
+                title: post.title,
+                flairText: postShowFlair ? post.linkFlairText : nil,
+                isNSFW: post.isNsfw,
+                isSpoiler: post.isSpoiler,
+                showDomain: postShowDomain && ((postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true)),
+                domainText: shortenedDomain,
+                flairBackground: UIColor(flairBackgroundColor),
+                flairTextColor: UIColor(flairTextColor),
+                textColor: UIColor.label,
+                titlePointSize: CGFloat(14) * CGFloat(titleScale),
+                titleWeight: .medium,
+                pillPointSize: CGFloat(12) * CGFloat(captionScale),
+                pillWeight: .medium
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var thumbnailColumn: some View {
+        VStack(spacing: 4) {
+            if shouldShowCompactThumbnail {
+                compactThumbnail
+                    .frame(width: postThumbSize.dimension, height: postThumbSize.dimension)
+                    .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(alignment: .center) { mediaBadge }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                    .highPriorityGesture(TapGesture().onEnded { handleThumbnailTap() })
+            }
+
+            if postShowActions && postShowCommentCount {
+            
+                    Pill(size: .small) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bubble.left")
+                                .font(.caption2)
+                            Text("\(post.numComments)")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                
+            }
+        }
+    }
     
     private var scoreText: String {
         let score = max(0, displayScore)
@@ -413,6 +457,12 @@ struct CompactPostRowView: View {
             return nil
         }
         return thumbnail
+    }
+
+    private var shouldShowCompactThumbnail: Bool {
+        guard postShowThumbnail else { return false }
+        if postHideTextThumbs && postType == .text { return false }
+        return true
     }
 
     private var shortenedDomain: String {

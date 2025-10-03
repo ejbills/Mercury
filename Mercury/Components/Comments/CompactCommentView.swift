@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Defaults
 
 struct CompactCommentView: View {
     let comment: RedditComment
@@ -26,6 +27,13 @@ struct CompactCommentView: View {
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var wasDeleted = false
+    // Appearance (Compact)
+    @Default(.commentCompactShowAuthor) private var commentShowAuthor
+    @Default(.commentCompactShowAvatar) private var commentShowAvatar
+    @Default(.commentCompactShowTime) private var commentShowTime
+    @Default(.commentCompactShowScore) private var commentShowScore
+    @Default(.commentCompactShowVoteButtons) private var commentShowVoteButtons
+    @Default(.commentCompactShowActions) private var commentShowActions
 
     init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
@@ -40,12 +48,13 @@ struct CompactCommentView: View {
     
     var body: some View {
         Card(
-            style: .comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil))),
+            style: CardStyle.comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil)))
+                .withCornerRadius(CGFloat(depth == 0 ? Defaults[.commentRootCardCornerRadius] : Defaults[.commentChildCardCornerRadius])),
             highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
         ) {
             HStack(alignment: .top, spacing: 8) {
                 // Compact vote controls on the left (hidden when collapsed)
-                if !isCollapsed {
+                if !isCollapsed && commentShowVoteButtons {
                     VStack(spacing: 2) {
                         VoteButton(
                             direction: .up,
@@ -77,37 +86,36 @@ struct CompactCommentView: View {
                     // Compact header - single line with author and meta
                     HStack(spacing: 6) {
                         // Author with badges
-                        HStack(spacing: 4) {
-                            UserAvatar(username: comment.author, size: 16)
-                            
-                            Text(isDeletedUser ? "[deleted]" : comment.author)
-                                .appFont(.caption, weight: .medium)
-                                .foregroundStyle(authorColor)
-                                .lineLimit(1)
-                            
-                            if comment.isSubmitter {
-                                Text("OP")
-                                    .appFont(.small, weight: .bold)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 3)
-                                    .padding(.vertical, 1)
-                                    .background(.blue, in: Capsule())
+                        if commentShowAuthor {
+                            HStack(spacing: 4) {
+                                if commentShowAvatar { UserAvatar(username: comment.author, size: 16) }
+                                
+                                Text(isDeletedUser ? "[deleted]" : comment.author)
+                                    .appFont(.caption, weight: .medium)
+                                    .foregroundStyle(authorColor)
+                                    .lineLimit(1)
+                                
+                                if comment.isSubmitter {
+                                    Text("OP")
+                                        .appFont(.small, weight: .bold)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 3)
+                                        .padding(.vertical, 1)
+                                        .background(.blue, in: Capsule())
+                                }
                             }
+                            Text("•").appFont(.small).foregroundStyle(.tertiary)
                         }
                         
-                        Text("•")
-                            .appFont(.small)
-                            .foregroundStyle(.tertiary)
-                        
-                        Text(comment.timeAgo)
-                            .appFont(.small)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-
-                        if !comment.scoreHidden {
-                            Text("•")
+                        if commentShowTime {
+                            Text(comment.timeAgo)
                                 .appFont(.small)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Text("•").appFont(.small).foregroundStyle(.tertiary)
+                        }
+
+                        if commentShowScore && !comment.scoreHidden {
                             Text(scoreText)
                                 .appFont(.caption, weight: .semibold)
                                 .foregroundStyle(scoreColor)
@@ -118,7 +126,7 @@ struct CompactCommentView: View {
                         Spacer()
 
                         // Inline actions in header
-                        if !isCollapsed {
+                        if !isCollapsed && commentShowActions {
                             Button(action: { showingReply = true }) {
                                 Image(systemName: "arrowshape.turn.up.left")
                                     .font(.caption)

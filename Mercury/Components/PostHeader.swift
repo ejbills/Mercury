@@ -1,9 +1,15 @@
 import SwiftUI
+import Defaults
 
 struct PostHeader: View {
     let post: RedditPost
     let colorScheme: PostHeaderColorScheme
     @Environment(\.navigationPathManager) private var navigationPath
+    @Default(.postNormalShowSubreddit) private var postShowSubreddit
+    @Default(.postNormalShowSubredditIcon) private var postShowSubredditIcon
+    @Default(.postNormalShowAuthor) private var postShowAuthor
+    @Default(.postNormalShowAvatar) private var postShowAvatar
+    @Default(.postNormalShowTime) private var postShowTime
     
     init(post: RedditPost, colorScheme: PostHeaderColorScheme = .light) {
         self.post = post
@@ -12,32 +18,44 @@ struct PostHeader: View {
     
     var body: some View {
         HStack(alignment: .top) {
-            Pill(action: {
-                navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
-            }) {
-                Text(post.displaySubreddit)
-                    .foregroundStyle(colorScheme.primaryTextColor)
-                    .appFont(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+            if postShowSubreddit {
+                Pill(action: {
+                    navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
+                }) {
+                    HStack(spacing: 6) {
+                        if postShowSubredditIcon {
+                            SubredditIcon(iconURL: post.subredditIconURL, displayName: post.subreddit, size: 16)
+                        }
+                        Text(post.displaySubreddit)
+                            .foregroundStyle(colorScheme.primaryTextColor)
+                            .appFont(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
             }
-            
+
             Spacer()
-            
-            Pill(action: {
-                navigationPath.navigate(to: .userProfile(username: post.author))
-            }) {
-                HStack(alignment: .center, spacing: 6) {
-                    UserAvatar(username: post.author, size: 16, iconURL: post.authorIconURL)
-                    Text(post.timeAgo)
-                        .appFont(.small)
-                        .foregroundStyle(colorScheme.tertiaryTextColor)
-                                        
-                    Text(post.author)
-                        .foregroundStyle(colorScheme.secondaryTextColor)
-                        .appFont(.caption)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+
+            if postShowAuthor || postShowTime {
+                Pill(action: {
+                    navigationPath.navigate(to: .userProfile(username: post.author))
+                }) {
+                    HStack(alignment: .center, spacing: 6) {
+                        if postShowAvatar { UserAvatar(username: post.author, size: 16, iconURL: post.authorIconURL) }
+                        if postShowTime {
+                            Text(post.timeAgo)
+                                .appFont(.small)
+                                .foregroundStyle(colorScheme.tertiaryTextColor)
+                        }
+                        if postShowAuthor {
+                            Text(post.author)
+                                .foregroundStyle(colorScheme.secondaryTextColor)
+                                .appFont(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    }
                 }
             }
         }

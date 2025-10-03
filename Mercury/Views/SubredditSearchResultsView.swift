@@ -13,11 +13,12 @@ struct SubredditSearchResultsView: View {
     @State private var hasMore = true
     @Namespace private var mediaNamespace
     @State private var selectedPost: RedditPost?
+    @Default(.feedItemSpacing) private var feedItemSpacing
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                     if posts.isEmpty && isLoading {
                         ProgressView().padding(.top, 80)
                     } else if let errorMessage, posts.isEmpty {
@@ -32,7 +33,7 @@ struct SubredditSearchResultsView: View {
                     } else {
                         ForEach(posts) { post in
                             Group {
-                                if Defaults[.compactMode] {
+                                if Defaults[.postLayoutStyle] == .compact {
                                     CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                                 } else {
                                     PostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)

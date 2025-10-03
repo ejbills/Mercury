@@ -40,6 +40,11 @@ struct PostRowView: View {
     
     @Default(.titleTextScale) private var titleScale
     @Default(.captionTextScale) private var captionScale
+    // Appearance (Normal mode)
+    @Default(.postNormalShowDomain) private var postShowDomain
+    @Default(.postNormalShowFlair) private var postShowFlair
+    @Default(.postNormalShowVoting) private var postShowVoting
+    @Default(.postNormalShowActions) private var postShowActions
 
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
         self.post = post
@@ -107,7 +112,7 @@ struct PostRowView: View {
     }
     
     var body: some View {
-        Card {
+        Card(style: CardStyle.default.withCornerRadius(CGFloat(Defaults[.postNormalCardCornerRadius]))) {
             VStack(alignment: .leading, spacing: 4) {
                 VStack(alignment: .leading, spacing: 8) {
                     postHeader
@@ -127,18 +132,41 @@ struct PostRowView: View {
                 
                 if showLargeToolbar {
                     HStack(spacing: 20) {
-                        VotingCluster(
-                            post: currentPost,
-                            voteState: $voteState,
-                            displayScore: $displayScore,
-                            isVoting: $isVoting,
-                            onVote: handleVote,
-                            colorScheme: .light,
-                            size: .large
-                        )
-                        
+                        if postShowVoting {
+                            VotingCluster(
+                                post: currentPost,
+                                voteState: $voteState,
+                                displayScore: $displayScore,
+                                isVoting: $isVoting,
+                                onVote: handleVote,
+                                colorScheme: .light,
+                                size: .large
+                            )
+                        }
+
                         Spacer()
-                        
+
+                        if postShowActions {
+                            PostActionToolbar(
+                                post: currentPost,
+                                voteState: $voteState,
+                                displayScore: $displayScore,
+                                isVoting: $isVoting,
+                                savedState: $savedState,
+                                onVote: handleVote,
+                                onReply: { showingPostReply = true },
+                                onShare: handleShare,
+                                onSave: handleSave,
+                                onCopyLink: handleCopyLink,
+                                onOpenOriginal: handleOpenOriginal,
+                                onDownload: handleDownload,
+                                colorScheme: .light,
+                                size: .large
+                            )
+                        }
+                    }
+                } else {
+                    if postShowActions {
                         PostActionToolbar(
                             post: currentPost,
                             voteState: $voteState,
@@ -153,26 +181,9 @@ struct PostRowView: View {
                             onOpenOriginal: handleOpenOriginal,
                             onDownload: handleDownload,
                             colorScheme: .light,
-                            size: .large
+                            size: .compact
                         )
                     }
-                } else {
-                    PostActionToolbar(
-                        post: currentPost,
-                        voteState: $voteState,
-                        displayScore: $displayScore,
-                        isVoting: $isVoting,
-                        savedState: $savedState,
-                        onVote: handleVote,
-                        onReply: { showingPostReply = true },
-                        onShare: handleShare,
-                        onSave: handleSave,
-                        onCopyLink: handleCopyLink,
-                        onOpenOriginal: handleOpenOriginal,
-                        onDownload: handleDownload,
-                        colorScheme: .light,
-                        size: .compact
-                    )
                 }
             }
         }
@@ -277,10 +288,10 @@ struct PostRowView: View {
         VStack(alignment: .leading, spacing: 6) {
             InlineTitleLabel(
                 title: post.title,
-                flairText: post.linkFlairText,
+                flairText: postShowFlair ? post.linkFlairText : nil,
                 isNSFW: post.isNsfw,
                 isSpoiler: post.isSpoiler,
-                showDomain: (postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true),
+                showDomain: postShowDomain && ((postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true)),
                 domainText: shortenedDomain,
                 flairBackground: UIColor(flairBackgroundColor),
                 flairTextColor: UIColor(flairTextColor),

@@ -28,6 +28,8 @@ struct SearchView: View {
     @State private var selectedPost: RedditPost?
     @Environment(\.navigationPathManager) private var navigationPath
     @FocusState private var isSearchFocused: Bool
+    @Default(.feedItemSpacing) private var feedItemSpacing
+    @Default(.postLayoutStyle) private var postLayoutStyle
     
     @State private var debounceTask: Task<Void, Never>? = nil
     
@@ -199,7 +201,7 @@ struct SearchView: View {
     @ViewBuilder
     private var searchResultsView: some View {
         ScrollView {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                 switch selectedTab {
                 case .posts:
                     postsResultsView
@@ -218,7 +220,6 @@ struct SearchView: View {
     
     @ViewBuilder
     private var postsResultsView: some View {
-        @Default(.compactMode) var compactMode
         if searchResults.isEmpty && !isLoading {
             Text("No posts found")
                 .font(.body)
@@ -227,7 +228,7 @@ struct SearchView: View {
         } else {
             ForEach(searchResults) { post in
                     Group {
-                        if compactMode {
+                        if postLayoutStyle == .compact {
                             CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                         } else {
                             PostRowView(
