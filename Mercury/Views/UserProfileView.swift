@@ -13,6 +13,7 @@ struct UserProfileView: View {
     @State private var selectedSection: ProfileSection = .posts
     @State private var showProfileWeb = false
     @State private var showingCopiedToast = false
+    @State private var shareItem: ShareItem?
     @Namespace private var sectionNamespace
     @State private var hasBoundAPI = false
     
@@ -117,6 +118,9 @@ struct UserProfileView: View {
         .sheet(isPresented: $showProfileWeb) {
             SafariView(url: profileURL)
         }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(shareItem: item)
+        }
         .overlay(alignment: .top) {
             CopiedToast(isShowing: showingCopiedToast)
         }
@@ -139,10 +143,7 @@ struct UserProfileView: View {
     // MARK: - Actions
     private func shareProfile() {
         let profileURL = URL(string: "https://reddit.com/u/\(username)")!
-        let vc = UIActivityViewController(activityItems: [profileURL], applicationActivities: nil)
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene, let window = scene.windows.first {
-            window.rootViewController?.present(vc, animated: true)
-        }
+        shareItem = ShareItem(items: [profileURL])
     }
     
     private var profileURL: URL { URL(string: "https://reddit.com/u/\(username)")! }

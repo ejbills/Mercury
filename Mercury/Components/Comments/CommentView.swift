@@ -15,10 +15,10 @@ struct CommentView: View {
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
-    @Default(.commentLeftShortSwipeAction) private var commentLeftShortSwipeAction
-    @Default(.commentLeftLongSwipeAction) private var commentLeftLongSwipeAction
-    @Default(.commentRightShortSwipeAction) private var commentRightShortSwipeAction
-    @Default(.commentRightLongSwipeAction) private var commentRightLongSwipeAction
+    @Default(.commentRightSwipeAction1) private var commentRightAction1
+    @Default(.commentRightSwipeAction2) private var commentRightAction2
+    @Default(.commentRightSwipeAction3) private var commentRightAction3
+    @Default(.commentRightSwipeAction4) private var commentRightAction4
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
@@ -67,22 +67,33 @@ struct CommentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+        .onAppear {
+            // Backwards-compat: fall back to legacy right short/long if new slots are empty
+            if commentRightAction1 == .none {
+                let legacy1 = Defaults[.commentRightShortSwipeAction]
+                if legacy1 != .none { commentRightAction1 = legacy1 }
+            }
+            if commentRightAction2 == .none {
+                let legacy2 = Defaults[.commentRightLongSwipeAction]
+                if legacy2 != .none { commentRightAction2 = legacy2 }
+            }
+        }
         .customSwipeGesture(
-            leftShort: commentLeftShortSwipeAction != .none ? SwipeAction(
-                type: commentLeftShortSwipeAction,
-                action: { await handleSwipeAction(commentLeftShortSwipeAction) }
+            right1: commentRightAction1 != .none ? SwipeAction(
+                type: commentRightAction1,
+                action: { await handleSwipeAction(commentRightAction1) }
             ) : nil,
-            leftLong: commentLeftLongSwipeAction != .none ? SwipeAction(
-                type: commentLeftLongSwipeAction,
-                action: { await handleSwipeAction(commentLeftLongSwipeAction) }
+            right2: commentRightAction2 != .none ? SwipeAction(
+                type: commentRightAction2,
+                action: { await handleSwipeAction(commentRightAction2) }
             ) : nil,
-            rightShort: commentRightShortSwipeAction != .none ? SwipeAction(
-                type: commentRightShortSwipeAction,
-                action: { await handleSwipeAction(commentRightShortSwipeAction) }
+            right3: commentRightAction3 != .none ? SwipeAction(
+                type: commentRightAction3,
+                action: { await handleSwipeAction(commentRightAction3) }
             ) : nil,
-            rightLong: commentRightLongSwipeAction != .none ? SwipeAction(
-                type: commentRightLongSwipeAction,
-                action: { await handleSwipeAction(commentRightLongSwipeAction) }
+            right4: commentRightAction4 != .none ? SwipeAction(
+                type: commentRightAction4,
+                action: { await handleSwipeAction(commentRightAction4) }
             ) : nil
         )
     }

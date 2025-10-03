@@ -50,6 +50,11 @@ struct CompactPostRowView: View {
     @Default(.postCompactShowVoting) private var postShowVoting
     @Default(.postCompactThumbnailPosition) private var postThumbPosition
     @Default(.postCompactShowActions) private var postShowActions
+    // Right-side swipe actions (compact)
+    @Default(.postRightSwipeAction1) private var postRightAction1
+    @Default(.postRightSwipeAction2) private var postRightAction2
+    @Default(.postRightSwipeAction3) private var postRightAction3
+    @Default(.postRightSwipeAction4) private var postRightAction4
     
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil) {
         self.post = post
@@ -124,6 +129,24 @@ struct CompactPostRowView: View {
             }
         }
         .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
+        .customSwipeGesture(
+            right1: postRightAction1 != .none ? SwipeAction(
+                type: postRightAction1,
+                action: { await handleSwipeAction(postRightAction1) }
+            ) : nil,
+            right2: postRightAction2 != .none ? SwipeAction(
+                type: postRightAction2,
+                action: { await handleSwipeAction(postRightAction2) }
+            ) : nil,
+            right3: postRightAction3 != .none ? SwipeAction(
+                type: postRightAction3,
+                action: { await handleSwipeAction(postRightAction3) }
+            ) : nil,
+            right4: postRightAction4 != .none ? SwipeAction(
+                type: postRightAction4,
+                action: { await handleSwipeAction(postRightAction4) }
+            ) : nil
+        )
         .sheet(isPresented: $showShareSheet) {
             MediaShareSheet(post: post, mediaURL: shareItem)
         }
@@ -659,6 +682,31 @@ struct CompactPostRowView: View {
         let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
         await MainActor.run {
             onRootReplyPosted?(created)
+        }
+    }
+
+    private func handleSwipeAction(_ actionType: SwipeActionType) async {
+        await MainActor.run {
+            switch actionType {
+            case .upvote:
+                handleVote(.upvoted)
+            case .downvote:
+                handleVote(.downvoted)
+            case .save:
+                handleSave()
+            case .share:
+                handleShare()
+            case .reply:
+                showingPostReply = true
+            case .profile:
+                navigationPath.navigate(to: .userProfile(username: post.author))
+            case .subreddit:
+                navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
+            case .copyLink:
+                handleCopyLink()
+            case .hide, .hideAbove, .collapse, .collapseToTop, .parentComment, .none:
+                break
+            }
         }
     }
 }

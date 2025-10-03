@@ -30,10 +30,10 @@ struct PostRowView: View {
     @State private var savedState: Bool
     @State private var showingPostReply = false
     @State private var videoHandoffState: VideoHandoffState? = nil
-    @Default(.postLeftShortSwipeAction) private var postLeftShortSwipeAction
-    @Default(.postLeftLongSwipeAction) private var postLeftLongSwipeAction
-    @Default(.postRightShortSwipeAction) private var postRightShortSwipeAction
-    @Default(.postRightLongSwipeAction) private var postRightLongSwipeAction
+    @Default(.postRightSwipeAction1) private var postRightAction1
+    @Default(.postRightSwipeAction2) private var postRightAction2
+    @Default(.postRightSwipeAction3) private var postRightAction3
+    @Default(.postRightSwipeAction4) private var postRightAction4
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
@@ -189,6 +189,17 @@ struct PostRowView: View {
         }
         // Use Card's tap handler for reliable navigation on whitespace
         .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
+        // Backwards-compat: if new right actions are unset, fall back to legacy right short/long
+        .onAppear {
+            if postRightAction1 == .none {
+                let legacy1 = Defaults[.postRightShortSwipeAction]
+                if legacy1 != .none { postRightAction1 = legacy1 }
+            }
+            if postRightAction2 == .none {
+                let legacy2 = Defaults[.postRightLongSwipeAction]
+                if legacy2 != .none { postRightAction2 = legacy2 }
+            }
+        }
         .contextMenu {
             if !post.locked && !post.archived {
                 Button(action: { showingPostReply = true }) {
@@ -223,21 +234,21 @@ struct PostRowView: View {
             }
         }
         .customSwipeGesture(
-            leftShort: postLeftShortSwipeAction != .none ? SwipeAction(
-                type: postLeftShortSwipeAction,
-                action: { await handleSwipeAction(postLeftShortSwipeAction) }
+            right1: postRightAction1 != .none ? SwipeAction(
+                type: postRightAction1,
+                action: { await handleSwipeAction(postRightAction1) }
             ) : nil,
-            leftLong: postLeftLongSwipeAction != .none ? SwipeAction(
-                type: postLeftLongSwipeAction,
-                action: { await handleSwipeAction(postLeftLongSwipeAction) }
+            right2: postRightAction2 != .none ? SwipeAction(
+                type: postRightAction2,
+                action: { await handleSwipeAction(postRightAction2) }
             ) : nil,
-            rightShort: postRightShortSwipeAction != .none ? SwipeAction(
-                type: postRightShortSwipeAction,
-                action: { await handleSwipeAction(postRightShortSwipeAction) }
+            right3: postRightAction3 != .none ? SwipeAction(
+                type: postRightAction3,
+                action: { await handleSwipeAction(postRightAction3) }
             ) : nil,
-            rightLong: postRightLongSwipeAction != .none ? SwipeAction(
-                type: postRightLongSwipeAction,
-                action: { await handleSwipeAction(postRightLongSwipeAction) }
+            right4: postRightAction4 != .none ? SwipeAction(
+                type: postRightAction4,
+                action: { await handleSwipeAction(postRightAction4) }
             ) : nil
         )
         .containerRelativeFrame(.horizontal) { width, _ in

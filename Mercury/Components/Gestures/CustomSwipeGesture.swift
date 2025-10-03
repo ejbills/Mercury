@@ -2,8 +2,12 @@ import SwiftUI
 import Defaults
 
 private enum SwipeConstants {
-    static let shortSwipeDragMin: CGFloat = 100
-    static let longSwipeDragMin: CGFloat = 140
+    // Right-side only thresholds, tuned for easy activation
+    // Each level is progressively farther to avoid accidental triggers
+    static let level1: CGFloat = 70
+    static let level2: CGFloat = 120
+    static let level3: CGFloat = 170
+    static let level4: CGFloat = 230
 }
 
 struct SwipeGestureModifier: ViewModifier {
@@ -11,33 +15,27 @@ struct SwipeGestureModifier: ViewModifier {
     @State private var dragPosition: CGFloat = .zero
     @State private var prevDragPosition: CGFloat = .zero
     @State private var dragBackground: Color?
-    @State private var leadingSwipeSymbol: String?
     @State private var trailingSwipeSymbol: String?
-    
-    private let primaryLeadingAction: SwipeAction?
-    private let secondaryLeadingAction: SwipeAction?
-    private let primaryTrailingAction: SwipeAction?
-    private let secondaryTrailingAction: SwipeAction?
+
+    // Right-side only actions (up to four)
+    private let trailingAction1: SwipeAction?
+    private let trailingAction2: SwipeAction?
+    private let trailingAction3: SwipeAction?
+    private let trailingAction4: SwipeAction?
     
     @Default(.swipeActionsEnabled) private var swipeActionsEnabled
     
-    init(primaryLeadingAction: SwipeAction?,
-         secondaryLeadingAction: SwipeAction?,
-         primaryTrailingAction: SwipeAction?,
-         secondaryTrailingAction: SwipeAction?
+    init(trailingAction1: SwipeAction?,
+         trailingAction2: SwipeAction?,
+         trailingAction3: SwipeAction?,
+         trailingAction4: SwipeAction?
     ) {
-        assert(primaryLeadingAction != nil || secondaryLeadingAction == nil,
-               "Secondary leading action requires primary leading action")
-        assert(primaryTrailingAction != nil || secondaryTrailingAction == nil, 
-               "Secondary trailing action requires primary trailing action")
-        
-        self.primaryLeadingAction = primaryLeadingAction
-        self.secondaryLeadingAction = secondaryLeadingAction
-        self.primaryTrailingAction = primaryTrailingAction
-        self.secondaryTrailingAction = secondaryTrailingAction
-        
-        _leadingSwipeSymbol = State(initialValue: primaryLeadingAction?.symbol.emptyName)
-        _trailingSwipeSymbol = State(initialValue: primaryTrailingAction?.symbol.emptyName)
+        self.trailingAction1 = trailingAction1
+        self.trailingAction2 = trailingAction2
+        self.trailingAction3 = trailingAction3
+        self.trailingAction4 = trailingAction4
+
+        _trailingSwipeSymbol = State(initialValue: trailingAction1?.symbol.emptyName)
     }
     
     func body(content: Content) -> some View {
@@ -53,9 +51,8 @@ struct SwipeGestureModifier: ViewModifier {
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 40, coordinateSpace: .global)
                             .updating($dragState) { value, state, _ in
-                                if dragState != .zero || value.location.x > 70 {
-                                    state = value.translation.width
-                                }
+                                // Only respond to right-side (trailing) swipes; ignore left/back gesture area
+                                state = value.translation.width
                             }
                     )
                     .onChange(of: dragState) { _, newDragState in
@@ -81,25 +78,13 @@ struct SwipeGestureModifier: ViewModifier {
                                     .frame(width: cardWidth, height: cardHeight)
                                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
                                 ZStack {
-                                    if let symbol = leadingSwipeSymbol, dragPosition > 0,
-                                       let action = dragPosition >= SwipeConstants.longSwipeDragMin ? secondaryLeadingAction ?? primaryLeadingAction : primaryLeadingAction {
-                                        ActionWidget(
-                                            systemImage: symbol,
-                                            color: action.color,
-                                            progress: min(dragPosition / SwipeConstants.shortSwipeDragMin, 1.0),
-                                            isActive: dragPosition >= SwipeConstants.shortSwipeDragMin
-                                        )
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                                        .padding(.leading, horizontalInset + 20)
-                                    }
-                                    
                                     if let symbol = trailingSwipeSymbol, dragPosition < 0,
-                                       let action = abs(dragPosition) >= SwipeConstants.longSwipeDragMin ? secondaryTrailingAction ?? primaryTrailingAction : primaryTrailingAction {
+                                       let action = actionFor(distance: abs(dragPosition)) {
                                         ActionWidget(
                                             systemImage: symbol,
                                             color: action.color,
-                                            progress: min(abs(dragPosition) / SwipeConstants.shortSwipeDragMin, 1.0),
-                                            isActive: abs(dragPosition) >= SwipeConstants.shortSwipeDragMin
+                                            progress: min(abs(dragPosition) / SwipeConstants.level1, 1.0),
+                                            isActive: abs(dragPosition) >= SwipeConstants.level1
                                         )
                                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                                         .padding(.trailing, horizontalInset + 20)
@@ -119,46 +104,51 @@ struct SwipeGestureModifier: ViewModifier {
     }
     
     private func updateSwipeState(for position: CGFloat) {
-        switch position {
-        case let pos where pos <= -SwipeConstants.longSwipeDragMin:
-            updateTrailingSwipe(
-                symbol: secondaryTrailingAction?.symbol.fillName ?? primaryTrailingAction?.symbol.fillName,
-                color: (secondaryTrailingAction?.color ?? primaryTrailingAction?.color)?.opacity(0.16),
-                shouldVibrate: prevDragPosition > -SwipeConstants.longSwipeDragMin && secondaryTrailingAction != nil
-            )
-        case let pos where pos <= -SwipeConstants.shortSwipeDragMin:
-            updateTrailingSwipe(
-                symbol: primaryTrailingAction?.symbol.fillName,
-                color: primaryTrailingAction?.color.opacity(0.12),
-                shouldVibrate: prevDragPosition > -SwipeConstants.shortSwipeDragMin || prevDragPosition <= -SwipeConstants.longSwipeDragMin
-            )
-        case let pos where pos < 0:
-            let opacity = min(abs(pos) / SwipeConstants.shortSwipeDragMin, 1.0) * 0.08
-            updateTrailingSwipe(
-                symbol: primaryTrailingAction?.symbol.emptyName,
-                color: primaryTrailingAction?.color.opacity(opacity),
-                shouldVibrate: prevDragPosition <= -SwipeConstants.shortSwipeDragMin
-            )
-        case let pos where pos < SwipeConstants.shortSwipeDragMin:
-            let opacity = min(pos / SwipeConstants.shortSwipeDragMin, 1.0) * 0.08
-            updateLeadingSwipe(
-                symbol: primaryLeadingAction?.symbol.emptyName,
-                color: primaryLeadingAction?.color.opacity(opacity),
-                shouldVibrate: prevDragPosition >= SwipeConstants.shortSwipeDragMin
-            )
-        case let pos where pos < SwipeConstants.longSwipeDragMin:
-            updateLeadingSwipe(
-                symbol: primaryLeadingAction?.symbol.fillName,
-                color: primaryLeadingAction?.color.opacity(0.12),
-                shouldVibrate: prevDragPosition < SwipeConstants.shortSwipeDragMin || prevDragPosition >= SwipeConstants.longSwipeDragMin
-            )
-        default:
-            updateLeadingSwipe(
-                symbol: secondaryLeadingAction?.symbol.fillName ?? primaryLeadingAction?.symbol.fillName,
-                color: (secondaryLeadingAction?.color ?? primaryLeadingAction?.color)?.opacity(0.16),
-                shouldVibrate: prevDragPosition < SwipeConstants.longSwipeDragMin && secondaryLeadingAction != nil
-            )
+        // Only respond to right-side (negative) drag positions
+        let pos = -position // work with positive distance for trailing side
+        if position >= 0 {
+            // Ignore left swipes entirely to avoid back gesture conflicts
+            prevDragPosition = position
+            draggingPreviewNone()
+            return
         }
+
+        // Determine which level we're in and update symbol/color
+        if pos >= SwipeConstants.level4 {
+            updateTrailingSwipe(
+                symbol: (trailingAction4 ?? trailingAction3 ?? trailingAction2 ?? trailingAction1)?.symbol.fillName,
+                color: (trailingAction4 ?? trailingAction3 ?? trailingAction2 ?? trailingAction1)?.color.opacity(0.16),
+                shouldVibrate: prevDragPosition > -SwipeConstants.level4 && trailingAction4 != nil
+            )
+        } else if pos >= SwipeConstants.level3 {
+            updateTrailingSwipe(
+                symbol: (trailingAction3 ?? trailingAction2 ?? trailingAction1)?.symbol.fillName,
+                color: (trailingAction3 ?? trailingAction2 ?? trailingAction1)?.color.opacity(0.14),
+                shouldVibrate: prevDragPosition > -SwipeConstants.level3 && trailingAction3 != nil
+            )
+        } else if pos >= SwipeConstants.level2 {
+            updateTrailingSwipe(
+                symbol: (trailingAction2 ?? trailingAction1)?.symbol.fillName,
+                color: (trailingAction2 ?? trailingAction1)?.color.opacity(0.12),
+                shouldVibrate: prevDragPosition > -SwipeConstants.level2 && trailingAction2 != nil
+            )
+        } else if pos >= SwipeConstants.level1 {
+            updateTrailingSwipe(
+                symbol: trailingAction1?.symbol.fillName,
+                color: trailingAction1?.color.opacity(0.10),
+                shouldVibrate: prevDragPosition > -SwipeConstants.level1 && trailingAction1 != nil
+            )
+        } else if pos > 0 {
+            let opacity = min(pos / SwipeConstants.level1, 1.0) * 0.08
+            updateTrailingSwipe(
+                symbol: trailingAction1?.symbol.emptyName,
+                color: trailingAction1?.color.opacity(opacity),
+                shouldVibrate: prevDragPosition <= -SwipeConstants.level1
+            )
+        } else {
+            draggingPreviewNone()
+        }
+
         prevDragPosition = position
     }
     
@@ -169,13 +159,10 @@ struct SwipeGestureModifier: ViewModifier {
             HapticManager.shared.gentleImpact()
         }
     }
-    
-    private func updateLeadingSwipe(symbol: String?, color: Color?, shouldVibrate: Bool) {
-        leadingSwipeSymbol = symbol
-        dragBackground = color
-        if shouldVibrate {
-            HapticManager.shared.gentleImpact()
-        }
+
+    private func draggingPreviewNone() {
+        trailingSwipeSymbol = trailingAction1?.symbol.emptyName
+        dragBackground = nil
     }
     
     private func draggingDidEnd() {
@@ -186,19 +173,15 @@ struct SwipeGestureModifier: ViewModifier {
         Task {
             try? await Task.sleep(for: .milliseconds(300))
             
-            switch finalDragPosition {
-            case let pos where pos < -SwipeConstants.longSwipeDragMin:
-                let action = secondaryTrailingAction ?? primaryTrailingAction
-                await action?.action()
-            case let pos where pos < -SwipeConstants.shortSwipeDragMin:
-                await primaryTrailingAction?.action()
-            case let pos where pos > SwipeConstants.longSwipeDragMin:
-                let action = secondaryLeadingAction ?? primaryLeadingAction
-                await action?.action()
-            case let pos where pos > SwipeConstants.shortSwipeDragMin:
-                await primaryLeadingAction?.action()
-            default:
-                break
+            let pos = -finalDragPosition
+            if pos >= SwipeConstants.level4 {
+                await (trailingAction4 ?? trailingAction3 ?? trailingAction2 ?? trailingAction1)?.action()
+            } else if pos >= SwipeConstants.level3 {
+                await (trailingAction3 ?? trailingAction2 ?? trailingAction1)?.action()
+            } else if pos >= SwipeConstants.level2 {
+                await (trailingAction2 ?? trailingAction1)?.action()
+            } else if pos >= SwipeConstants.level1 {
+                await trailingAction1?.action()
             }
         }
     }
@@ -207,39 +190,53 @@ struct SwipeGestureModifier: ViewModifier {
         withAnimation(.spring(response: 0.25)) {
             dragPosition = .zero
             prevDragPosition = .zero
-            leadingSwipeSymbol = primaryLeadingAction?.symbol.emptyName
-            trailingSwipeSymbol = primaryTrailingAction?.symbol.emptyName
+            trailingSwipeSymbol = trailingAction1?.symbol.emptyName
             dragBackground = nil
         }
     }
     
     private func shouldRespondToDragPosition(_ position: CGFloat) -> Bool {
-        if position > 0, primaryLeadingAction == nil {
+        // Ignore left (positive) swipes entirely to avoid interfering with back gesture
+        if position > 0 { return false }
+
+        // Only respond if there is at least one trailing action configured
+        if position < 0,
+           trailingAction1 == nil && trailingAction2 == nil && trailingAction3 == nil && trailingAction4 == nil {
             return false
         }
-        
-        if position < 0, primaryTrailingAction == nil {
-            return false
-        }
-        
         return true
+    }
+
+    private func actionFor(distance: CGFloat) -> SwipeAction? {
+        if distance >= SwipeConstants.level4 {
+            return trailingAction4 ?? trailingAction3 ?? trailingAction2 ?? trailingAction1
+        } else if distance >= SwipeConstants.level3 {
+            return trailingAction3 ?? trailingAction2 ?? trailingAction1
+        } else if distance >= SwipeConstants.level2 {
+            return trailingAction2 ?? trailingAction1
+        } else if distance >= SwipeConstants.level1 {
+            return trailingAction1
+        } else {
+            return trailingAction1
+        }
     }
 }
 
 extension View {
     @ViewBuilder
     func customSwipeGesture(
-        leftShort: SwipeAction? = nil,
-        leftLong: SwipeAction? = nil,  
-        rightShort: SwipeAction? = nil,
-        rightLong: SwipeAction? = nil
+        // Right-side only: up to four actions, increasing with distance
+        right1: SwipeAction? = nil,
+        right2: SwipeAction? = nil,
+        right3: SwipeAction? = nil,
+        right4: SwipeAction? = nil
     ) -> some View {
         modifier(
             SwipeGestureModifier(
-                primaryLeadingAction: leftShort,
-                secondaryLeadingAction: leftLong,
-                primaryTrailingAction: rightShort,
-                secondaryTrailingAction: rightLong
+                trailingAction1: right1,
+                trailingAction2: right2,
+                trailingAction3: right3,
+                trailingAction4: right4
             )
         )
     }

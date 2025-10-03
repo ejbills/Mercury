@@ -34,6 +34,11 @@ struct CompactCommentView: View {
     @Default(.commentCompactShowScore) private var commentShowScore
     @Default(.commentCompactShowVoteButtons) private var commentShowVoteButtons
     @Default(.commentCompactShowActions) private var commentShowActions
+    // Right-side swipe actions (compact comments)
+    @Default(.commentRightSwipeAction1) private var commentRightAction1
+    @Default(.commentRightSwipeAction2) private var commentRightAction2
+    @Default(.commentRightSwipeAction3) private var commentRightAction3
+    @Default(.commentRightSwipeAction4) private var commentRightAction4
 
     init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
@@ -195,6 +200,24 @@ struct CompactCommentView: View {
                 onCollapseToggle()
             }
         }
+        .customSwipeGesture(
+            right1: commentRightAction1 != .none ? SwipeAction(
+                type: commentRightAction1,
+                action: { await handleSwipeAction(commentRightAction1) }
+            ) : nil,
+            right2: commentRightAction2 != .none ? SwipeAction(
+                type: commentRightAction2,
+                action: { await handleSwipeAction(commentRightAction2) }
+            ) : nil,
+            right3: commentRightAction3 != .none ? SwipeAction(
+                type: commentRightAction3,
+                action: { await handleSwipeAction(commentRightAction3) }
+            ) : nil,
+            right4: commentRightAction4 != .none ? SwipeAction(
+                type: commentRightAction4,
+                action: { await handleSwipeAction(commentRightAction4) }
+            ) : nil
+        )
         .sheet(isPresented: $showingReply) {
             MarkdownComposerView(
                 title: "Reply",
@@ -359,6 +382,39 @@ struct CompactCommentView: View {
         let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
         await MainActor.run {
             onReplyPosted(created)
+        }
+    }
+
+    private func handleSwipeAction(_ actionType: SwipeActionType) async {
+        await MainActor.run {
+            switch actionType {
+            case .upvote:
+                handleVote(.upvoted)
+            case .downvote:
+                handleVote(.downvoted)
+            case .save:
+                handleSave()
+            case .share:
+                if let url = URL(string: "https://www.reddit.com\(comment.permalink)") {
+                    UIPasteboard.general.url = url
+                }
+            case .reply:
+                showingReply = true
+            case .profile:
+                if !isDeletedUser {
+                    navigationPath.navigate(to: .userProfile(username: comment.author))
+                }
+            case .parentComment:
+                // In compact thread view, parent scroll is handled by container if provided
+                // Here we just collapse/expand as a hint
+                onCollapseToggle()
+            case .collapse:
+                onCollapseToggle()
+            case .collapseToTop:
+                onCollapseToggle()
+            case .subreddit, .hide, .hideAbove, .copyLink, .none:
+                break
+            }
         }
     }
 }

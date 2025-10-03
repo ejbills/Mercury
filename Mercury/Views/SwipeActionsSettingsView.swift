@@ -3,14 +3,14 @@ import Defaults
 
 struct SwipeActionsSettingsView: View {
     @Default(.swipeActionsEnabled) private var swipeActionsEnabled
-    @Default(.postLeftShortSwipeAction) private var postLeftShortSwipeAction
-    @Default(.postLeftLongSwipeAction) private var postLeftLongSwipeAction
-    @Default(.postRightShortSwipeAction) private var postRightShortSwipeAction
-    @Default(.postRightLongSwipeAction) private var postRightLongSwipeAction
-    @Default(.commentLeftShortSwipeAction) private var commentLeftShortSwipeAction
-    @Default(.commentLeftLongSwipeAction) private var commentLeftLongSwipeAction
-    @Default(.commentRightShortSwipeAction) private var commentRightShortSwipeAction
-    @Default(.commentRightLongSwipeAction) private var commentRightLongSwipeAction
+    @Default(.postRightSwipeAction1) private var postRightAction1
+    @Default(.postRightSwipeAction2) private var postRightAction2
+    @Default(.postRightSwipeAction3) private var postRightAction3
+    @Default(.postRightSwipeAction4) private var postRightAction4
+    @Default(.commentRightSwipeAction1) private var commentRightAction1
+    @Default(.commentRightSwipeAction2) private var commentRightAction2
+    @Default(.commentRightSwipeAction3) private var commentRightAction3
+    @Default(.commentRightSwipeAction4) private var commentRightAction4
     
     var body: some View {
         List {
@@ -28,9 +28,9 @@ struct SwipeActionsSettingsView: View {
 
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Swipe Actions")
+                    Text("Right-Side Swipe Actions")
                         .font(.headline)
-                    Text("Short swipes trigger the first action, long swipes trigger the second action. Both actions are automatically executed when you reach the trigger distance.")
+                    Text("iOS back gesture conflicts with left swipes. Configure up to four actions on the right: Short, Medium, Long, and Full distance.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -38,38 +38,22 @@ struct SwipeActionsSettingsView: View {
             }
             
             Section("Posts") {
-                SwipeActionGroup(
-                    title: "Left Swipe",
-                    systemImage: "arrow.left",
-                    shortSelection: $postLeftShortSwipeAction,
-                    longSelection: $postLeftLongSwipeAction,
-                    availableActions: SwipeActionType.allCases.filter { $0.availableForPosts }
-                )
-                
-                SwipeActionGroup(
-                    title: "Right Swipe",
-                    systemImage: "arrow.right",
-                    shortSelection: $postRightShortSwipeAction,
-                    longSelection: $postRightLongSwipeAction,
+                SwipeActionQuadGroup(
+                    selection1: $postRightAction1,
+                    selection2: $postRightAction2,
+                    selection3: $postRightAction3,
+                    selection4: $postRightAction4,
                     availableActions: SwipeActionType.allCases.filter { $0.availableForPosts }
                 )
             }
             .disabled(!swipeActionsEnabled)
             
             Section("Comments") {
-                SwipeActionGroup(
-                    title: "Left Swipe",
-                    systemImage: "arrow.left",
-                    shortSelection: $commentLeftShortSwipeAction,
-                    longSelection: $commentLeftLongSwipeAction,
-                    availableActions: SwipeActionType.allCases.filter { $0.availableForComments }
-                )
-                
-                SwipeActionGroup(
-                    title: "Right Swipe",
-                    systemImage: "arrow.right",
-                    shortSelection: $commentRightShortSwipeAction,
-                    longSelection: $commentRightLongSwipeAction,
+                SwipeActionQuadGroup(
+                    selection1: $commentRightAction1,
+                    selection2: $commentRightAction2,
+                    selection3: $commentRightAction3,
+                    selection4: $commentRightAction4,
                     availableActions: SwipeActionType.allCases.filter { $0.availableForComments }
                 )
             }
@@ -131,36 +115,19 @@ struct SwipeActionsSettingsView: View {
     }
 }
 
-struct SwipeActionGroup: View {
-    let title: String
-    let systemImage: String
-    @Binding var shortSelection: SwipeActionType
-    @Binding var longSelection: SwipeActionType
+struct SwipeActionQuadGroup: View {
+    @Binding var selection1: SwipeActionType
+    @Binding var selection2: SwipeActionType
+    @Binding var selection3: SwipeActionType
+    @Binding var selection4: SwipeActionType
     let availableActions: [SwipeActionType]
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                
-                Text(title)
-                    .font(.body)
-                    .fontWeight(.medium)
-            }
-            
-            SwipeActionPicker(
-                title: "Short Swipe",
-                selection: $shortSelection,
-                availableActions: availableActions
-            )
-            
-            SwipeActionPicker(
-                title: "Long Swipe",
-                selection: $longSelection,
-                availableActions: availableActions
-            )
+            SwipeActionPicker(title: "Short", selection: $selection1, availableActions: availableActions)
+            SwipeActionPicker(title: "Medium", selection: $selection2, availableActions: availableActions)
+            SwipeActionPicker(title: "Long", selection: $selection3, availableActions: availableActions)
+            SwipeActionPicker(title: "Full", selection: $selection4, availableActions: availableActions)
         }
         .padding(.vertical, 4)
     }
