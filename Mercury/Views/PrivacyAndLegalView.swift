@@ -65,7 +65,7 @@ struct PrivacyAndLegalView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Mercury is provided as-is, without warranties. If Reddit changes its policies or technical requirements, some features may stop working or become unavailable.")
                             .font(.body)
-                        Text("If you ever want to stop using Mercury, use Settings → Sign Out to remove your local credentials.")
+                        Text("If you ever want to stop using Mercury, use Settings → Manage Accounts → Swipe on your account → Remove to remove your local credentials.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }

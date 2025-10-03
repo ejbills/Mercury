@@ -10,6 +10,9 @@ extension Defaults.Keys {
     static let userInfo = Key<RedditUser?>("userInfo")
     static let isSetupComplete = Key<Bool>("isSetupComplete", default: false)
     static let lastLoginDate = Key<Date?>("lastLoginDate")
+    // Multi-account
+    static let storedAccounts = Key<[StoredAccount]>("storedAccounts", default: [])
+    static let activeUsername = Key<String?>("activeUsername")
     static let compactMode = Key<Bool>("compactMode", default: false)
     // Appearance - Posts
     static let postLayoutStyle = Key<PostLayoutStyle>("postLayoutStyle", default: .normal)

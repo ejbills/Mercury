@@ -24,7 +24,8 @@ struct ProfilePostsSection: View {
             } else {
                 LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                     ForEach(posts) { post in
-                        if Defaults[.postLayoutStyle] == .compact {
+                        let useCompact = (Defaults[.postLayoutStyle] == .compact) || Defaults[.compactMode]
+                        if useCompact {
                             CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                         } else {
                             PostRowView(
@@ -75,6 +76,7 @@ struct ProfileCommentsSection: View {
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
+    @Default(.commentLayoutStyle) private var commentLayoutStyle
     
     var body: some View {
         Group {
@@ -90,14 +92,18 @@ struct ProfileCommentsSection: View {
                 LazyVStack(spacing: 8) {
                     ForEach(comments, id: \.self) { comment in
                         if let key = linkKey(for: comment), let post = commentPostMap[key] {
-                            CommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
-                                .allowsHitTesting(false)
-                                .environment(\.redditAPI, redditAPI)
-                                .environment(\.navigationPathManager, navigationPath)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    onCommentTap(post)
+                            Group {
+                                if commentLayoutStyle == .compact {
+                                    CompactCommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
+                                } else {
+                                    CommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
                                 }
+                            }
+                            .allowsHitTesting(false)
+                            .environment(\.redditAPI, redditAPI)
+                            .environment(\.navigationPathManager, navigationPath)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onCommentTap(post) }
                         }
                     }
                 }

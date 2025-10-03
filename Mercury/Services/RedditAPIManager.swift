@@ -42,6 +42,18 @@ class RedditAPIManager {
     var hasStoredCredentials: Bool {
         authService.hasStoredCredentials
     }
+
+    // MARK: - Multi-account exposure
+    var storedAccounts: [StoredAccount] { authService.storedAccounts }
+    var activeUsername: String? { authService.activeUsername }
+    
+    func switchToAccount(username: String) async {
+        await authService.switchToAccount(username: username)
+    }
+    
+    func removeAccount(username: String) {
+        authService.removeAccount(username: username)
+    }
     
     // MARK: - Initialization
     
@@ -83,12 +95,21 @@ class RedditAPIManager {
         authService.startOAuthFlow()
     }
     
+    func startOAuthFlow(clientId: String) {
+        authService.startOAuthFlow(clientId: clientId)
+    }
+    
     func validateCredentials() async {
         await authService.validateCredentials()
     }
     
     func clearStoredCredentials() {
         authService.clearStoredCredentials()
+    }
+
+    // Helpers for account flows
+    func buildAuthorizationURL(for clientId: String) -> URL? {
+        authService.buildAuthorizationURL(for: clientId)
     }
     
     // MARK: - Content Methods (Delegated)

@@ -6,10 +6,23 @@ struct SettingsView: View {
     @Default(.clientId) private var clientId
     @Default(.isSetupComplete) private var isSetupComplete
     @State private var showingSignOutConfirm = false
+    @State private var showingAccounts = false
 
     var body: some View {
         List {
             Section("Account") {
+                Button {
+                    showingAccounts = true
+                } label: {
+                    HStack {
+                        Label("Manage Accounts", systemImage: "person.2.circle")
+                        Spacer()
+                        if let name = apiService.userInfo?.name ?? apiService.activeUsername {
+                            Text("u/\(name)").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 if let user = apiService.userInfo {
                     HStack(spacing: 12) {
                         ZStack {
@@ -42,15 +55,17 @@ struct SettingsView: View {
                         }
                         .foregroundStyle(.primary)
                     }
-                } else {
+                } else if apiService.activeUsername == nil {
                     Text("Not signed in")
                         .foregroundStyle(.secondary)
                 }
 
-                Button(role: .destructive) {
-                    showingSignOutConfirm = true
-                } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                if let currentName = apiService.userInfo?.name ?? apiService.activeUsername {
+                    Button(role: .destructive) {
+                        showingSignOutConfirm = true
+                    } label: {
+                        Label("Sign out u/\(currentName)", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
                 }
             }
 
@@ -131,10 +146,16 @@ struct SettingsView: View {
         .alert("Sign Out?", isPresented: $showingSignOutConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Sign Out", role: .destructive) {
-                apiService.clearStoredCredentials()
+                if let name = apiService.userInfo?.name ?? apiService.activeUsername {
+                    apiService.removeAccount(username: name)
+                }
             }
         } message: {
-            Text("You’ll need to reauthenticate to continue using Mercury.")
+            Text("You’ll be signed out of u/\(apiService.userInfo?.name ?? apiService.activeUsername ?? "-"). You can add or sign in again anytime.")
+        }
+        .sheet(isPresented: $showingAccounts) {
+            MultiAccountSheet(isPresented: $showingAccounts)
+                .environment(\.redditAPI, apiService)
         }
     }
 }

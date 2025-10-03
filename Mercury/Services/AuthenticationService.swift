@@ -11,6 +11,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     var accessToken: String?
     var refreshToken: String?
     var accessTokenExpiry: Date?
+    // Multi-account
+    var storedAccounts: [StoredAccount] = []
+    var activeUsername: String? = nil
     
     private var clientId: String = ""
     private let redirectURI = "mercury://oauth"
@@ -20,6 +23,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     private var isRefreshingToken = false
     private var refreshRetryCount = 0
     private let maxRefreshRetries = 3
+    // Pending values for seamless add/switch flows
+    private var pendingClientId: String? = nil
+    private var pendingRefreshToken: String? = nil
     
     enum APIStatus {
         case unknown
@@ -53,6 +59,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         self.refreshToken = Defaults[.refreshToken]
         self.accessTokenExpiry = Defaults[.accessTokenExpiry]
         self.userInfo = Defaults[.userInfo]
+        self.storedAccounts = Defaults[.storedAccounts]
+        self.activeUsername = Defaults[.activeUsername]
         
         if !clientId.isEmpty && accessToken != nil && userInfo != nil {
             self.apiStatus = .valid
@@ -72,6 +80,14 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         Defaults[.userInfo] = userInfo
         Defaults[.isSetupComplete] = true
         Defaults[.lastLoginDate] = Date()
+
+        // Persist multi-account info if available
+        if let user = userInfo, let rt = refreshToken {
+            upsertStoredAccount(username: user.name, refreshToken: rt)
+            Defaults[.storedAccounts] = storedAccounts
+            Defaults[.activeUsername] = user.name
+            activeUsername = user.name
+        }
     }
     
     func clearStoredCredentials() {
@@ -82,7 +98,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         Defaults[.userInfo] = nil
         Defaults[.isSetupComplete] = false
         Defaults[.lastLoginDate] = nil
-        
+
         self.clientId = ""
         self.accessToken = nil
         self.refreshToken = nil
@@ -119,8 +135,10 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         preconditionFailure("No UIWindowScene available for ASWebAuthenticationSession presentation anchor")
     }
     
-    func startOAuthFlow() {
-        guard !clientId.isEmpty else {
+    func startOAuthFlow(clientId override: String? = nil) {
+        if let override, !override.isEmpty { pendingClientId = override }
+        let useClientId = pendingClientId ?? clientId
+        guard !useClientId.isEmpty else {
             self.apiStatus = .invalid
             self.errorMessage = "Client ID is required"
             return
@@ -133,7 +151,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         
         var components = URLComponents(string: "https://www.reddit.com/api/v1/authorize")!
         components.queryItems = [
-            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_id", value: useClientId),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
@@ -210,7 +228,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.httpMethod = "POST"
         request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         
-        let credentials = "\(clientId):".data(using: .utf8)!.base64EncodedString()
+        let useClientId = pendingClientId ?? clientId
+        let credentials = "\(useClientId):".data(using: .utf8)!.base64EncodedString()
         request.addValue("Basic \(credentials)", forHTTPHeaderField: "Authorization")
         
         let bodyData = "grant_type=authorization_code&code=\(code)&redirect_uri=\(redirectURI)".data(using: .utf8)
@@ -328,6 +347,11 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             await MainActor.run {
                 self.userInfo = user
                 self.apiStatus = .valid
+                if let p = self.pendingClientId {
+                    self.clientId = p
+                    Defaults[.clientId] = p
+                    self.pendingClientId = nil
+                }
                 self.saveCredentials()
                 self.scheduleTokenRefreshIfNeeded()
             }
@@ -365,7 +389,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     func refreshAccessToken() async -> Bool {
         // Prevent concurrent refresh attempts
         guard !isRefreshingToken else { return false }
-        guard let refreshToken = refreshToken, !clientId.isEmpty else { return false }
+        let useClientId = pendingClientId ?? clientId
+        let useRefreshToken = pendingRefreshToken ?? refreshToken
+        guard let refreshToken = useRefreshToken, !useClientId.isEmpty else { return false }
         guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else { return false }
         
         await MainActor.run {
@@ -383,7 +409,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        let credentials = "\(clientId):".data(using: .utf8)!.base64EncodedString()
+        let credentials = "\(useClientId):".data(using: .utf8)!.base64EncodedString()
         request.addValue("Basic \(credentials)", forHTTPHeaderField: "Authorization")
         
         let body = "grant_type=refresh_token&refresh_token=\(refreshToken)"
@@ -419,6 +445,10 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                     self.refreshToken = newRT
                 }
                 self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
+                if let p = self.pendingClientId { self.clientId = p; Defaults[.clientId] = p }
+                if let pr = self.pendingRefreshToken { self.refreshToken = pr; Defaults[.refreshToken] = pr }
+                self.pendingClientId = nil
+                self.pendingRefreshToken = nil
                 self.refreshRetryCount = 0 // Reset retry count on success
                 self.apiStatus = .valid
                 self.errorMessage = nil
@@ -483,6 +513,84 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                 }
             }
         }
+    }
+
+    // Public helper for building an authorization URL for display/copy
+    func buildAuthorizationURL(for clientId: String) -> URL? {
+        let scope = "identity,edit,flair,history,modconfig,modflair,modlog,modposts,modwiki,mysubreddits,privatemessages,read,report,save,submit,subscribe,vote,wikiedit,wikiread"
+        var components = URLComponents(string: "https://www.reddit.com/api/v1/authorize")!
+        components.queryItems = [
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "state", value: UUID().uuidString),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "duration", value: "permanent"),
+            URLQueryItem(name: "scope", value: scope)
+        ]
+        return components.url
+    }
+
+    // MARK: - Multi-account helpers
+    private func upsertStoredAccount(username: String, refreshToken: String) {
+        if let idx = storedAccounts.firstIndex(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) {
+            storedAccounts[idx].refreshToken = refreshToken
+            storedAccounts[idx].lastUpdated = Date()
+            storedAccounts[idx].clientId = self.clientId
+        } else {
+            storedAccounts.append(StoredAccount(username: username, refreshToken: refreshToken, lastUpdated: Date(), clientId: self.clientId))
+        }
+        Defaults[.storedAccounts] = storedAccounts
+    }
+
+    func switchToAccount(username: String) async {
+        guard let acct = storedAccounts.first(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) else { return }
+
+        await MainActor.run {
+            // Stage pending values and mark active account; do not clear current session
+            self.pendingRefreshToken = acct.refreshToken
+            self.pendingClientId = acct.clientId ?? self.clientId
+            self.activeUsername = acct.username
+            Defaults[.activeUsername] = acct.username
+        }
+
+        let refreshed = await refreshAccessToken()
+        if refreshed {
+            await fetchUserInfo()
+        }
+    }
+
+    func removeAccount(username: String) {
+        storedAccounts.removeAll { $0.username.caseInsensitiveCompare(username) == .orderedSame }
+        Defaults[.storedAccounts] = storedAccounts
+        // If removing current account
+        if activeUsername?.caseInsensitiveCompare(username) == .orderedSame {
+            if let next = storedAccounts.first {
+                Task { await switchToAccount(username: next.username) }
+            } else {
+                // No accounts left: clear session but keep app config (clientId)
+                clearActiveSessionPreservingAppConfig()
+                Defaults[.activeUsername] = nil
+                activeUsername = nil
+            }
+        }
+    }
+
+    // Clear tokens/user info while preserving clientId and setup state
+    private func clearActiveSessionPreservingAppConfig() {
+        Defaults[.accessToken] = nil
+        Defaults[.refreshToken] = nil
+        Defaults[.accessTokenExpiry] = nil
+        Defaults[.userInfo] = nil
+        self.accessToken = nil
+        self.refreshToken = nil
+        self.accessTokenExpiry = nil
+        self.userInfo = nil
+        self.apiStatus = .unknown
+        self.errorMessage = nil
+        self.refreshRetryCount = 0
+        self.isRefreshingToken = false
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = nil
     }
 }
 

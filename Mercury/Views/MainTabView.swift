@@ -9,6 +9,7 @@ struct MainTabView: View {
     @State private var settingsNavigationPath = NavigationPathManager()
     @State private var searchText: String = ""
     
+    
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
@@ -165,6 +166,7 @@ struct MainTabView: View {
             }
         }
         .tint(Color.accentColor)
+        // Long-press on tab bar not supported on iOS 26; account management moved to Settings
     }
     
     @ViewBuilder
