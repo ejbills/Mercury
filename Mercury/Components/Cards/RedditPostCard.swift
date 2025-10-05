@@ -80,9 +80,8 @@ struct RedditPostCard: View {
     }
     
     private var redditPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 10)
+        Rectangle()
             .fill(.fill.secondary)
-            .frame(width: EmbedCardMetrics.thumbnailSize, height: EmbedCardMetrics.thumbnailSize)
             .overlay {
                 Image(systemName: "r.circle.fill")
                     .font(.title2)

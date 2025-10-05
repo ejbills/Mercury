@@ -69,6 +69,11 @@ struct PostCommentsView: View {
                                 },
                                 allowsNavigation: false
                             )
+                            .overlay {
+                                if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
+                                    downloadProgressOverlay
+                                }
+                            }
 
                             if let bodyText = post.selftext, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
@@ -90,6 +95,11 @@ struct PostCommentsView: View {
                             },
                             allowsNavigation: false
                         )
+                        .overlay {
+                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
+                                downloadProgressOverlay
+                            }
+                        }
                     }
 
                     // Post Action Toolbar
@@ -609,6 +619,39 @@ struct PostCommentsView: View {
                 // On failure, do not present share sheet
             }
         }
+    }
+
+    @ViewBuilder
+    private var downloadProgressOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+
+            VStack(spacing: 16) {
+                ProgressView(value: downloadProgress)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                    .frame(width: 200)
+
+                VStack(spacing: 4) {
+                    let downloadText = switch post.postType {
+                    case .video: "Downloading Video"
+                    case .youtube: "Opening YouTube"
+                    case .gif: "Downloading GIF"
+                    case .image: "Downloading Image"
+                    case .gallery: "Downloading Gallery"
+                    default: "Downloading"
+                    }
+
+                    Text(downloadText)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: downloadProgress)
     }
 
     // MARK: - Search Expansion

@@ -17,7 +17,7 @@ struct RichArticleCard: View {
             thumbnail: thumbnailView,
             labelIcon: "globe",
             labelText: displayDomain,
-            labelTint: .blue,
+            labelTint: .secondary,
             title: displayTitle,
             subtitle: displayDescription,
             onTap: onTap
@@ -35,13 +35,11 @@ struct RichArticleCard: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: EmbedCardMetrics.thumbnailSize, height: EmbedCardMetrics.thumbnailSize)
-                            .clipped()
                     } else {
                         compactPlaceholder
                     }
                 }
-                .processors([.resize(size: CGSize(width: 160, height: 160))]) // Smaller resize for thumbnails
+                .processors([.resize(size: CGSize(width: 200, height: 200))])
                 .priority(.high)
                 .transition(.opacity)
             } else {
@@ -69,9 +67,8 @@ struct RichArticleCard: View {
     }
     
     private var compactPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 12)
+        Rectangle()
             .fill(.fill.secondary)
-            .frame(width: EmbedCardMetrics.thumbnailSize, height: EmbedCardMetrics.thumbnailSize)
             .overlay {
                 Image(systemName: "link")
                     .font(.title3)
