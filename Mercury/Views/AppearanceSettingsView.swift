@@ -17,6 +17,7 @@ struct AppearanceSettingsView: View {
     @Default(.postNormalShowScore) private var postNormalShowScore
     @Default(.postNormalShowCommentCount) private var postNormalShowCommentCount
     @Default(.postNormalShowVoting) private var postNormalShowVoting
+    @Default(.postNormalVotingPosition) private var postNormalVotingPosition
     @Default(.postNormalShowActions) private var postNormalShowActions
     @Default(.postNormalUseCardStyle) private var postNormalUseCardStyle
     // Compact
@@ -170,6 +171,13 @@ struct AppearanceSettingsView: View {
                     Toggle("Show Score", isOn: $postNormalShowScore)
                     Toggle("Show Comment Count", isOn: $postNormalShowCommentCount)
                     Toggle("Show Upvote/Downvote Buttons", isOn: $postNormalShowVoting)
+                    Picker("Voting Position", selection: $postNormalVotingPosition) {
+                        ForEach(ThumbnailPosition.allCases, id: \.self) { pos in
+                            Text(pos.displayName).tag(pos)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(!postNormalShowVoting)
                     Toggle("Show Action Bar", isOn: $postNormalShowActions)
                     Toggle("Use Card Styling", isOn: $postNormalUseCardStyle)
                     TuningSliderRow(
@@ -452,6 +460,7 @@ private extension AppearanceSettingsView {
         Defaults[.postNormalShowScore] = true
         Defaults[.postNormalShowCommentCount] = true
         Defaults[.postNormalShowVoting] = true
+        Defaults[.postNormalVotingPosition] = .right
         Defaults[.postNormalShowActions] = true
         Defaults[.postNormalUseCardStyle] = true
         // Compact

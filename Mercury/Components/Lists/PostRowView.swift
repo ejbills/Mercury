@@ -45,7 +45,9 @@ struct PostRowView: View {
     @Default(.postNormalShowDomain) private var postShowDomain
     @Default(.postNormalShowFlair) private var postShowFlair
     @Default(.postNormalShowScore) private var postShowScore
+    @Default(.postNormalShowCommentCount) private var postShowCommentCount
     @Default(.postNormalShowVoting) private var postShowVoting
+    @Default(.postNormalVotingPosition) private var postVotingPosition
     @Default(.postNormalShowActions) private var postShowActions
     @Default(.postNormalUseCardStyle) private var postUseCardStyle
     @Default(.postHorizontalPadding) private var postHorizontalPadding
@@ -283,9 +285,14 @@ struct PostRowView: View {
 
     @ViewBuilder
     private var nonCardContainer: some View {
-        let content = postCardBody
-            .padding(nonCardContentInsets)
-            .contentShape(Rectangle())
+        let content = VStack(spacing: 0) {
+            Divider()
+            postCardBody
+                .padding(nonCardContentInsets)
+            Divider()
+        }
+        .contentShape(Rectangle())
+
         if allowsNavigation {
             content
                 .onTapGesture { navigateToComments() }
@@ -513,6 +520,24 @@ struct PostRowView: View {
     
     private var postFooter: some View {
         HStack(alignment: .center, spacing: 8) {
+            // Left side - voting buttons if positioned left
+            if postShowVoting && postVotingPosition == .left {
+                VotingCluster(
+                    post: currentPost,
+                    voteState: $voteState,
+                    displayScore: $displayScore,
+                    isVoting: $isVoting,
+                    onVote: handleVote,
+                    colorScheme: .light,
+                    size: .compact
+                )
+            }
+
+            // If voting is on left, push score/comment pills to the right
+            if postVotingPosition == .left {
+                Spacer()
+            }
+
             // Upvote score pill (tappable toggle)
             if postShowScore {
                 Pill(action: {
@@ -529,22 +554,27 @@ struct PostRowView: View {
                     .foregroundStyle(scoreColor)
                 }
             }
-            
+
             // Comment count pill
-            Pill {
-                HStack(spacing: 6) {
-                    Image(systemName: "bubble.left")
-                        .font(.callout)
-                    Text(post.commentsText)
-                        .appFont(.caption, weight: .medium)
+            if postShowCommentCount {
+                Pill {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.left")
+                            .font(.callout)
+                        Text(post.commentsText)
+                            .appFont(.caption, weight: .medium)
+                    }
+                    .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.secondary)
             }
 
-            Spacer()
+            // If voting is on right, push them to the right side
+            if postVotingPosition == .right {
+                Spacer()
+            }
 
-            // Voting buttons on the right
-            if postShowVoting {
+            // Right side - voting buttons if positioned right
+            if postShowVoting && postVotingPosition == .right {
                 VotingCluster(
                     post: currentPost,
                     voteState: $voteState,

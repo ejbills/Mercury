@@ -22,6 +22,9 @@ struct PostActionToolbar: View {
     let onDownload: (() -> Void)?
     let colorScheme: PostActionColorScheme
     let size: PostActionSize
+    let showScore: Bool
+    let showCommentCount: Bool
+    let showVoting: Bool
 
     enum PostActionColorScheme {
         case light
@@ -34,12 +37,11 @@ struct PostActionToolbar: View {
     }
 
     @Environment(\.navigationPathManager) private var navigationPath
-    @Default(.postNormalShowVoting) private var postShowVoting
 
     var body: some View {
         HStack(spacing: 8) {
             // Voting buttons (for compact size in feed)
-            if size == .compact && postShowVoting {
+            if size == .compact && showVoting {
                 VotingCluster(
                     post: post,
                     voteState: $voteState,
@@ -53,28 +55,32 @@ struct PostActionToolbar: View {
 
             // For large size (comments page), show upvote count badge
             if size == .large {
-                Pill(action: {
-                    onVote(voteState == .upvoted ? .neutral : .upvoted)
-                }, size: .regular) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.up")
-                            .font(.callout)
-                        Text(scoreText)
-                            .appFont(.caption, weight: .medium)
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
+                if showScore {
+                    Pill(action: {
+                        onVote(voteState == .upvoted ? .neutral : .upvoted)
+                    }, size: .regular) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.up")
+                                .font(.callout)
+                            Text(scoreText)
+                                .appFont(.caption, weight: .medium)
+                                .monospacedDigit()
+                                .contentTransition(.numericText())
+                        }
+                        .foregroundStyle(scoreColor)
                     }
-                    .foregroundStyle(scoreColor)
                 }
 
-                Pill {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bubble.left")
-                            .font(.callout)
-                        Text(post.commentsText)
-                            .appFont(.caption, weight: .medium)
+                if showCommentCount {
+                    Pill {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bubble.left")
+                                .font(.callout)
+                            Text(post.commentsText)
+                                .appFont(.caption, weight: .medium)
+                        }
+                        .foregroundStyle(secondaryColor)
                     }
-                    .foregroundStyle(secondaryColor)
                 }
             }
 

@@ -37,6 +37,14 @@ struct PostCommentsView: View {
     @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
     @Default(.commentHorizontalPadding) private var commentHorizontalPadding
     @Default(.postLayoutStyle) private var postLayoutStyle
+    @Default(.postNormalShowActions) private var postNormalShowActions
+    @Default(.postNormalShowScore) private var postNormalShowScore
+    @Default(.postNormalShowCommentCount) private var postNormalShowCommentCount
+    @Default(.postNormalShowVoting) private var postNormalShowVoting
+    @Default(.postCompactShowActions) private var postCompactShowActions
+    @Default(.postCompactShowScore) private var postCompactShowScore
+    @Default(.postCompactShowCommentCount) private var postCompactShowCommentCount
+    @Default(.postCompactShowVoting) private var postCompactShowVoting
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
@@ -84,23 +92,28 @@ struct PostCommentsView: View {
                         )
                     }
 
-                    // Post Action Toolbar - Always visible as separator
-                    PostActionToolbar(
-                        post: post,
-                        voteState: $postVoteState,
-                        displayScore: $postDisplayScore,
-                        isVoting: $postIsVoting,
-                        savedState: $postSavedState,
-                        onVote: handlePostVote,
-                        onReply: { showingPostReply = true },
-                        onShare: handlePostShare,
-                        onSave: handlePostSave,
-                        onCopyLink: handlePostCopyLink,
-                        onOpenOriginal: handlePostOpenOriginal,
-                        onDownload: handlePostDownload,
-                        colorScheme: .light,
-                        size: .large
-                    )
+                    // Post Action Toolbar
+                    if (postLayoutStyle == .normal && postNormalShowActions) || (postLayoutStyle == .compact && postCompactShowActions) {
+                        PostActionToolbar(
+                            post: post,
+                            voteState: $postVoteState,
+                            displayScore: $postDisplayScore,
+                            isVoting: $postIsVoting,
+                            savedState: $postSavedState,
+                            onVote: handlePostVote,
+                            onReply: { showingPostReply = true },
+                            onShare: handlePostShare,
+                            onSave: handlePostSave,
+                            onCopyLink: handlePostCopyLink,
+                            onOpenOriginal: handlePostOpenOriginal,
+                            onDownload: handlePostDownload,
+                            colorScheme: .light,
+                            size: .large,
+                            showScore: postLayoutStyle == .normal ? postNormalShowScore : postCompactShowScore,
+                            showCommentCount: postLayoutStyle == .normal ? postNormalShowCommentCount : postCompactShowCommentCount,
+                            showVoting: postLayoutStyle == .normal ? postNormalShowVoting : postCompactShowVoting
+                        )
+                    }
 
                     if targetCommentId != nil {
                         modePicker

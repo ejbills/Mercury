@@ -59,16 +59,20 @@ struct CommentView: View {
                     commentContent
                 }
             } else {
-                HStack(alignment: .top, spacing: 0) {
-                    if let accentColor, resolvedCardStyle.accentWidth > 0 {
-                        Rectangle()
-                            .fill(accentColor)
-                            .frame(width: resolvedCardStyle.accentWidth)
-                    }
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack(alignment: .top, spacing: 0) {
+                        if let accentColor, resolvedCardStyle.accentWidth > 0 {
+                            Rectangle()
+                                .fill(accentColor)
+                                .frame(width: resolvedCardStyle.accentWidth)
+                        }
 
-                    commentContent
-                        .padding(nonCardContentInsets)
-                        .background(alignment: .leading) { nonCardBackground }
+                        commentContent
+                            .padding(nonCardContentInsets)
+                            .background(alignment: .leading) { nonCardBackground }
+                    }
+                    Divider()
                 }
             }
         }

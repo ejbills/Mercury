@@ -233,9 +233,14 @@ struct CompactPostRowView: View {
 
     @ViewBuilder
     private var nonCardContainer: some View {
-        let content = compactRowBody
-            .padding(nonCardContentInsets)
-            .contentShape(Rectangle())
+        let content = VStack(spacing: 0) {
+            Divider()
+            compactRowBody
+                .padding(nonCardContentInsets)
+            Divider()
+        }
+        .contentShape(Rectangle())
+
         if allowsNavigation {
             content
                 .onTapGesture { navigateToComments() }

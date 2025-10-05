@@ -25,6 +25,7 @@ extension Defaults.Keys {
     static let postNormalShowScore = Key<Bool>("postNormalShowScore", default: true)
     static let postNormalShowCommentCount = Key<Bool>("postNormalShowCommentCount", default: true)
     static let postNormalShowVoting = Key<Bool>("postNormalShowVoting", default: true)
+    static let postNormalVotingPosition = Key<ThumbnailPosition>("postNormalVotingPosition", default: .right)
     static let postNormalShowActions = Key<Bool>("postNormalShowActions", default: true)
     static let postNormalUseCardStyle = Key<Bool>("postNormalUseCardStyle", default: true)
     // Compact layout options
@@ -308,17 +309,11 @@ enum AppColorSchemePreference: String, CaseIterable, Codable, Defaults.Serializa
 
 enum FeedBackgroundStyle: String, CaseIterable, Codable, Defaults.Serializable {
     case system
-    case soft
-    case paper
-    case midnight
     case custom
 
     var displayName: String {
         switch self {
-        case .system: return "System Default"
-        case .soft: return "Soft Gray"
-        case .paper: return "Warm Paper"
-        case .midnight: return "Midnight"
+        case .system: return "Default"
         case .custom: return "Custom"
         }
     }
@@ -327,12 +322,6 @@ enum FeedBackgroundStyle: String, CaseIterable, Codable, Defaults.Serializable {
         switch self {
         case .system:
             return Color(UIColor.systemBackground)
-        case .soft:
-            return Color(red: 0.94, green: 0.95, blue: 0.97)
-        case .paper:
-            return Color(red: 0.96, green: 0.94, blue: 0.88)
-        case .midnight:
-            return Color(red: 0.09, green: 0.10, blue: 0.14)
         case .custom:
             return custom ?? Color(UIColor.systemBackground)
         }
