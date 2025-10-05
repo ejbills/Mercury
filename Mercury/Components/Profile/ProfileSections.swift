@@ -107,6 +107,7 @@ struct ProfileCommentsSection: View {
                                 .onTapGesture {
                                     onCommentTap(post)
                                 }
+                                .padding(.horizontal, CGFloat(commentHorizontalPadding))
                         }
                     }
                 }

@@ -15,7 +15,6 @@ struct MultiEditorView: View {
     @State private var selectedSubs: Set<String> = []
     @State private var isSaving = false
     @State private var errorMessage: String?
-    @State private var searchText: String = ""
 
     init(mode: Mode, apiService: RedditAPIManager, availableSubreddits: [Subreddit], onComplete: @escaping (MultiReddit?) -> Void) {
         self.mode = mode
@@ -38,7 +37,6 @@ struct MultiEditorView: View {
                 detailsSection
                 subredditsSection
             }
-            .searchable(text: $searchText)
             .navigationTitle(modeTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -70,7 +68,7 @@ struct MultiEditorView: View {
 
     private var subredditsSection: some View {
         Section("Subreddits") {
-            SwiftUI.ForEach(filteredSubs, id: \.id) { (subreddit: Subreddit) in
+            SwiftUI.ForEach(availableSubreddits, id: \.id) { (subreddit: Subreddit) in
                 HStack {
                     Text(subreddit.displayNamePrefixed)
                         .appFont(.body)
@@ -88,13 +86,6 @@ struct MultiEditorView: View {
                 }
             }
         }
-    }
-
-    var filteredSubs: [Subreddit] {
-        let base = availableSubreddits
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return base }
-        return base.filter { $0.displayName.localizedCaseInsensitiveContains(q) || $0.title.localizedCaseInsensitiveContains(q) }
     }
 
     private var modeTitle: String {

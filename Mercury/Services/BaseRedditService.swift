@@ -34,9 +34,12 @@ class BaseRedditService {
         }
     }
     
+    private static let defaultSuccessStatusCodes = Set(200..<300)
+
     /// Handles common HTTP response validation
-    func validateResponse(_ response: HTTPURLResponse, allowedStatusCodes: [Int] = [200]) throws {
-        guard allowedStatusCodes.contains(response.statusCode) else {
+    func validateResponse(_ response: HTTPURLResponse, allowedStatusCodes: [Int] = []) throws {
+        let allowed = allowedStatusCodes.isEmpty ? Self.defaultSuccessStatusCodes : Set(allowedStatusCodes)
+        guard allowed.contains(response.statusCode) else {
             switch response.statusCode {
             case 401:
                 throw APIError.invalidToken

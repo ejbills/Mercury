@@ -10,6 +10,7 @@ extension Defaults.Keys {
     static let userInfo = Key<RedditUser?>("userInfo")
     static let isSetupComplete = Key<Bool>("isSetupComplete", default: false)
     static let lastLoginDate = Key<Date?>("lastLoginDate")
+    static let defaultHomeFeed = Key<String?>("defaultHomeFeed")
     static let compactMode = Key<Bool>("compactMode", default: false)
     // Appearance - Posts
     static let postLayoutStyle = Key<PostLayoutStyle>("postLayoutStyle", default: .normal)
@@ -71,6 +72,8 @@ extension Defaults.Keys {
     static let subredditBlockingEnabled = Key<Bool>("subredditBlockingEnabled", default: true)
     
     static let blurNSFWContent = Key<Bool>("blurNSFWContent", default: true)
+    static let blurSpoilerContent = Key<Bool>("blurSpoilerContent", default: true)
+
     // Global toggle for enabling/disabling swipe actions across the app
     static let swipeActionsEnabled = Key<Bool>("swipeActionsEnabled", default: true)
     

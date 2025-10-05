@@ -42,14 +42,9 @@ struct AlphabeticalSubredditList: View {
         self.onSubscribeToggle = onSubscribeToggle
     }
     
-    private var allSections: [(String, SectionType)] {
+    private var contentSections: [(String, SectionType)] {
         var sections: [(String, SectionType)] = []
-        
-        // Add quick access section if callback is provided
-        if onQuickLinkTap != nil {
-            sections.append(("★", .quickAccess(QuickLink.allCases)))
-        }
-        
+
         // Add Multireddits if provided
         if onMultiTap != nil && !multis.isEmpty {
             sections.append(("m", .multis(multis)))
@@ -58,13 +53,14 @@ struct AlphabeticalSubredditList: View {
         // Add favorites section if there are any favorites
         let favoriteSubs = subreddits.filter { favoriteSubreddits.contains($0.displayName) }
         if !favoriteSubs.isEmpty {
-            sections.append(("♥", .favorites(favoriteSubs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() })))
+            let sortedFavorites = favoriteSubs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+            sections.append(("♥", .favorites(sortedFavorites)))
         }
-        
+
         // Add regular subreddit sections
         let subredditSections = groupedSubreddits.map { ($0.0, SectionType.subreddits($0.1)) }
         sections.append(contentsOf: subredditSections)
-        
+
         return sections
     }
     
@@ -88,26 +84,35 @@ struct AlphabeticalSubredditList: View {
     }
     
     private var sectionIndexTitles: [String] {
-        allSections.map { $0.0 }
+        var titles = contentSections.map { $0.0 }
+        if hasQuickAccess { titles.insert("★", at: 0) }
+        return titles
     }
     
     private enum SectionType {
-        case quickAccess([QuickLink])
         case multis([MultiReddit])
         case favorites([Subreddit])
         case subreddits([Subreddit])
+    }
+
+    private var hasQuickAccess: Bool {
+        onQuickLinkTap != nil
     }
     
     var body: some View {
         ScrollViewReader { proxy in
             ZStack {
                 List {
-                    ForEach(allSections, id: \.0) { section in
+                    if hasQuickAccess {
+                        QuickAccessGrid(quickLinks: QuickLink.allCases, onQuickLinkTap: onQuickLinkTap)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .id("★")
+                    }
+
+                    ForEach(contentSections, id: \.0) { section in
                         Section(header: sectionHeader(section.0)) {
                             switch section.1 {
-                            case .quickAccess(let quickLinks):
-                                QuickAccessGrid(quickLinks: quickLinks, onQuickLinkTap: onQuickLinkTap)
-                                    .listRowSeparator(.hidden)
                             case .multis(let items):
                                 ForEach(items, id: \.id) { multi in
                                     MultiRedditRow(multi: multi) {
@@ -155,7 +160,7 @@ struct AlphabeticalSubredditList: View {
                 .scrollContentBackground(.hidden)
                 
                 // Section index overlay
-                if !allSections.isEmpty {
+                if !sectionIndexTitles.isEmpty {
                     SectionIndexTitles(
                         proxy: proxy,
                         titles: sectionIndexTitles
@@ -169,15 +174,8 @@ struct AlphabeticalSubredditList: View {
         HStack {
             Pill(size: .regular) {
                 HStack(spacing: 6) {
-                    if title == "★" {
-                        Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(.yellow)
-                        Text("Quick Access")
-                            .appFont(.meta)
-                            .fontWeight(.semibold)
-                    } else if title == "m" {
-                        Image(systemName: "rectangle.3.group.fill")
+                    if title == "m" {
+                        Image(systemName: "plus.rectangle.on.rectangle")
                             .font(.caption)
                             .foregroundStyle(.indigo)
                         Text("Multireddits")
@@ -207,8 +205,7 @@ struct AlphabeticalSubredditList: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(4)
         .id(title)
     }
 }
@@ -287,7 +284,7 @@ struct SectionIndexTitles: View {
                 .foregroundStyle(color)
         case "m":
             // Multireddit icon instead of the letter "m"
-            Image(systemName: "rectangle.3.group.fill")
+            Image(systemName: "plus.rectangle.on.rectangle")
                 .font(.caption2)
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(color)
@@ -302,14 +299,9 @@ struct SectionIndexTitles: View {
 
 private struct GlassContainer: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
             content
-                .glassEffect(.regular.tint(Color.blue.opacity(0.22)))
-        } else {
-            content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.25), lineWidth: 0.8))
-        }
+                .glassEffect(.regular)
+
     }
 }
 

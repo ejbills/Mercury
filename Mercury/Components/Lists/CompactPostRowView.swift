@@ -24,6 +24,7 @@ struct CompactPostRowView: View {
     @State private var offlinePlayer: AVPlayer? = nil
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
+    @State private var compactThumbnailBlurred = false
     @State private var showShareSheet = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
@@ -114,6 +115,23 @@ struct CompactPostRowView: View {
         updatedPost.currentVoteState = voteState
         updatedPost.displayScore = displayScore
         return updatedPost
+    }
+
+    private var compactSensitiveContentType: SensitiveContentOverlay.ContentType {
+        switch postType {
+        case .text:
+            return .text
+        case .image:
+            return .image
+        case .gif:
+            return .gif
+        case .video, .youtube:
+            return .video
+        case .gallery:
+            return .gallery
+        case .link:
+            return .link
+        }
     }
 
     private var resolvedCardStyle: CardStyle {
@@ -500,7 +518,7 @@ struct CompactPostRowView: View {
                     .frame(width: postThumbSize.dimension, height: postThumbSize.dimension)
                     .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                     .overlay(alignment: .center) { mediaBadge }
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .sensitiveContentBlurred(post: post, contentType: compactSensitiveContentType, isBlurred: $compactThumbnailBlurred, cornerRadius: 8)
                     .contentShape(RoundedRectangle(cornerRadius: 8))
                     .highPriorityGesture(TapGesture().onEnded { handleThumbnailTap() })
             }

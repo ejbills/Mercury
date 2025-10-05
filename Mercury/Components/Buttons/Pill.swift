@@ -32,11 +32,10 @@ struct Pill<Content: View>: View {
         }
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
-        .background(.gray.opacity(0.15), in: Capsule())
-        .background(.thinMaterial.opacity(0.75), in: Capsule())
+        .background(.thinMaterial, in: Capsule())
         .overlay {
             Capsule()
-                .stroke(.separator.opacity(0.2), lineWidth: 0.5)
+                .stroke(.gray.opacity(0.3), lineWidth: 0.4)
         }
     }
 }
@@ -59,22 +58,22 @@ enum PillSize {
     
     var horizontalPadding: CGFloat {
         switch self {
-        case .small: return 6
-        case .regular: return 12
-        }
-    }
-    
-    var verticalPadding: CGFloat {
-        switch self {
         case .small: return 2
         case .regular: return 6
         }
     }
     
-    var contentSpacing: CGFloat {
+    var verticalPadding: CGFloat {
         switch self {
         case .small: return 3
-        case .regular: return 6
+        case .regular: return 4
+        }
+    }
+    
+    var contentSpacing: CGFloat {
+        switch self {
+        case .small: return 2
+        case .regular: return 4
         }
     }
 }

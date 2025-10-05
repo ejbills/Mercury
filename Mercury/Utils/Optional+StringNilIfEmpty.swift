@@ -5,7 +5,7 @@
 
 import Foundation
 
-extension Optional where Wrapped == String {
-    var nilIfEmpty: String? { (self ?? "").isEmpty ? nil : self }
+extension String {
+    var nilIfEmpty: String? { (self).isEmpty ? nil : self }
 }
 

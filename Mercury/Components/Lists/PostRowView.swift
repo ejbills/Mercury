@@ -25,6 +25,7 @@ struct PostRowView: View {
     @State private var offlinePlayer: AVPlayer? = nil
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
+    @State private var linkPreviewBlurred = false
     @State private var showShareSheet = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
@@ -362,8 +363,8 @@ struct PostRowView: View {
                 flairBackground: UIColor(flairBackgroundColor),
                 flairTextColor: UIColor(flairTextColor),
                 textColor: UIColor.label,
-                titlePointSize: CGFloat(18) * CGFloat(titleScale),
-                titleWeight: .semibold,
+                titlePointSize: CGFloat(16) * CGFloat(titleScale),
+                titleWeight: .medium,
                 pillPointSize: CGFloat(12) * CGFloat(captionScale),
                 pillWeight: .medium
             )
@@ -528,6 +529,7 @@ struct PostRowView: View {
                         }
                     }
                 }
+                .sensitiveContentBlurred(post: post, contentType: .link, isBlurred: $linkPreviewBlurred)
             } else {
                 RichArticleCard(
                     url: urlString,
@@ -538,6 +540,7 @@ struct PostRowView: View {
                     let normalized = URLNormalizer.normalizeRedditURL(urlString)
                     if let url = URL(string: normalized) { safariURL = url }
                 }
+                .sensitiveContentBlurred(post: post, contentType: .link, isBlurred: $linkPreviewBlurred)
             }
         }
     }
@@ -648,6 +651,7 @@ struct PostRowView: View {
     }
     
     private func handleShare() {
+        shareItems = nil // Ensure we use metadata-based share when no downloads are present
         shareItem = nil  // No media file to share
         showShareSheet = true
     }

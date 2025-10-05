@@ -33,7 +33,7 @@ struct SubredditFeedView: View {
     @State private var searchHasMore = true
     @State private var searchDebounceTask: Task<Void, Never>? = nil
     @State private var showingPostComposer = false
-    
+
     private let pageSize = 25
     @Default(.feedItemSpacing) private var feedItemSpacing
     @Default(.feedBackgroundStyle) private var feedBackgroundStyle
@@ -145,7 +145,7 @@ struct SubredditFeedView: View {
             }
         }
         .navigationTitle(subredditDisplayName)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $feedSearchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search \(subredditDisplayName)")
         .onChange(of: feedSearchText) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -225,7 +225,7 @@ struct SubredditFeedView: View {
         }
         // confirmationDialogs removed; Menu anchored to toolbar button handles sorting
     }
-    
+
     private var subredditDisplayName: String {
         if subreddit == "popular" {
             return "Popular"
@@ -551,7 +551,7 @@ struct SubredditFeedView: View {
         isSearchLoading = true
         await performInFeedSearch(reset: false)
     }
-    
+
     private func fetchPosts(after: String?) async throws -> PostResponse {
         let s = subreddit.lowercased()
         switch s {
