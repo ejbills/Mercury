@@ -13,7 +13,6 @@ struct UserProfileView: View {
     @State private var videoHandoffState: VideoHandoffState?
     @State private var selectedSection: ProfileSection = .posts
     @State private var showProfileWeb = false
-    @State private var showingCopiedToast = false
     @State private var shareItem: ShareItem?
     @Namespace private var sectionNamespace
     @State private var hasBoundAPI = false
@@ -125,10 +124,6 @@ struct UserProfileView: View {
         .sheet(item: $shareItem) { item in
             ShareSheet(shareItem: item)
         }
-        .overlay(alignment: .top) {
-            CopiedToast(isShowing: showingCopiedToast)
-        }
-        .animation(.easeInOut(duration: 0.2), value: showingCopiedToast)
     }
     
     // MARK: - Sections
@@ -154,9 +149,8 @@ struct UserProfileView: View {
     
     private func copyUsername() {
         UIPasteboard.general.string = "u/\(username)"
-        showingCopiedToast = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            withAnimation { showingCopiedToast = false }
-        }
+
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
     }
 }

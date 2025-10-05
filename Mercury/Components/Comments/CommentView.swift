@@ -59,10 +59,17 @@ struct CommentView: View {
                     commentContent
                 }
             } else {
-                commentContent
-                    .padding(nonCardContentInsets)
-                    .background(alignment: .leading) { nonCardBackground }
-                    .overlay(alignment: resolvedCardStyle.accentPosition) { nonCardAccent }
+                HStack(alignment: .top, spacing: 0) {
+                    if let accentColor, resolvedCardStyle.accentWidth > 0 {
+                        Rectangle()
+                            .fill(accentColor)
+                            .frame(width: resolvedCardStyle.accentWidth)
+                    }
+
+                    commentContent
+                        .padding(nonCardContentInsets)
+                        .background(alignment: .leading) { nonCardBackground }
+                }
             }
         }
         .contentShape(Rectangle())
@@ -238,12 +245,10 @@ struct CommentView: View {
                         }
                     }
                 } label: {
-                    Pill(size: .small) {
                         Image(systemName: "ellipsis")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .frame(width: 14, height: 14)
-                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -336,15 +341,6 @@ struct CommentView: View {
         }
     }
 
-    @ViewBuilder
-    private var nonCardAccent: some View {
-        if commentUseCardStyle, let accentColor, resolvedCardStyle.accentWidth > 0 {
-            Rectangle()
-                .fill(accentColor)
-                .frame(width: resolvedCardStyle.accentWidth)
-                .clipShape(RoundedRectangle(cornerRadius: nonCardCornerRadius, style: .continuous))
-        }
-    }
 
     private var depthColor: Color {
         let threadColors: [Color] = [.blue, .orange, .green, .purple, .pink, .cyan, .mint, .yellow]

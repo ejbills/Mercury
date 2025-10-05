@@ -50,29 +50,27 @@ struct PillButtonStyle: ButtonStyle {
     }
 }
 
-// (Reverted) Keep lightweight material-based styling for performance.
-
 enum PillSize {
     case small
     case regular
-    
+
     var horizontalPadding: CGFloat {
         switch self {
-        case .small: return 2
-        case .regular: return 6
+        case .small: return 6
+        case .regular: return 8
         }
     }
-    
+
     var verticalPadding: CGFloat {
         switch self {
-        case .small: return 3
-        case .regular: return 4
+        case .small: return 4
+        case .regular: return 5
         }
     }
-    
+
     var contentSpacing: CGFloat {
         switch self {
-        case .small: return 2
+        case .small: return 3
         case .regular: return 4
         }
     }

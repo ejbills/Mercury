@@ -37,22 +37,7 @@ struct VotingCluster: View {
             ) {
                 onVote(voteState == .upvoted ? .neutral : .upvoted)
             }
-            
-            // Score display
-            VStack(spacing: 2) {
-                Text(scoreText)
-                    .font(.callout)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(scoreColor)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                
-                Text("Score")
-                    .font(.caption2)
-                    .foregroundStyle(secondaryTextColor)
-            }
-            .frame(minWidth: 50)
-            
+
             // Downvote button
             VoteButton(
                 direction: .down,
@@ -64,30 +49,6 @@ struct VotingCluster: View {
                 onVote(voteState == .downvoted ? .neutral : .downvoted)
             }
         }
-    }
-    
-    // MARK: - Computed Properties
-    
-    private var scoreText: String {
-        let score = max(0, displayScore)
-        if score >= 1000 {
-            let kScore = Double(score) / 1000.0
-            return String(format: "%.1fk", kScore)
-        } else {
-            return String(score)
-        }
-    }
-    
-    private var scoreColor: Color {
-        switch voteState {
-        case .upvoted: return .orange
-        case .downvoted: return .blue
-        case .neutral: return colorScheme == .dark ? .white : .primary
-        }
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? .white.opacity(0.7) : .secondary
     }
 }
 

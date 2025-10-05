@@ -50,11 +50,11 @@ struct MediaShareSheet: UIViewControllerRepresentable {
                 activities.append(SaveImageToPhotosActivity(fileURL: mediaURL))
             }
         } else {
-            // Fallback to sharing the post metadata when no media has been prepared
+            // Fallback to sharing the post metadata (Reddit comments URL) when no media has been prepared
             if !post.title.isEmpty {
                 activityItems.append(post.title)
             }
-            if let shareURL = URL(string: post.fullURL) ?? URL(string: post.permalinkURL) {
+            if let shareURL = URL(string: post.permalinkURL) {
                 activityItems.append(shareURL)
             } else {
                 activityItems.append(post.permalinkURL)

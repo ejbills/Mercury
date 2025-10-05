@@ -18,7 +18,6 @@ struct CompactPostRowView: View {
     @Binding var selectedPost: RedditPost?
     @State private var showingSafari = false
     @State private var isVoting = false
-    @State private var showingCopiedToast = false
     @State private var shareItem: URL?
     @State private var isOfflinePlayerPresented = false
     @State private var offlinePlayer: AVPlayer? = nil
@@ -434,14 +433,19 @@ struct CompactPostRowView: View {
                 }
 
                 if postShowScore {
-                    Button(action: { handleVote(.upvoted) }) {
-                        Text(scoreText)
-                            .appFont(.small, weight: .semibold)
-                            .foregroundStyle(scoreColor)
-                            .monospacedDigit()
-                            .lineLimit(1)
+                    Pill(action: {
+                        handleVote(voteState == .upvoted ? .neutral : .upvoted)
+                    }, size: .small) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up")
+                                .font(.caption2)
+                            Text(scoreText)
+                                .appFont(.small, weight: .semibold)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(scoreColor)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 Spacer(minLength: 0)
@@ -731,21 +735,9 @@ struct CompactPostRowView: View {
     
     private func handleCopyLink() {
         UIPasteboard.general.string = post.permalinkURL
-        
-        // Show toast feedback
-        showingCopiedToast = true
-        
-        // Provide haptic feedback
+
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
-        
-        // Hide toast after delay
-        Task {
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            await MainActor.run {
-                showingCopiedToast = false
-            }
-        }
     }
     
     private func handleOpenOriginal() {

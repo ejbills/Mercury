@@ -18,7 +18,6 @@ struct PostRowView: View {
     @State private var showingSafari = false
     @State private var safariURL: URL? = nil
     @State private var isVoting = false
-    @State private var showingCopiedToast = false
     @State private var shareItem: URL?
     @State private var shareItems: [URL]?
     @State private var isOfflinePlayerPresented = false
@@ -45,6 +44,7 @@ struct PostRowView: View {
     // Appearance (Normal mode)
     @Default(.postNormalShowDomain) private var postShowDomain
     @Default(.postNormalShowFlair) private var postShowFlair
+    @Default(.postNormalShowScore) private var postShowScore
     @Default(.postNormalShowVoting) private var postShowVoting
     @Default(.postNormalShowActions) private var postShowActions
     @Default(.postNormalUseCardStyle) private var postUseCardStyle
@@ -146,62 +146,9 @@ struct PostRowView: View {
                     }
             }
 
-            postFooter
-
-            if showLargeToolbar {
-                HStack(spacing: 20) {
-                    if postShowVoting {
-                        VotingCluster(
-                            post: currentPost,
-                            voteState: $voteState,
-                            displayScore: $displayScore,
-                            isVoting: $isVoting,
-                            onVote: handleVote,
-                            colorScheme: .light,
-                            size: .large
-                        )
-                    }
-
-                    Spacer()
-
-                    if postShowActions {
-                        PostActionToolbar(
-                            post: currentPost,
-                            voteState: $voteState,
-                            displayScore: $displayScore,
-                            isVoting: $isVoting,
-                            savedState: $savedState,
-                            onVote: handleVote,
-                            onReply: { showingPostReply = true },
-                            onShare: handleShare,
-                            onSave: handleSave,
-                            onCopyLink: handleCopyLink,
-                            onOpenOriginal: handleOpenOriginal,
-                            onDownload: handleDownload,
-                            colorScheme: .light,
-                            size: .large
-                        )
-                    }
-                }
-            } else {
-                if postShowActions {
-                    PostActionToolbar(
-                        post: currentPost,
-                        voteState: $voteState,
-                        displayScore: $displayScore,
-                        isVoting: $isVoting,
-                        savedState: $savedState,
-                        onVote: handleVote,
-                        onReply: { showingPostReply = true },
-                        onShare: handleShare,
-                        onSave: handleSave,
-                        onCopyLink: handleCopyLink,
-                        onOpenOriginal: handleOpenOriginal,
-                        onDownload: handleDownload,
-                        colorScheme: .light,
-                        size: .compact
-                    )
-                }
+            // Only show footer in feed, not in comments page
+            if !showLargeToolbar {
+                postFooter
             }
         }
     }
@@ -565,9 +512,59 @@ struct PostRowView: View {
     }
     
     private var postFooter: some View {
-        HStack(spacing: 8) {
-            InlineToast(isShowing: showingCopiedToast)
+        HStack(alignment: .center, spacing: 8) {
+            // Upvote score pill (tappable toggle)
+            if postShowScore {
+                Pill(action: {
+                    handleVote(voteState == .upvoted ? .neutral : .upvoted)
+                }, size: .regular) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up")
+                            .font(.callout)
+                        Text(scoreText)
+                            .appFont(.caption, weight: .medium)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+                    .foregroundStyle(scoreColor)
+                }
+            }
+            
+            // Comment count pill
+            Pill {
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.left")
+                        .font(.callout)
+                    Text(post.commentsText)
+                        .appFont(.caption, weight: .medium)
+                }
+                .foregroundStyle(.secondary)
+            }
+
             Spacer()
+
+            // Voting buttons on the right
+            if postShowVoting {
+                VotingCluster(
+                    post: currentPost,
+                    voteState: $voteState,
+                    displayScore: $displayScore,
+                    isVoting: $isVoting,
+                    onVote: handleVote,
+                    colorScheme: .light,
+                    size: .compact
+                )
+            }
+        }
+    }
+
+    private var scoreText: String {
+        let score = max(0, displayScore)
+        if score >= 1000 {
+            let kScore = Double(score) / 1000.0
+            return String(format: "%.1fk", kScore)
+        } else {
+            return String(score)
         }
     }
     
@@ -576,7 +573,7 @@ struct PostRowView: View {
         switch voteState {
         case .upvoted: return .orange
         case .downvoted: return .blue
-        case .neutral: return .primary
+        case .neutral: return .secondary
         }
     }
     
@@ -680,18 +677,9 @@ struct PostRowView: View {
     
     private func handleCopyLink() {
         UIPasteboard.general.string = post.permalinkURL
-        
-        showingCopiedToast = true
-        
+
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
-        
-        Task {
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            await MainActor.run {
-                showingCopiedToast = false
-            }
-        }
     }
     
     private func handleOpenOriginal() {

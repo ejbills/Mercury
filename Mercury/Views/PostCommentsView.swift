@@ -22,6 +22,16 @@ struct PostCommentsView: View {
     @State private var filteredComments: [RedditComment] = []
     @State private var isSearchLoading: Bool = false
     @State private var searchDebounceTask: Task<Void, Never>? = nil
+    @State private var postVoteState: RedditPost.VoteState
+    @State private var postDisplayScore: Int
+    @State private var postIsVoting: Bool = false
+    @State private var postSavedState: Bool
+    @State private var showingPostReply = false
+    @State private var shareItem: URL?
+    @State private var shareItems: [URL]?
+    @State private var showShareSheet = false
+    @State private var isDownloading = false
+    @State private var downloadProgress: Double = 0.0
     @Default(.postHorizontalPadding) private var postHorizontalPadding
     @Default(.feedBackgroundStyle) private var feedBackgroundStyle
     @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
@@ -31,6 +41,9 @@ struct PostCommentsView: View {
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
             self.targetCommentId = targetCommentId
+            self._postVoteState = State(initialValue: post.currentVoteState)
+            self._postDisplayScore = State(initialValue: post.displayScore)
+            self._postSavedState = State(initialValue: post.saved)
         }
     
     var body: some View {
@@ -70,6 +83,24 @@ struct PostCommentsView: View {
                             allowsNavigation: false
                         )
                     }
+
+                    // Post Action Toolbar - Always visible as separator
+                    PostActionToolbar(
+                        post: post,
+                        voteState: $postVoteState,
+                        displayScore: $postDisplayScore,
+                        isVoting: $postIsVoting,
+                        savedState: $postSavedState,
+                        onVote: handlePostVote,
+                        onReply: { showingPostReply = true },
+                        onShare: handlePostShare,
+                        onSave: handlePostSave,
+                        onCopyLink: handlePostCopyLink,
+                        onOpenOriginal: handlePostOpenOriginal,
+                        onDownload: handlePostDownload,
+                        colorScheme: .light,
+                        size: .large
+                    )
 
                     if targetCommentId != nil {
                         modePicker
@@ -151,6 +182,22 @@ struct PostCommentsView: View {
                     videoHandoffState = handoffState
                 }
             )
+        }
+        .sheet(isPresented: $showingPostReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                onCancel: { showingPostReply = false },
+                onSubmit: { text in
+                    try await submitPostReply(text: text)
+                }
+            )
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let urls = shareItems {
+                MediaShareSheet(post: post, mediaURLs: urls)
+            } else {
+                MediaShareSheet(post: post, mediaURL: shareItem)
+            }
         }
     }
     
@@ -404,6 +451,150 @@ struct PostCommentsView: View {
         guard let targetId = targetCommentId, !targetId.isEmpty else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             proxy.animatedScrollTo(targetId, anchor: .center)
+        }
+    }
+
+    // MARK: - Post Action Handlers
+
+    private func handlePostVote(_ newVoteState: RedditPost.VoteState) {
+        guard !postIsVoting else { return }
+
+        let originalState = postVoteState
+        let originalScore = postDisplayScore
+
+        withAnimation(.bouncy(duration: 0.4)) {
+            let scoreDelta = calculateScoreDelta(from: postVoteState, to: newVoteState)
+            postVoteState = newVoteState
+            postDisplayScore = max(0, postDisplayScore + scoreDelta)
+        }
+
+        postIsVoting = true
+
+        Task {
+            do {
+                let voteDirection: VoteDirection = switch newVoteState {
+                case .upvoted: .upvote
+                case .downvoted: .downvote
+                case .neutral: .neutral
+                }
+
+                try await redditAPI.voteOnPost(postId: post.id, voteDirection: voteDirection)
+
+                await MainActor.run {
+                    postIsVoting = false
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation(.bouncy(duration: 0.4)) {
+                        postVoteState = originalState
+                        postDisplayScore = originalScore
+                    }
+                    postIsVoting = false
+                }
+            }
+        }
+    }
+
+    private func calculateScoreDelta(from oldState: RedditPost.VoteState, to newState: RedditPost.VoteState) -> Int {
+        switch (oldState, newState) {
+        case (.neutral, .upvoted): return 1
+        case (.neutral, .downvoted): return -1
+        case (.upvoted, .neutral): return -1
+        case (.upvoted, .downvoted): return -2
+        case (.downvoted, .neutral): return 1
+        case (.downvoted, .upvoted): return 2
+        default: return 0
+        }
+    }
+
+    private func handlePostShare() {
+        shareItem = nil
+        showShareSheet = true
+    }
+
+    private func handlePostSave() {
+        Task {
+            let originalState = postSavedState
+            await MainActor.run {
+                postSavedState.toggle()
+            }
+
+            do {
+                if originalState {
+                    try await redditAPI.unsavePost(postId: post.id)
+                } else {
+                    try await redditAPI.savePost(postId: post.id)
+                }
+            } catch {
+                print("Save/Unsave error: \(error)")
+                await MainActor.run {
+                    postSavedState = originalState
+                }
+            }
+        }
+    }
+
+    private func handlePostCopyLink() {
+        UIPasteboard.general.string = post.permalinkURL
+
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+    }
+
+    private func handlePostOpenOriginal() {
+        if let urlString = post.url, let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func submitPostReply(text: String) async throws {
+        let parent = post.fullname
+        let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        await MainActor.run {
+            threadManager.addRootComment(created)
+        }
+    }
+
+    private func handlePostDownload() {
+        guard post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery else { return }
+        guard !isDownloading else { return }
+        isDownloading = true
+        Task {
+            defer { isDownloading = false }
+            do {
+                let service = MediaDownloadService()
+                if post.postType == .gallery {
+                    let urls = try await service.downloadAllGalleryImages(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItems = urls
+                        shareItem = nil
+                        showShareSheet = true
+                    }
+                } else {
+                    let fileURL = try await service.download(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItem = fileURL
+                        shareItems = nil
+                        showShareSheet = true
+                    }
+                }
+            } catch {
+                // On failure, do not present share sheet
+            }
         }
     }
 
