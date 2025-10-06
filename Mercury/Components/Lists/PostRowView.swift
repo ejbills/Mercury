@@ -14,16 +14,17 @@ struct PostRowView: View {
     let onVideoHandoff: ((VideoHandoffState) -> Void)?
     var onHidePost: ((String) -> Void)? = nil
     var onHidePostsAbove: ((String) -> Void)? = nil
+    let allowsNavigation: Bool
     @State private var showingSafari = false
     @State private var safariURL: URL? = nil
     @State private var isVoting = false
-    @State private var showingCopiedToast = false
     @State private var shareItem: URL?
     @State private var shareItems: [URL]?
     @State private var isOfflinePlayerPresented = false
     @State private var offlinePlayer: AVPlayer? = nil
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
+    @State private var linkPreviewBlurred = false
     @State private var showShareSheet = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
@@ -43,10 +44,15 @@ struct PostRowView: View {
     // Appearance (Normal mode)
     @Default(.postNormalShowDomain) private var postShowDomain
     @Default(.postNormalShowFlair) private var postShowFlair
+    @Default(.postNormalShowScore) private var postShowScore
+    @Default(.postNormalShowCommentCount) private var postShowCommentCount
     @Default(.postNormalShowVoting) private var postShowVoting
+    @Default(.postNormalVotingPosition) private var postVotingPosition
     @Default(.postNormalShowActions) private var postShowActions
+    @Default(.postNormalUseCardStyle) private var postUseCardStyle
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
 
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, showLargeToolbar: Bool = false, showFullText: Bool = false, onRootReplyPosted: ((RedditComment) -> Void)? = nil, onVideoHandoff: ((VideoHandoffState) -> Void)? = nil, onHidePost: ((String) -> Void)? = nil, onHidePostsAbove: ((String) -> Void)? = nil, allowsNavigation: Bool = true) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
@@ -56,6 +62,7 @@ struct PostRowView: View {
         self.onVideoHandoff = onVideoHandoff
         self.onHidePost = onHidePost
         self.onHidePostsAbove = onHidePostsAbove
+        self.allowsNavigation = allowsNavigation
         self.postType = post.postType
         let isRedditPostLink: Bool = {
             if let u = post.url?.lowercased() {
@@ -111,84 +118,52 @@ struct PostRowView: View {
         return updatedPost
     }
     
-    var body: some View {
-        Card(style: CardStyle.default.withCornerRadius(CGFloat(Defaults[.postNormalCardCornerRadius]))) {
-            VStack(alignment: .leading, spacing: 4) {
-                VStack(alignment: .leading, spacing: 8) {
-                    postHeader
-                    postTitle
-                }
-                
-                if hasMediaOrTextContent {
-                    postMediaContent
-                        .overlay {
-                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
-                                downloadProgressOverlay
-                            }
+    private var resolvedCardStyle: CardStyle {
+        CardStyle.default.withCornerRadius(CGFloat(Defaults[.postNormalCardCornerRadius]))
+    }
+
+    private var nonCardContentInsets: EdgeInsets {
+        EdgeInsets(
+            top: resolvedCardStyle.padding.top,
+            leading: 0,
+            bottom: resolvedCardStyle.padding.bottom,
+            trailing: 0
+        )
+    }
+
+    @ViewBuilder
+    private var postCardBody: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
+                postHeader
+                postTitle
+            }
+
+            if hasMediaOrTextContent {
+                postMediaContent
+                    .overlay {
+                        if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
+                            downloadProgressOverlay
                         }
-                }
-                
+                    }
+            }
+
+            // Only show footer in feed, not in comments page
+            if !showLargeToolbar {
                 postFooter
-                
-                if showLargeToolbar {
-                    HStack(spacing: 20) {
-                        if postShowVoting {
-                            VotingCluster(
-                                post: currentPost,
-                                voteState: $voteState,
-                                displayScore: $displayScore,
-                                isVoting: $isVoting,
-                                onVote: handleVote,
-                                colorScheme: .light,
-                                size: .large
-                            )
-                        }
-
-                        Spacer()
-
-                        if postShowActions {
-                            PostActionToolbar(
-                                post: currentPost,
-                                voteState: $voteState,
-                                displayScore: $displayScore,
-                                isVoting: $isVoting,
-                                savedState: $savedState,
-                                onVote: handleVote,
-                                onReply: { showingPostReply = true },
-                                onShare: handleShare,
-                                onSave: handleSave,
-                                onCopyLink: handleCopyLink,
-                                onOpenOriginal: handleOpenOriginal,
-                                onDownload: handleDownload,
-                                colorScheme: .light,
-                                size: .large
-                            )
-                        }
-                    }
-                } else {
-                    if postShowActions {
-                        PostActionToolbar(
-                            post: currentPost,
-                            voteState: $voteState,
-                            displayScore: $displayScore,
-                            isVoting: $isVoting,
-                            savedState: $savedState,
-                            onVote: handleVote,
-                            onReply: { showingPostReply = true },
-                            onShare: handleShare,
-                            onSave: handleSave,
-                            onCopyLink: handleCopyLink,
-                            onOpenOriginal: handleOpenOriginal,
-                            onDownload: handleDownload,
-                            colorScheme: .light,
-                            size: .compact
-                        )
-                    }
-                }
             }
         }
-        // Use Card's tap handler for reliable navigation on whitespace
-        .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
+    }
+    
+    var body: some View {
+        Group {
+            if postUseCardStyle {
+                cardContainer
+            } else {
+                nonCardContainer
+            }
+        }
+        .padding(.horizontal, CGFloat(postHorizontalPadding))
         // Backwards-compat: if new right actions are unset, fall back to legacy right short/long
         .onAppear {
             if postRightAction1 == .none {
@@ -251,10 +226,10 @@ struct PostRowView: View {
                 action: { await handleSwipeAction(postRightAction4) }
             ) : nil
         )
-        .containerRelativeFrame(.horizontal) { width, _ in
-            width - 32 // 16pt margin on each side
-        }
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .shadow(color: postUseCardStyle ? Color.black.opacity(0.05) : .clear,
+                radius: postUseCardStyle ? 8 : 0,
+                x: 0,
+                y: postUseCardStyle ? 4 : 0)
         .sheet(isPresented: $showShareSheet) {
             if let urls = shareItems {
                 MediaShareSheet(post: post, mediaURLs: urls)
@@ -290,6 +265,41 @@ struct PostRowView: View {
             }
         }
     }
+
+    private func navigateToComments() {
+        navigationPath.navigate(to: .postComments(post: currentPost))
+    }
+
+    @ViewBuilder
+    private var cardContainer: some View {
+        let card = Card(style: resolvedCardStyle) {
+            postCardBody
+        }
+        if allowsNavigation {
+            card
+                .onTap { navigateToComments() }
+        } else {
+            card
+        }
+    }
+
+    @ViewBuilder
+    private var nonCardContainer: some View {
+        let content = VStack(spacing: 0) {
+            Divider()
+            postCardBody
+                .padding(nonCardContentInsets)
+            Divider()
+        }
+        .contentShape(Rectangle())
+
+        if allowsNavigation {
+            content
+                .onTapGesture { navigateToComments() }
+        } else {
+            content
+        }
+    }
     
     private var postHeader: some View {
         PostHeader(post: post, colorScheme: .light)
@@ -307,8 +317,8 @@ struct PostRowView: View {
                 flairBackground: UIColor(flairBackgroundColor),
                 flairTextColor: UIColor(flairTextColor),
                 textColor: UIColor.label,
-                titlePointSize: CGFloat(18) * CGFloat(titleScale),
-                titleWeight: .semibold,
+                titlePointSize: CGFloat(16) * CGFloat(titleScale),
+                titleWeight: .medium,
                 pillPointSize: CGFloat(12) * CGFloat(captionScale),
                 pillWeight: .medium
             )
@@ -473,6 +483,7 @@ struct PostRowView: View {
                         }
                     }
                 }
+                .sensitiveContentBlurred(post: post, contentType: .link, isBlurred: $linkPreviewBlurred)
             } else {
                 RichArticleCard(
                     url: urlString,
@@ -483,6 +494,7 @@ struct PostRowView: View {
                     let normalized = URLNormalizer.normalizeRedditURL(urlString)
                     if let url = URL(string: normalized) { safariURL = url }
                 }
+                .sensitiveContentBlurred(post: post, contentType: .link, isBlurred: $linkPreviewBlurred)
             }
         }
     }
@@ -507,9 +519,82 @@ struct PostRowView: View {
     }
     
     private var postFooter: some View {
-        HStack(spacing: 8) {
-            InlineToast(isShowing: showingCopiedToast)
-            Spacer()
+        HStack(alignment: .center, spacing: 8) {
+            // Left side - voting buttons if positioned left
+            if postShowVoting && postVotingPosition == .left {
+                VotingCluster(
+                    post: currentPost,
+                    voteState: $voteState,
+                    displayScore: $displayScore,
+                    isVoting: $isVoting,
+                    onVote: handleVote,
+                    colorScheme: .light,
+                    size: .compact
+                )
+            }
+
+            // If voting is on left, push score/comment pills to the right
+            if postVotingPosition == .left {
+                Spacer()
+            }
+
+            // Upvote score pill (tappable toggle)
+            if postShowScore {
+                Pill(action: {
+                    handleVote(voteState == .upvoted ? .neutral : .upvoted)
+                }, size: .regular) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up")
+                            .font(.callout)
+                        Text(scoreText)
+                            .appFont(.caption, weight: .medium)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+                    .foregroundStyle(scoreColor)
+                }
+            }
+
+            // Comment count pill
+            if postShowCommentCount {
+                Pill {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.left")
+                            .font(.callout)
+                        Text(post.commentsText)
+                            .appFont(.caption, weight: .medium)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            // If voting is on right, push them to the right side
+            if postVotingPosition == .right {
+                Spacer()
+            }
+
+            // Right side - voting buttons if positioned right
+            if postShowVoting && postVotingPosition == .right {
+                VotingCluster(
+                    post: currentPost,
+                    voteState: $voteState,
+                    displayScore: $displayScore,
+                    isVoting: $isVoting,
+                    onVote: handleVote,
+                    colorScheme: .light,
+                    size: .compact
+                )
+            }
+        }
+    }
+
+    private var scoreText: String {
+        let score = max(0, displayScore)
+        if score >= 1000 {
+            let kScore = Double(score) / 1000.0
+            return String(format: "%.1fk", kScore)
+        } else {
+            return String(score)
         }
     }
     
@@ -518,7 +603,7 @@ struct PostRowView: View {
         switch voteState {
         case .upvoted: return .orange
         case .downvoted: return .blue
-        case .neutral: return .primary
+        case .neutral: return .secondary
         }
     }
     
@@ -593,6 +678,7 @@ struct PostRowView: View {
     }
     
     private func handleShare() {
+        shareItems = nil // Ensure we use metadata-based share when no downloads are present
         shareItem = nil  // No media file to share
         showShareSheet = true
     }
@@ -621,18 +707,9 @@ struct PostRowView: View {
     
     private func handleCopyLink() {
         UIPasteboard.general.string = post.permalinkURL
-        
-        showingCopiedToast = true
-        
+
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
-        
-        Task {
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            await MainActor.run {
-                showingCopiedToast = false
-            }
-        }
     }
     
     private func handleOpenOriginal() {

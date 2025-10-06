@@ -151,7 +151,10 @@ struct MediaDetailView: View {
                 onOpenOriginal: nil,
                 onDownload: handleDownload,
                 colorScheme: .dark,
-                size: .compact
+                size: .compact,
+                showScore: true,
+                showCommentCount: true,
+                showVoting: true
             )
         }
         .padding(.horizontal, 20)

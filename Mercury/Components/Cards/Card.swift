@@ -78,7 +78,7 @@ struct CardStyle {
     let accentPosition: Alignment
     
     static let `default` = CardStyle(
-        padding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16),
+        padding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12),
         cornerRadius: 16,
         backgroundColor: Color.clear,
         borderColor: .gray.opacity(0.3),
@@ -100,7 +100,7 @@ struct CardStyle {
     )
     
     static let minimal = CardStyle(
-        padding: EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12),
+        padding: EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8),
         cornerRadius: 8,
         backgroundColor: Color.clear,
         borderColor: .gray.opacity(0.2),
@@ -112,7 +112,7 @@ struct CardStyle {
     
     static func withAccent(_ color: Color, width: CGFloat = 3, position: Alignment = .leading) -> CardStyle {
         return CardStyle(
-            padding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16),
+            padding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12),
             cornerRadius: 16,
             backgroundColor: Color.clear,
             borderColor: .gray.opacity(0.3),
@@ -125,14 +125,14 @@ struct CardStyle {
     
     static func comment(depth: Int = 0, accentColor: Color? = nil) -> CardStyle {
         return CardStyle(
-            padding: EdgeInsets(top: depth == 0 ? 16 : 12, leading: 16, bottom: depth == 0 ? 16 : 12, trailing: 16),
+            padding: EdgeInsets(top: depth == 0 ? 12 : 10, leading: 12, bottom: depth == 0 ? 12 : 10, trailing: 12),
             cornerRadius: depth == 0 ? 16 : 12,
             backgroundColor: Color.clear,
             borderColor: .gray.opacity(0.3),
             borderWidth: 0.5,
             // Show accent if provided (OP stripe), regardless of depth
             accentColor: accentColor,
-            accentWidth: 4,
+            accentWidth: 2,
             accentPosition: .leading
         )
     }

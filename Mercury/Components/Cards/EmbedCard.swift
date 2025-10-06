@@ -10,9 +10,10 @@ import SwiftUI
 
 struct EmbedCardMetrics {
     static let cornerRadius: CGFloat = 12
-    static let thumbnailSize: CGFloat = 60
-    static let horizontalPadding: CGFloat = 12
-    static let verticalPadding: CGFloat = 12
+    static let thumbnailWidth: CGFloat = 100
+    static let minHeight: CGFloat = 80
+    static let contentPadding: CGFloat = 12
+    static let contentSpacing: CGFloat = 4
 }
 
 struct EmbedCard<Thumbnail: View>: View {
@@ -43,52 +44,45 @@ struct EmbedCard<Thumbnail: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            thumbnail
-                .frame(width: EmbedCardMetrics.thumbnailSize, height: EmbedCardMetrics.thumbnailSize)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .background(.fill.secondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: EmbedCardMetrics.contentSpacing) {
+                HStack(spacing: 4) {
                     Image(systemName: labelIcon)
-                        .font(.caption)
-                        .foregroundStyle(labelTint)
-                    Text(labelText.uppercased())
                         .font(.caption2)
-                        .fontWeight(.semibold)
                         .foregroundStyle(labelTint)
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
+                    Text(labelText)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .fontWeight(.medium)
+                        .foregroundStyle(labelTint)
+                        .lineLimit(1)
                 }
-                .frame(height: 14)
 
                 Text(title)
-                    .font(.callout)
+                    .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
                 Text(subtitle)
-                    .font(.footnote)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: EmbedCardMetrics.thumbnailSize)
+            .padding(EmbedCardMetrics.contentPadding)
+
+            thumbnail
+                .frame(width: EmbedCardMetrics.thumbnailWidth)
+                .frame(maxHeight: .infinity)
+                .clipped()
         }
-        .padding(.horizontal, EmbedCardMetrics.horizontalPadding)
-        .padding(.vertical, EmbedCardMetrics.verticalPadding)
-        .background(
-            Color(UIColor.secondarySystemBackground),
-            in: RoundedRectangle(cornerRadius: EmbedCardMetrics.cornerRadius, style: .continuous)
-        )
+        .frame(minHeight: EmbedCardMetrics.minHeight)
+        .background(Color(UIColor.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: EmbedCardMetrics.cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: EmbedCardMetrics.cornerRadius, style: .continuous)
-                .stroke(Color(UIColor.separator).opacity(0.25), lineWidth: 0.5)
+                .stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture { onTap() }

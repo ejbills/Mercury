@@ -2,6 +2,8 @@ import SwiftUI
 import Defaults
 
 struct AppearanceSettingsView: View {
+    @Default(.appColorScheme) private var appColorScheme
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
     // Posts
     @Default(.postLayoutStyle) private var postLayoutStyle
     // Normal
@@ -15,7 +17,9 @@ struct AppearanceSettingsView: View {
     @Default(.postNormalShowScore) private var postNormalShowScore
     @Default(.postNormalShowCommentCount) private var postNormalShowCommentCount
     @Default(.postNormalShowVoting) private var postNormalShowVoting
+    @Default(.postNormalVotingPosition) private var postNormalVotingPosition
     @Default(.postNormalShowActions) private var postNormalShowActions
+    @Default(.postNormalUseCardStyle) private var postNormalUseCardStyle
     // Compact
     @Default(.postCompactThumbnailSize) private var postCompactThumbSize
     @Default(.postCompactThumbnailPosition) private var postCompactThumbPosition
@@ -32,6 +36,7 @@ struct AppearanceSettingsView: View {
     @Default(.postCompactShowCommentCount) private var postCompactShowCommentCount
     @Default(.postCompactShowVoting) private var postCompactShowVoting
     @Default(.postCompactShowActions) private var postCompactShowActions
+    @Default(.postCompactUseCardStyle) private var postCompactUseCardStyle
 
     // Comments
     @Default(.commentLayoutStyle) private var commentLayoutStyle
@@ -42,6 +47,7 @@ struct AppearanceSettingsView: View {
     @Default(.commentNormalShowScore) private var commentNormalShowScore
     @Default(.commentNormalShowVoteButtons) private var commentNormalShowVoteButtons
     @Default(.commentNormalShowActions) private var commentNormalShowActions
+    @Default(.commentNormalUseCardStyle) private var commentNormalUseCardStyle
     // Compact
     @Default(.commentCompactShowAuthor) private var commentCompactShowAuthor
     @Default(.commentCompactShowAvatar) private var commentCompactShowAvatar
@@ -49,6 +55,7 @@ struct AppearanceSettingsView: View {
     @Default(.commentCompactShowScore) private var commentCompactShowScore
     @Default(.commentCompactShowVoteButtons) private var commentCompactShowVoteButtons
     @Default(.commentCompactShowActions) private var commentCompactShowActions
+    @Default(.commentCompactUseCardStyle) private var commentCompactUseCardStyle
 
     // Legacy bridging for old toggle
     @Default(.compactMode) private var legacyCompactMode
@@ -62,10 +69,14 @@ struct AppearanceSettingsView: View {
     @State private var expandPostsCompact = false
     @State private var expandCommentsNormal = false
     @State private var expandCommentsCompact = false
+    @State private var migratedHorizontalPadding = false
     // Tuning group state (removed consolidated tuning groups)
     // Tuning
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
     @Default(.feedItemSpacing) private var feedItemSpacing
     @Default(.commentRowVerticalPadding) private var commentRowVerticalPadding
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
+    @Default(.commentHorizontalPadding) private var commentHorizontalPadding
     @Default(.postNormalCardCornerRadius) private var postNormalCorner
     @Default(.postCompactCardCornerRadius) private var postCompactCorner
     @Default(.commentRootCardCornerRadius) private var commentRootCorner
@@ -73,6 +84,39 @@ struct AppearanceSettingsView: View {
 
     var body: some View {
         List {
+            Section("Theme") {
+                Picker("Color Scheme", selection: $appColorScheme) {
+                    ForEach(AppColorSchemePreference.allCases, id: \.self) { scheme in
+                        Text(scheme.displayName).tag(scheme)
+                    }
+                }
+
+                Picker("Feed Background", selection: $feedBackgroundStyle) {
+                    ForEach(FeedBackgroundStyle.allCases, id: \.self) { style in
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(style.resolveColor(custom: customFeedBackgroundColor?.color))
+                                .frame(width: 20, height: 20)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
+                                )
+                            Text(style.displayName)
+                        }
+                        .tag(style)
+                    }
+                }
+
+                if feedBackgroundStyle == .custom {
+                    ColorPicker("Custom Feed Background", selection: Binding(get: {
+                        customFeedBackgroundColor?.color ?? Color(UIColor.systemBackground)
+                    }, set: { newColor in
+                        customFeedBackgroundColor = SerializableColor(color: newColor)
+                    }))
+                    .padding(.vertical, 4)
+                }
+            }
+
             // Post preview
             Section("Post Preview") {
                 VStack(alignment: .leading, spacing: 8) {
@@ -96,7 +140,6 @@ struct AppearanceSettingsView: View {
                         }
                     }
                 }
-                .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color(UIColor.secondarySystemBackground))
@@ -128,13 +171,22 @@ struct AppearanceSettingsView: View {
                     Toggle("Show Score", isOn: $postNormalShowScore)
                     Toggle("Show Comment Count", isOn: $postNormalShowCommentCount)
                     Toggle("Show Upvote/Downvote Buttons", isOn: $postNormalShowVoting)
+                    Picker("Voting Position", selection: $postNormalVotingPosition) {
+                        ForEach(ThumbnailPosition.allCases, id: \.self) { pos in
+                            Text(pos.displayName).tag(pos)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(!postNormalShowVoting)
                     Toggle("Show Action Bar", isOn: $postNormalShowActions)
+                    Toggle("Use Card Styling", isOn: $postNormalUseCardStyle)
                     TuningSliderRow(
                         title: "Card Corner Radius",
                         value: $postNormalCorner,
                         range: 0...30,
                         step: 1
                     )
+                    .disabled(!postNormalUseCardStyle)
                 } label: {
                     Label("Normal Options", systemImage: "rectangle.grid.1x2")
                 }
@@ -164,13 +216,15 @@ struct AppearanceSettingsView: View {
                     Toggle("Show Score", isOn: $postCompactShowScore)
                     Toggle("Show Comment Count", isOn: $postCompactShowCommentCount)
                     Toggle("Show Upvote/Downvote Buttons", isOn: $postCompactShowVoting)
-                    Toggle("Show Action Bar", isOn: $postCompactShowActions)
+                    Toggle("Show Overflow Menu", isOn: $postCompactShowActions)
+                    Toggle("Use Card Styling", isOn: $postCompactUseCardStyle)
                     TuningSliderRow(
                         title: "Card Corner Radius",
                         value: $postCompactCorner,
                         range: 0...30,
                         step: 1
                     )
+                    .disabled(!postCompactUseCardStyle)
                 } label: {
                     Label("Compact Options", systemImage: "square.grid.3x2")
                 }
@@ -218,18 +272,21 @@ struct AppearanceSettingsView: View {
                     Toggle("Show Score", isOn: $commentNormalShowScore)
                     Toggle("Show Upvote/Downvote Buttons", isOn: $commentNormalShowVoteButtons)
                     Toggle("Show Action Buttons", isOn: $commentNormalShowActions)
+                    Toggle("Use Card Styling", isOn: $commentNormalUseCardStyle)
                     TuningSliderRow(
                         title: "Root Card Corner",
                         value: $commentRootCorner,
                         range: 0...30,
                         step: 1
                     )
+                    .disabled(!commentNormalUseCardStyle)
                     TuningSliderRow(
                         title: "Child Card Corner",
                         value: $commentChildCorner,
                         range: 0...30,
                         step: 1
                     )
+                    .disabled(!commentNormalUseCardStyle)
                 } label: {
                     Label("Normal Options", systemImage: "text.bubble")
                 }
@@ -241,18 +298,21 @@ struct AppearanceSettingsView: View {
                     Toggle("Show Score", isOn: $commentCompactShowScore)
                     Toggle("Show Upvote/Downvote Buttons", isOn: $commentCompactShowVoteButtons)
                     Toggle("Show Action Buttons", isOn: $commentCompactShowActions)
+                    Toggle("Use Card Styling", isOn: $commentCompactUseCardStyle)
                     TuningSliderRow(
                         title: "Root Card Corner",
                         value: $commentRootCorner,
                         range: 0...30,
                         step: 1
                     )
+                    .disabled(!commentCompactUseCardStyle)
                     TuningSliderRow(
                         title: "Child Card Corner",
                         value: $commentChildCorner,
                         range: 0...30,
                         step: 1
                     )
+                    .disabled(!commentCompactUseCardStyle)
                 } label: {
                     Label("Compact Options", systemImage: "text.bubble.fill")
                 }
@@ -267,9 +327,21 @@ struct AppearanceSettingsView: View {
                     step: 1
                 )
                 TuningSliderRow(
+                    title: "Post Horizontal Padding",
+                    value: $postHorizontalPadding,
+                    range: 0...32,
+                    step: 1
+                )
+                TuningSliderRow(
                     title: "Comment Spacing",
                     value: $commentRowVerticalPadding,
                     range: 0...12,
+                    step: 1
+                )
+                TuningSliderRow(
+                    title: "Comment Horizontal Padding",
+                    value: $commentHorizontalPadding,
+                    range: 0...32,
                     step: 1
                 )
             }
@@ -289,11 +361,13 @@ struct AppearanceSettingsView: View {
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
         .listStyle(.insetGrouped)
+        .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
         .onAppear {
             // Initialize from legacy compact toggle if user had set it
             if legacyCompactMode, postLayoutStyle == .normal {
                 postLayoutStyle = .compact
             }
+            migrateHorizontalPaddingIfNeeded()
         }
         .alert("Reset Appearance?", isPresented: $showingResetConfirm) {
             Button("Cancel", role: .cancel) {}
@@ -386,7 +460,9 @@ private extension AppearanceSettingsView {
         Defaults[.postNormalShowScore] = true
         Defaults[.postNormalShowCommentCount] = true
         Defaults[.postNormalShowVoting] = true
+        Defaults[.postNormalVotingPosition] = .right
         Defaults[.postNormalShowActions] = true
+        Defaults[.postNormalUseCardStyle] = true
         // Compact
         Defaults[.postCompactThumbnailSize] = .medium
         Defaults[.postCompactShowThumbnail] = true
@@ -403,6 +479,7 @@ private extension AppearanceSettingsView {
         Defaults[.postCompactShowCommentCount] = true
         Defaults[.postCompactShowVoting] = true
         Defaults[.postCompactShowActions] = true
+        Defaults[.postCompactUseCardStyle] = true
 
         // Comments
         Defaults[.commentLayoutStyle] = .normal
@@ -413,6 +490,7 @@ private extension AppearanceSettingsView {
         Defaults[.commentNormalShowScore] = true
         Defaults[.commentNormalShowVoteButtons] = true
         Defaults[.commentNormalShowActions] = true
+        Defaults[.commentNormalUseCardStyle] = true
         // Compact
         Defaults[.commentCompactShowAuthor] = true
         Defaults[.commentCompactShowAvatar] = true
@@ -420,16 +498,37 @@ private extension AppearanceSettingsView {
         Defaults[.commentCompactShowScore] = true
         Defaults[.commentCompactShowVoteButtons] = true
         Defaults[.commentCompactShowActions] = true
+        Defaults[.commentCompactUseCardStyle] = true
 
         // Legacy bridge
         Defaults[.compactMode] = false
 
         // Tuning defaults
         Defaults[.feedItemSpacing] = 8
+        Defaults[.postHorizontalPadding] = 12
+        Defaults[.commentHorizontalPadding] = 12
         Defaults[.commentRowVerticalPadding] = 4
         Defaults[.postNormalCardCornerRadius] = 16
         Defaults[.postCompactCardCornerRadius] = 8
         Defaults[.commentRootCardCornerRadius] = 16
         Defaults[.commentChildCardCornerRadius] = 12
+        Defaults[.appColorScheme] = .system
+        Defaults[.feedBackgroundStyle] = .system
+        Defaults[.customFeedBackgroundColor] = nil
+    }
+
+    func migrateHorizontalPaddingIfNeeded() {
+        guard !migratedHorizontalPadding else { return }
+        migratedHorizontalPadding = true
+
+        let legacyValue = Defaults[.feedHorizontalPadding]
+        let defaultHorizontal: Double = 12
+
+        if Defaults[.postHorizontalPadding] == defaultHorizontal {
+            Defaults[.postHorizontalPadding] = legacyValue
+        }
+        if Defaults[.commentHorizontalPadding] == defaultHorizontal {
+            Defaults[.commentHorizontalPadding] = legacyValue
+        }
     }
 }

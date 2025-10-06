@@ -49,7 +49,7 @@ struct MultiRedditRow: View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
                 .fill(LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing))
-            Image(systemName: "rectangle.3.group.fill")
+            Image(systemName: "plus.rectangle.on.rectangle")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
         }

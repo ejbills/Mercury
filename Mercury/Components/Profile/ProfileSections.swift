@@ -12,15 +12,19 @@ struct ProfilePostsSection: View {
     let onRefresh: () async -> Void
     let onLoadMore: () async -> Void
     @Default(.feedItemSpacing) private var feedItemSpacing
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
     
     var body: some View {
         Group {
             if isLoading && posts.isEmpty {
                 ProfileLoadingState(text: "Loading posts…")
+                    .padding(.horizontal, CGFloat(postHorizontalPadding))
             } else if let errorMessage, posts.isEmpty {
                 ProfileErrorState(message: errorMessage, retry: { Task { await onRefresh() } })
+                    .padding(.horizontal, CGFloat(postHorizontalPadding))
             } else if posts.isEmpty {
                 ProfileEmptyState(title: "No Posts", message: "This user hasn't posted yet.")
+                    .padding(.horizontal, CGFloat(postHorizontalPadding))
             } else {
                 LazyVStack(spacing: CGFloat(feedItemSpacing)) {
                     ForEach(posts) { post in
@@ -53,10 +57,10 @@ struct ProfilePostsSection: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, 12)
+                    .padding(.horizontal, CGFloat(postHorizontalPadding))
                 }
             }
         }
-        .padding(.horizontal, 12)
         .padding(.bottom, 24)
         .padding(.top, 12)
     }
@@ -76,18 +80,23 @@ struct ProfileCommentsSection: View {
     
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
+    @Default(.commentHorizontalPadding) private var commentHorizontalPadding
     @Default(.commentLayoutStyle) private var commentLayoutStyle
-    
+
     var body: some View {
         Group {
             if isLoading && comments.isEmpty {
                 ProfileLoadingState(text: "Loading comments…")
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if let errorMessage, comments.isEmpty {
                 ProfileErrorState(message: errorMessage, retry: { Task { await onRefresh() } })
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if comments.isEmpty {
                 ProfileEmptyState(title: "No Comments", message: "This user hasn't commented yet.")
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if !commentsContextReady {
                 ProfileLoadingState(text: "Preparing comments…")
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else {
                 LazyVStack(spacing: 8) {
                     ForEach(comments, id: \.self) { comment in
@@ -99,11 +108,7 @@ struct ProfileCommentsSection: View {
                                     CommentView(comment: comment, depth: 0, post: post) { } onReplyPosted: { _ in }
                                 }
                             }
-                            .allowsHitTesting(false)
-                            .environment(\.redditAPI, redditAPI)
-                            .environment(\.navigationPathManager, navigationPath)
-                            .contentShape(Rectangle())
-                            .onTapGesture { onCommentTap(post) }
+                            .padding(.horizontal, CGFloat(commentHorizontalPadding))
                         }
                     }
                 }
@@ -124,10 +129,10 @@ struct ProfileCommentsSection: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, 12)
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
                 }
             }
         }
-        .padding(.horizontal, 12)
         .padding(.bottom, 24)
         .padding(.top, 12)
     }

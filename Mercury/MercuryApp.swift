@@ -1,9 +1,12 @@
 import SwiftUI
 import Nuke
 import AVFoundation
+import Defaults
 
 @main
 struct MercuryApp: App {
+    @Default(.appColorScheme) private var appColorScheme
+
     init() {
         // Configure Nuke pipeline once for the entire app
         ImagePipelineService.configureSharedPipeline()
@@ -13,6 +16,7 @@ struct MercuryApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(appColorScheme.colorScheme)
         }
         .handlesExternalEvents(matching: ["mercury"])
     }

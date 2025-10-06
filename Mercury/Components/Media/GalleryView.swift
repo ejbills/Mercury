@@ -102,7 +102,7 @@ struct SimpleGalleryView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .matchedTransitionSource(id: mediaId, in: namespace)
-        .nsfwBlurred(post: post, contentType: .gallery, isBlurred: $isBlurred)
+        .sensitiveContentBlurred(post: post, contentType: .gallery, isBlurred: $isBlurred)
     }
     
     private var galleryBadge: some View {

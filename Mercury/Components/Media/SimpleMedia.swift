@@ -81,7 +81,7 @@ struct SimpleImageView: View {
                 selectedPost = post
             }
             .matchedTransitionSource(id: mediaId, in: namespace)
-            .nsfwBlurred(post: post, contentType: .image, isBlurred: $isBlurred)
+            .sensitiveContentBlurred(post: post, contentType: .image, isBlurred: $isBlurred)
     }
 }
 
@@ -128,7 +128,7 @@ struct SimpleGifView: View {
             .contentShape(Rectangle())
             .onTapGesture { selectedPost = post }
             .matchedTransitionSource(id: mediaId, in: namespace)
-            .nsfwBlurred(post: post, contentType: .gif, isBlurred: $isBlurred)
+            .sensitiveContentBlurred(post: post, contentType: .gif, isBlurred: $isBlurred)
     }
 }
 
@@ -223,7 +223,7 @@ struct SimpleVideoView: View {
             .contentShape(Rectangle())
             .onTapGesture { handleTap() }
             .matchedTransitionSource(id: mediaId, in: namespace)
-            .nsfwBlurred(post: post, contentType: .video, isBlurred: $isBlurred)
+            .sensitiveContentBlurred(post: post, contentType: .video, isBlurred: $isBlurred)
             .onChange(of: resumeFromState) { _, _ in }
             .onDisappear {
                 // Ensure audio never bleeds when navigating away

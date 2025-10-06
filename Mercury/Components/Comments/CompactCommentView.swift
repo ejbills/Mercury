@@ -34,6 +34,7 @@ struct CompactCommentView: View {
     @Default(.commentCompactShowScore) private var commentShowScore
     @Default(.commentCompactShowVoteButtons) private var commentShowVoteButtons
     @Default(.commentCompactShowActions) private var commentShowActions
+    @Default(.commentCompactUseCardStyle) private var commentUseCardStyle
     // Right-side swipe actions (compact comments)
     @Default(.commentRightSwipeAction1) private var commentRightAction1
     @Default(.commentRightSwipeAction2) private var commentRightAction2
@@ -52,147 +53,28 @@ struct CompactCommentView: View {
     }
     
     var body: some View {
-        Card(
-            style: CardStyle.comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil)))
-                .withCornerRadius(CGFloat(depth == 0 ? Defaults[.commentRootCardCornerRadius] : Defaults[.commentChildCardCornerRadius])),
-            highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
-        ) {
-            HStack(alignment: .top, spacing: 8) {
-                // Compact vote controls on the left (hidden when collapsed)
-                if !isCollapsed && commentShowVoteButtons {
-                    VStack(spacing: 2) {
-                        VoteButton(
-                            direction: .up,
-                            isActive: voteState == .upvoted,
-                            size: .small,
-                            colorScheme: .light,
-                            disabled: isVoting || !comment.canVote
-                        ) {
-                            handleVote(.upvoted)
-                        }
-                        
-                        // Score moved to header toolbar in compact mode
-                        
-                        VoteButton(
-                            direction: .down,
-                            isActive: voteState == .downvoted,
-                            size: .small,
-                            colorScheme: .light,
-                            disabled: isVoting || !comment.canVote
-                        ) {
-                            handleVote(.downvoted)
-                        }
-                    }
-                    .frame(width: 32)
+        Group {
+            if commentUseCardStyle {
+                Card(style: resolvedCardStyle, highlightColor: highlightColor) {
+                    commentLayout
                 }
-                
-                // Main content area
-                VStack(alignment: .leading, spacing: 4) {
-                    // Compact header - single line with author and meta
-                    HStack(spacing: 6) {
-                        // Author with badges
-                        if commentShowAuthor {
-                            HStack(spacing: 4) {
-                                if commentShowAvatar { UserAvatar(username: comment.author, size: 16) }
-                                
-                                Text(isDeletedUser ? "[deleted]" : comment.author)
-                                    .appFont(.caption, weight: .medium)
-                                    .foregroundStyle(authorColor)
-                                    .lineLimit(1)
-                                
-                                if comment.isSubmitter {
-                                    Text("OP")
-                                        .appFont(.small, weight: .bold)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 3)
-                                        .padding(.vertical, 1)
-                                        .background(.blue, in: Capsule())
-                                }
-                            }
-                            Text("•").appFont(.small).foregroundStyle(.tertiary)
-                        }
-                        
-                        if commentShowTime {
-                            Text(comment.timeAgo)
-                                .appFont(.small)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            Text("•").appFont(.small).foregroundStyle(.tertiary)
+            } else {
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack(alignment: .top, spacing: 0) {
+                        if let accentColor, resolvedCardStyle.accentWidth > 0 {
+                            Rectangle()
+                                .fill(accentColor)
+                                .frame(width: resolvedCardStyle.accentWidth)
                         }
 
-                        if commentShowScore && !comment.scoreHidden {
-                            Text(scoreText)
-                                .appFont(.caption, weight: .semibold)
-                                .foregroundStyle(scoreColor)
-                                .monospacedDigit()
-                                .lineLimit(1)
-                        }
-                        
-                        Spacer()
-
-                        // Inline actions in header
-                        if !isCollapsed && commentShowActions {
-                            Button(action: { showingReply = true }) {
-                                Image(systemName: "arrowshape.turn.up.left")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-
-                            Menu {
-                                Button(action: { handleSave() }) {
-                                    Label(comment.saved ? "Unsave" : "Save",
-                                          systemImage: comment.saved ? "bookmark.fill" : "bookmark")
-                                }
-                                if canDeleteComment {
-                                    Button(role: .destructive, action: { showingDeleteConfirm = true }) {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        // Collapse button
-                        Button(action: {
-                            withAnimation(.snappy(duration: 0.125)) {
-                                onCollapseToggle()
-                            }
-                        }) {
-                            Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 12, height: 12)
-                        }
-                        .buttonStyle(.plain)
+                        commentLayout
+                            .padding(nonCardContentInsets)
+                            .background(alignment: .leading) { nonCardBackground }
                     }
-                    
-                    // Comment body - compact mode
-                    if !isCollapsed {
-                        Group {
-                            if wasDeleted || comment.body == "[deleted]" || comment.body == "[removed]" {
-                                Text("[deleted]")
-                                    .appFont(.caption)
-                                    .italic()
-                                    .foregroundStyle(.tertiary)
-                            } else {
-                                MarkdownRenderer(content: comment.body, compactMode: false)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.primary)
-                                    .lineSpacing(1)
-                                    .multilineTextAlignment(.leading)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                        // Actions moved inline with header in compact mode
-                    }
+                    Divider()
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -238,7 +120,185 @@ struct CompactCommentView: View {
     }
     
     // MARK: - Helper Properties
-    
+
+    @ViewBuilder
+    private var commentLayout: some View {
+        HStack(alignment: .top, spacing: 8) {
+            if !isCollapsed && commentShowVoteButtons {
+                VStack(spacing: 2) {
+                    VoteButton(
+                        direction: .up,
+                        isActive: voteState == .upvoted,
+                        size: .small,
+                        colorScheme: .light,
+                        disabled: isVoting || !comment.canVote
+                    ) {
+                        handleVote(.upvoted)
+                    }
+
+                    VoteButton(
+                        direction: .down,
+                        isActive: voteState == .downvoted,
+                        size: .small,
+                        colorScheme: .light,
+                        disabled: isVoting || !comment.canVote
+                    ) {
+                        handleVote(.downvoted)
+                    }
+                }
+                .frame(width: 32)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                headerRow
+
+                if !isCollapsed {
+                    bodyContent
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var headerRow: some View {
+        HStack(spacing: 6) {
+            if commentShowAuthor {
+                HStack(spacing: 4) {
+                    if commentShowAvatar { UserAvatar(username: comment.author, size: 16) }
+
+                    Text(isDeletedUser ? "[deleted]" : comment.author)
+                        .appFont(.caption, weight: .medium)
+                        .foregroundStyle(authorColor)
+                        .lineLimit(1)
+
+                    if comment.isSubmitter {
+                        Text("OP")
+                            .appFont(.small, weight: .bold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(.blue, in: Capsule())
+                    }
+                }
+                Text("•").appFont(.small).foregroundStyle(.tertiary)
+            }
+
+            if commentShowTime {
+                Text(comment.timeAgo)
+                    .appFont(.small)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text("•").appFont(.small).foregroundStyle(.tertiary)
+            }
+
+            if commentShowScore && !comment.scoreHidden {
+                Text(scoreText)
+                    .appFont(.caption, weight: .semibold)
+                    .foregroundStyle(scoreColor)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if !isCollapsed && commentShowActions {
+                Button(action: { showingReply = true }) {
+                    Image(systemName: "arrowshape.turn.up.left")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                Menu {
+                    Button(action: { handleSave() }) {
+                        Label(comment.saved ? "Unsave" : "Save",
+                              systemImage: comment.saved ? "bookmark.fill" : "bookmark")
+                    }
+                    if canDeleteComment {
+                        Button(role: .destructive, action: { showingDeleteConfirm = true }) {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button(action: {
+                withAnimation(.snappy(duration: 0.125)) {
+                    onCollapseToggle()
+                }
+            }) {
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12, height: 12)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var bodyContent: some View {
+        if wasDeleted || comment.body == "[deleted]" || comment.body == "[removed]" {
+            Text("[deleted]")
+                .appFont(.caption)
+                .italic()
+                .foregroundStyle(.tertiary)
+        } else {
+            MarkdownRenderer(content: comment.body, compactMode: false)
+                .appFont(.caption)
+                .foregroundStyle(.primary)
+                .lineSpacing(1)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var resolvedCardStyle: CardStyle {
+        CardStyle.comment(depth: depth, accentColor: accentColor)
+            .withCornerRadius(nonCardCornerRadius)
+    }
+
+    private var accentColor: Color? {
+        if comment.isSubmitter {
+            return .accentColor
+        } else if depth > 0 {
+            return depthColor
+        }
+        return nil
+    }
+
+    private var highlightColor: Color? {
+        comment.stickied ? Color.green.opacity(0.10) : nil
+    }
+
+    private var nonCardCornerRadius: CGFloat {
+        CGFloat(depth == 0 ? Defaults[.commentRootCardCornerRadius] : Defaults[.commentChildCardCornerRadius])
+    }
+
+    private var nonCardContentInsets: EdgeInsets {
+        EdgeInsets(
+            top: resolvedCardStyle.padding.top,
+            leading: 0,
+            bottom: resolvedCardStyle.padding.bottom,
+            trailing: 0
+        )
+    }
+
+    @ViewBuilder
+    private var nonCardBackground: some View {
+        if commentUseCardStyle, let highlightColor {
+            RoundedRectangle(cornerRadius: nonCardCornerRadius, style: .continuous)
+                .fill(highlightColor)
+        }
+    }
+
+
     private var depthColor: Color {
         let threadColors: [Color] = [.blue, .orange, .green, .purple, .pink, .cyan, .mint, .yellow]
         if depth == 0 {

@@ -21,17 +21,14 @@ struct TextSizeSettingsView: View {
             Section("Preview") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Post Title Preview")
-                        .font(.system(size: 20 * previewTitleScale, weight: .semibold))
+                        .font(.system(size: 16 * previewTitleScale, weight: .semibold))
                         .lineLimit(2)
                     Text("By u/someverylongusernamethatshouldtruncate in r/averylongsubredditname")
-                        .font(.system(size: 15 * previewCaptionScale))
+                        .font(.system(size: 12 * previewCaptionScale))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Text("Body text preview. This scales independently from iOS Accessibility sizes to prevent layout overflow.")
-                        .font(.system(size: 17 * previewBodyScale))
-                    Text("Caption preview")
-                        .font(.system(size: 12 * previewCaptionScale))
-                        .foregroundStyle(.secondary)
+                    Text("The quick brown fox jumped over the lazy dog.")
+                        .font(.system(size: 16 * previewBodyScale))
                 }
                 .padding(.vertical, 8)
                 .frame(height: 220) // lock layout so sliders don't shift while dragging
@@ -72,12 +69,6 @@ struct TextSizeSettingsView: View {
                         .appFont(.caption)
                 }
             }
-
-            Section(footer:
-                        Text("These sizes are applied within the app and do not modify your device's Accessibility text size settings.")
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-            ) { EmptyView() }
         }
         .navigationTitle("Text Size")
         .toolbar {

@@ -33,9 +33,12 @@ struct SubredditFeedView: View {
     @State private var searchHasMore = true
     @State private var searchDebounceTask: Task<Void, Never>? = nil
     @State private var showingPostComposer = false
-    
+
     private let pageSize = 25
     @Default(.feedItemSpacing) private var feedItemSpacing
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
     
     var body: some View {
         let base = isSearching ? searchResults : posts
@@ -50,11 +53,14 @@ struct SubredditFeedView: View {
                     
                     if (isSearching ? searchResults.isEmpty : posts.isEmpty) && (isSearching ? isSearchLoading : isLoading) {
                         skeletonLoadingView
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                     } else if !isSearching && posts.isEmpty && errorMessage != nil && !isLoading {
                         errorView
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                             .padding(.top, 100)
                     } else if (!isSearching && posts.isEmpty) || (isSearching && searchResults.isEmpty && !isSearchLoading) {
                         emptyStateView
+                            .padding(.horizontal, CGFloat(postHorizontalPadding))
                             .padding(.top, 100)
                     } else {
                         ForEach(visiblePosts) { post in
@@ -105,15 +111,27 @@ struct SubredditFeedView: View {
                             }
                         
                         if isSearching {
-                            if searchHasMore { searchLoadMoreSection } else if !searchResults.isEmpty { endOfFeedView }
+                            if searchHasMore {
+                                searchLoadMoreSection
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            } else if !searchResults.isEmpty {
+                                endOfFeedView
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            }
                         } else {
-                            if hasMore { loadMoreSection } else { endOfFeedView }
+                            if hasMore {
+                                loadMoreSection
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            } else {
+                                endOfFeedView
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            }
                         }
                     }
                 }
-                .padding(.horizontal, 12)
                 .padding(.top, 6)
             }
+            .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
             .scrollPosition(id: $scrollPosition)
             
             .onAppear {
@@ -127,7 +145,7 @@ struct SubredditFeedView: View {
             }
         }
         .navigationTitle(subredditDisplayName)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $feedSearchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search \(subredditDisplayName)")
         .onChange(of: feedSearchText) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -207,7 +225,7 @@ struct SubredditFeedView: View {
         }
         // confirmationDialogs removed; Menu anchored to toolbar button handles sorting
     }
-    
+
     private var subredditDisplayName: String {
         if subreddit == "popular" {
             return "Popular"
@@ -533,7 +551,7 @@ struct SubredditFeedView: View {
         isSearchLoading = true
         await performInFeedSearch(reset: false)
     }
-    
+
     private func fetchPosts(after: String?) async throws -> PostResponse {
         let s = subreddit.lowercased()
         switch s {

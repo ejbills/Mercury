@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct PostCommentsView: View {
     let post: RedditPost
@@ -21,36 +22,121 @@ struct PostCommentsView: View {
     @State private var filteredComments: [RedditComment] = []
     @State private var isSearchLoading: Bool = false
     @State private var searchDebounceTask: Task<Void, Never>? = nil
+    @State private var postVoteState: RedditPost.VoteState
+    @State private var postDisplayScore: Int
+    @State private var postIsVoting: Bool = false
+    @State private var postSavedState: Bool
+    @State private var showingPostReply = false
+    @State private var shareItem: URL?
+    @State private var shareItems: [URL]?
+    @State private var showShareSheet = false
+    @State private var isDownloading = false
+    @State private var downloadProgress: Double = 0.0
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
+    @Default(.feedBackgroundStyle) private var feedBackgroundStyle
+    @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
+    @Default(.commentHorizontalPadding) private var commentHorizontalPadding
+    @Default(.postLayoutStyle) private var postLayoutStyle
+    @Default(.postNormalShowActions) private var postNormalShowActions
+    @Default(.postNormalShowScore) private var postNormalShowScore
+    @Default(.postNormalShowCommentCount) private var postNormalShowCommentCount
+    @Default(.postNormalShowVoting) private var postNormalShowVoting
+    @Default(.postCompactShowActions) private var postCompactShowActions
+    @Default(.postCompactShowScore) private var postCompactShowScore
+    @Default(.postCompactShowCommentCount) private var postCompactShowCommentCount
+    @Default(.postCompactShowVoting) private var postCompactShowVoting
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
             self.targetCommentId = targetCommentId
+            self._postVoteState = State(initialValue: post.currentVoteState)
+            self._postDisplayScore = State(initialValue: post.displayScore)
+            self._postSavedState = State(initialValue: post.saved)
         }
     
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                        PostRowView(
-                        post: post, 
-                        namespace: mediaNamespace, 
-                        selectedPost: $selectedPost,
-                        showLargeToolbar: true,
-                        showFullText: true,
-                        onRootReplyPosted: { newComment in
-                            threadManager.addRootComment(newComment)
-                        },
-                        onVideoHandoff: { handoffState in
-                            videoHandoffState = handoffState
-                        },
-                    )
-                        if targetCommentId != nil { modePicker }
-                        commentsSection(proxy: proxy)
+                    if postLayoutStyle == .compact {
+                        VStack(alignment: .leading, spacing: 8) {
+                            CompactPostRowView(
+                                post: post,
+                                namespace: mediaNamespace,
+                                selectedPost: $selectedPost,
+                                onRootReplyPosted: { newComment in
+                                    threadManager.addRootComment(newComment)
+                                },
+                                allowsNavigation: false
+                            )
+                            .overlay {
+                                if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
+                                    downloadProgressOverlay
+                                }
+                            }
 
+                            if let bodyText = post.selftext, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
+                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                            }
+                        }
+                    } else {
+                        PostRowView(
+                            post: post,
+                            namespace: mediaNamespace,
+                            selectedPost: $selectedPost,
+                            showLargeToolbar: true,
+                            showFullText: true,
+                            onRootReplyPosted: { newComment in
+                                threadManager.addRootComment(newComment)
+                            },
+                            onVideoHandoff: { handoffState in
+                                videoHandoffState = handoffState
+                            },
+                            allowsNavigation: false
+                        )
+                        .overlay {
+                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
+                                downloadProgressOverlay
+                            }
+                        }
                     }
+
+                    // Post Action Toolbar
+                    if (postLayoutStyle == .normal && postNormalShowActions) || (postLayoutStyle == .compact && postCompactShowActions) {
+                        PostActionToolbar(
+                            post: post,
+                            voteState: $postVoteState,
+                            displayScore: $postDisplayScore,
+                            isVoting: $postIsVoting,
+                            savedState: $postSavedState,
+                            onVote: handlePostVote,
+                            onReply: { showingPostReply = true },
+                            onShare: handlePostShare,
+                            onSave: handlePostSave,
+                            onCopyLink: handlePostCopyLink,
+                            onOpenOriginal: handlePostOpenOriginal,
+                            onDownload: handlePostDownload,
+                            colorScheme: .light,
+                            size: .large,
+                            showScore: postLayoutStyle == .normal ? postNormalShowScore : postCompactShowScore,
+                            showCommentCount: postLayoutStyle == .normal ? postNormalShowCommentCount : postCompactShowCommentCount,
+                            showVoting: postLayoutStyle == .normal ? postNormalShowVoting : postCompactShowVoting
+                        )
+                    }
+
+                    if targetCommentId != nil {
+                        modePicker
+                            .padding(.horizontal, CGFloat(commentHorizontalPadding))
+                    }
+
+                    commentsSection(proxy: proxy)
+
+                }
                 .padding(.top, 8)
                 .padding(.bottom, 20)
             }
+            .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
             .onChange(of: threadManager.commentThreads.count) { _, _ in
                 scrollToTargetIfNeeded(proxy: proxy)
             }
@@ -120,6 +206,22 @@ struct PostCommentsView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingPostReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                onCancel: { showingPostReply = false },
+                onSubmit: { text in
+                    try await submitPostReply(text: text)
+                }
+            )
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let urls = shareItems {
+                MediaShareSheet(post: post, mediaURLs: urls)
+            } else {
+                MediaShareSheet(post: post, mediaURL: shareItem)
+            }
+        }
     }
     
     
@@ -127,9 +229,11 @@ struct PostCommentsView: View {
         Group {
             if (isSearching && isSearchLoading) {
                 loadingView
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if isSearching {
                 if filteredComments.isEmpty {
                     emptyCommentsView
+                        .padding(.horizontal, CGFloat(commentHorizontalPadding))
                 } else {
                     VStack(spacing: 8) {
                         ForEach(filteredComments, id: \.id) { c in
@@ -139,16 +243,19 @@ struct PostCommentsView: View {
                                 post: post,
                                 onReplyPosted: { _ in }
                             )
-                            .padding(.horizontal, 16)
                         }
                     }
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
                 }
             } else if isLoading && threadManager.commentThreads.isEmpty {
                 loadingView
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if let errorMessage = errorMessage, threadManager.commentThreads.isEmpty {
                 errorView(message: errorMessage)
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else if threadManager.commentThreads.isEmpty {
                 emptyCommentsView
+                    .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else {
                 commentsListView(proxy: proxy)
             }
@@ -156,51 +263,50 @@ struct PostCommentsView: View {
     }
     
     private var modePicker: some View {
-            HStack(spacing: 8) {
-                Pill(action: {
-                    guard !singleThreadMode else { return }
-                    singleThreadMode = true
-                    Task { await loadComments() }
-                }, size: .regular) {
-                    HStack(spacing: 6) {
-                        Image(systemName: singleThreadMode ? "checkmark.circle.fill" : "text.bubble")
-                            .foregroundStyle(singleThreadMode ? .blue : .secondary)
-                        Text("Single comment thread")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
+        HStack(spacing: 8) {
+            Pill(action: {
+                guard !singleThreadMode else { return }
+                singleThreadMode = true
+                Task { await loadComments() }
+            }, size: .regular) {
+                HStack(spacing: 6) {
+                    Image(systemName: singleThreadMode ? "checkmark.circle.fill" : "text.bubble")
+                        .foregroundStyle(singleThreadMode ? .blue : .secondary)
+                    Text("Single comment thread")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                 }
-                
-                Pill(action: {
-                    guard singleThreadMode else { return }
-                    singleThreadMode = false
-                    Task { await loadComments() }
-                }, size: .regular) {
-                    HStack(spacing: 6) {
-                        Image(systemName: !singleThreadMode ? "checkmark.circle.fill" : "text.bubble.fill")
-                            .foregroundStyle(!singleThreadMode ? .blue : .secondary)
-                        Text("See full discussion")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
+
+            Pill(action: {
+                guard singleThreadMode else { return }
+                singleThreadMode = false
+                Task { await loadComments() }
+            }, size: .regular) {
+                HStack(spacing: 6) {
+                    Image(systemName: !singleThreadMode ? "checkmark.circle.fill" : "text.bubble.fill")
+                        .foregroundStyle(!singleThreadMode ? .blue : .secondary)
+                    Text("See full discussion")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+            }
+            Spacer(minLength: 0)
+        }
         }
     
     private func commentsListView(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
-            
+
             CommentThreadView(
                 comments: allComments,
                 post: post,
                 sort: commentSort,
-                scrollProxy: proxy,
+                scrollProxy: proxy
             )
-            .padding(.horizontal, 16)
-            
+            .padding(.horizontal, CGFloat(commentHorizontalPadding))
+
             if !threadManager.moreObjects.isEmpty {
                 LazyVStack(spacing: 8) {
                     ForEach(threadManager.moreObjects, id: \.id) { more in
@@ -240,9 +346,9 @@ struct PostCommentsView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 16)
                     }
                 }
+                .padding(.horizontal, CGFloat(commentHorizontalPadding))
             }
         }
     }
@@ -283,7 +389,7 @@ struct PostCommentsView: View {
             .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, CGFloat(commentHorizontalPadding))
         .padding(.top, 60)
     }
     
@@ -303,7 +409,7 @@ struct PostCommentsView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, CGFloat(commentHorizontalPadding))
         .padding(.top, 60)
     }
     
@@ -369,6 +475,183 @@ struct PostCommentsView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             proxy.animatedScrollTo(targetId, anchor: .center)
         }
+    }
+
+    // MARK: - Post Action Handlers
+
+    private func handlePostVote(_ newVoteState: RedditPost.VoteState) {
+        guard !postIsVoting else { return }
+
+        let originalState = postVoteState
+        let originalScore = postDisplayScore
+
+        withAnimation(.bouncy(duration: 0.4)) {
+            let scoreDelta = calculateScoreDelta(from: postVoteState, to: newVoteState)
+            postVoteState = newVoteState
+            postDisplayScore = max(0, postDisplayScore + scoreDelta)
+        }
+
+        postIsVoting = true
+
+        Task {
+            do {
+                let voteDirection: VoteDirection = switch newVoteState {
+                case .upvoted: .upvote
+                case .downvoted: .downvote
+                case .neutral: .neutral
+                }
+
+                try await redditAPI.voteOnPost(postId: post.id, voteDirection: voteDirection)
+
+                await MainActor.run {
+                    postIsVoting = false
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation(.bouncy(duration: 0.4)) {
+                        postVoteState = originalState
+                        postDisplayScore = originalScore
+                    }
+                    postIsVoting = false
+                }
+            }
+        }
+    }
+
+    private func calculateScoreDelta(from oldState: RedditPost.VoteState, to newState: RedditPost.VoteState) -> Int {
+        switch (oldState, newState) {
+        case (.neutral, .upvoted): return 1
+        case (.neutral, .downvoted): return -1
+        case (.upvoted, .neutral): return -1
+        case (.upvoted, .downvoted): return -2
+        case (.downvoted, .neutral): return 1
+        case (.downvoted, .upvoted): return 2
+        default: return 0
+        }
+    }
+
+    private func handlePostShare() {
+        shareItem = nil
+        showShareSheet = true
+    }
+
+    private func handlePostSave() {
+        Task {
+            let originalState = postSavedState
+            await MainActor.run {
+                postSavedState.toggle()
+            }
+
+            do {
+                if originalState {
+                    try await redditAPI.unsavePost(postId: post.id)
+                } else {
+                    try await redditAPI.savePost(postId: post.id)
+                }
+            } catch {
+                print("Save/Unsave error: \(error)")
+                await MainActor.run {
+                    postSavedState = originalState
+                }
+            }
+        }
+    }
+
+    private func handlePostCopyLink() {
+        UIPasteboard.general.string = post.permalinkURL
+
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+    }
+
+    private func handlePostOpenOriginal() {
+        if let urlString = post.url, let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func submitPostReply(text: String) async throws {
+        let parent = post.fullname
+        let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        await MainActor.run {
+            threadManager.addRootComment(created)
+        }
+    }
+
+    private func handlePostDownload() {
+        guard post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery else { return }
+        guard !isDownloading else { return }
+        isDownloading = true
+        Task {
+            defer { isDownloading = false }
+            do {
+                let service = MediaDownloadService()
+                if post.postType == .gallery {
+                    let urls = try await service.downloadAllGalleryImages(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItems = urls
+                        shareItem = nil
+                        showShareSheet = true
+                    }
+                } else {
+                    let fileURL = try await service.download(post: post, options: .init(
+                        preferredFilename: post.id,
+                        onProgress: { progress in
+                            Task { @MainActor in
+                                downloadProgress = progress
+                            }
+                        }
+                    ))
+                    await MainActor.run {
+                        shareItem = fileURL
+                        shareItems = nil
+                        showShareSheet = true
+                    }
+                }
+            } catch {
+                // On failure, do not present share sheet
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var downloadProgressOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+
+            VStack(spacing: 16) {
+                ProgressView(value: downloadProgress)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                    .frame(width: 200)
+
+                VStack(spacing: 4) {
+                    let downloadText = switch post.postType {
+                    case .video: "Downloading Video"
+                    case .youtube: "Opening YouTube"
+                    case .gif: "Downloading GIF"
+                    case .image: "Downloading Image"
+                    case .gallery: "Downloading Gallery"
+                    default: "Downloading"
+                    }
+
+                    Text(downloadText)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: downloadProgress)
     }
 
     // MARK: - Search Expansion

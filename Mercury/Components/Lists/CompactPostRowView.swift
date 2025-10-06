@@ -18,12 +18,12 @@ struct CompactPostRowView: View {
     @Binding var selectedPost: RedditPost?
     @State private var showingSafari = false
     @State private var isVoting = false
-    @State private var showingCopiedToast = false
     @State private var shareItem: URL?
     @State private var isOfflinePlayerPresented = false
     @State private var offlinePlayer: AVPlayer? = nil
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
+    @State private var compactThumbnailBlurred = false
     @State private var showShareSheet = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
@@ -32,6 +32,7 @@ struct CompactPostRowView: View {
     @Environment(\.navigationPathManager) private var navigationPath
     var onRootReplyPosted: ((RedditComment) -> Void)? = nil
     // no-op
+    let allowsNavigation: Bool
     @Default(.titleTextScale) private var titleScale
     @Default(.captionTextScale) private var captionScale
     // Appearance (Compact)
@@ -50,17 +51,20 @@ struct CompactPostRowView: View {
     @Default(.postCompactShowVoting) private var postShowVoting
     @Default(.postCompactThumbnailPosition) private var postThumbPosition
     @Default(.postCompactShowActions) private var postShowActions
+    @Default(.postCompactUseCardStyle) private var postUseCardStyle
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
     // Right-side swipe actions (compact)
     @Default(.postRightSwipeAction1) private var postRightAction1
     @Default(.postRightSwipeAction2) private var postRightAction2
     @Default(.postRightSwipeAction3) private var postRightAction3
     @Default(.postRightSwipeAction4) private var postRightAction4
     
-    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil) {
+    init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil, allowsNavigation: Bool = true) {
         self.post = post
         self.namespace = namespace
         self._selectedPost = selectedPost
         self.onRootReplyPosted = onRootReplyPosted
+        self.allowsNavigation = allowsNavigation
         self.postType = post.postType
         // Detect reddit post links (crossposts/embedded posts) regardless of thumbnail
         let isRedditPostLink: Bool = {
@@ -111,24 +115,61 @@ struct CompactPostRowView: View {
         updatedPost.displayScore = displayScore
         return updatedPost
     }
-    
-    var body: some View {
-        Card(style: CardStyle.minimal.withCornerRadius(CGFloat(Defaults[.postCompactCardCornerRadius]))) {
-            HStack(alignment: .top, spacing: 10) {
-                if postThumbPosition == .left {
-                    // Thumbnail on left, votes/ellipsis on right
-                    if shouldShowCompactThumbnail { thumbnailColumn }
-                    contentColumn
-                    if postShowVoting { votingColumn }
-                } else {
-                    // Thumbnail on right, votes/ellipsis on left
-                    if postShowVoting { votingColumn }
-                    contentColumn
-                    if shouldShowCompactThumbnail { thumbnailColumn }
-                }
+
+    private var compactSensitiveContentType: SensitiveContentOverlay.ContentType {
+        switch postType {
+        case .text:
+            return .text
+        case .image:
+            return .image
+        case .gif:
+            return .gif
+        case .video, .youtube:
+            return .video
+        case .gallery:
+            return .gallery
+        case .link:
+            return .link
+        }
+    }
+
+    private var resolvedCardStyle: CardStyle {
+        CardStyle.minimal.withCornerRadius(CGFloat(Defaults[.postCompactCardCornerRadius]))
+    }
+
+    private var nonCardContentInsets: EdgeInsets {
+        EdgeInsets(
+            top: resolvedCardStyle.padding.top,
+            leading: 0,
+            bottom: resolvedCardStyle.padding.bottom,
+            trailing: 0
+        )
+    }
+
+    @ViewBuilder
+    private var compactRowBody: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if postThumbPosition == .left {
+                if shouldShowCompactThumbnail { thumbnailColumn }
+                contentColumn
+                if postShowVoting { votingColumn }
+            } else {
+                if postShowVoting { votingColumn }
+                contentColumn
+                if shouldShowCompactThumbnail { thumbnailColumn }
             }
         }
-        .onTap { navigationPath.navigate(to: .postComments(post: currentPost)) }
+    }
+    
+    var body: some View {
+        Group {
+            if postUseCardStyle {
+                cardContainer
+            } else {
+                nonCardContainer
+            }
+        }
+        .padding(.horizontal, CGFloat(postHorizontalPadding))
         .customSwipeGesture(
             right1: postRightAction1 != .none ? SwipeAction(
                 type: postRightAction1,
@@ -170,6 +211,41 @@ struct CompactPostRowView: View {
                     .onAppear { player.play() }
                     .ignoresSafeArea()
             }
+        }
+    }
+
+    private func navigateToComments() {
+        navigationPath.navigate(to: .postComments(post: currentPost))
+    }
+
+    @ViewBuilder
+    private var cardContainer: some View {
+        let card = Card(style: resolvedCardStyle) {
+            compactRowBody
+        }
+        if allowsNavigation {
+            card
+                .onTap { navigateToComments() }
+        } else {
+            card
+        }
+    }
+
+    @ViewBuilder
+    private var nonCardContainer: some View {
+        let content = VStack(spacing: 0) {
+            Divider()
+            compactRowBody
+                .padding(nonCardContentInsets)
+            Divider()
+        }
+        .contentShape(Rectangle())
+
+        if allowsNavigation {
+            content
+                .onTapGesture { navigateToComments() }
+        } else {
+            content
         }
     }
     
@@ -322,29 +398,6 @@ struct CompactPostRowView: View {
             ) { handleVote(.downvoted) }
 
             Spacer(minLength: 0)
-
-            // Ellipsis menu (hide when actions are disabled)
-            if postShowActions {
-                Menu {
-                    Button(action: { handleSave() }) {
-                        Label(post.saved ? "Unsave" : "Save",
-                              systemImage: post.saved ? "bookmark.fill" : "bookmark")
-                    }
-                    Button(action: { handleShare() }) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    Button(action: { handleCopyLink() }) {
-                        Label("Copy Link", systemImage: "link")
-                    }
-                    if shouldShowOpenOriginal {
-                        Button(action: { handleOpenOriginal() }) {
-                            Label("Open Original", systemImage: "arrow.up.right.square")
-                        }
-                    }
-                } label: {
-                    GlassMenuLabel(systemImage: "ellipsis", foreground: .secondary, font: .caption)
-                }
-            }
         }
         .frame(width: 28)
     }
@@ -352,7 +405,7 @@ struct CompactPostRowView: View {
     private var contentColumn: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Meta + inline score
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if postShowSubreddit {
                     // Subreddit + icon
                     HStack(spacing: 4) {
@@ -364,7 +417,6 @@ struct CompactPostRowView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    Text("•").appFont(.small).foregroundStyle(.tertiary)
                 }
 
                 if postShowAuthor {
@@ -376,7 +428,6 @@ struct CompactPostRowView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    Text("•").appFont(.small).foregroundStyle(.tertiary)
                 }
 
                 if postShowTime {
@@ -384,22 +435,35 @@ struct CompactPostRowView: View {
                         .appFont(.small)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    Text("•").appFont(.small).foregroundStyle(.tertiary)
                 }
 
                 if postShowScore {
-                    Button(action: { handleVote(.upvoted) }) {
-                        Text(scoreText)
-                            .appFont(.small, weight: .semibold)
-                            .foregroundStyle(scoreColor)
-                            .monospacedDigit()
-                            .lineLimit(1)
+                    Pill(action: {
+                        handleVote(voteState == .upvoted ? .neutral : .upvoted)
+                    }, size: .small) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up")
+                                .font(.caption2)
+                            Text(scoreText)
+                                .appFont(.small, weight: .semibold)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(scoreColor)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 Spacer(minLength: 0)
+
+                if postShowCommentCount {
+                    commentBadge
+                }
+
+                if postShowActions {
+                    overflowMenu
+                }
             }
+            .lineLimit(1)
 
             // Inline title + pills via UIKit-backed label for robust wrapping
             InlineTitleLabel(
@@ -423,6 +487,39 @@ struct CompactPostRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var commentBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "bubble.left")
+                .font(.caption2)
+            Text("\(post.numComments)")
+                .font(.caption2)
+                .fontWeight(.medium)
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    private var overflowMenu: some View {
+        Menu {
+            Button(action: { handleSave() }) {
+                Label(post.saved ? "Unsave" : "Save",
+                      systemImage: post.saved ? "bookmark.fill" : "bookmark")
+            }
+            Button(action: { handleShare() }) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(action: { handleCopyLink() }) {
+                Label("Copy Link", systemImage: "link")
+            }
+            if shouldShowOpenOriginal {
+                Button(action: { handleOpenOriginal() }) {
+                    Label("Open Original", systemImage: "arrow.up.right.square")
+                }
+            }
+        } label: {
+            GlassMenuLabel(systemImage: "ellipsis", foreground: .secondary, font: .caption)
+        }
+    }
+
     private var thumbnailColumn: some View {
         VStack(spacing: 4) {
             if shouldShowCompactThumbnail {
@@ -430,24 +527,9 @@ struct CompactPostRowView: View {
                     .frame(width: postThumbSize.dimension, height: postThumbSize.dimension)
                     .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                     .overlay(alignment: .center) { mediaBadge }
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .sensitiveContentBlurred(post: post, contentType: compactSensitiveContentType, isBlurred: $compactThumbnailBlurred, cornerRadius: 8)
                     .contentShape(RoundedRectangle(cornerRadius: 8))
                     .highPriorityGesture(TapGesture().onEnded { handleThumbnailTap() })
-            }
-
-            if postShowActions && postShowCommentCount {
-            
-                    Pill(size: .small) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bubble.left")
-                                .font(.caption2)
-                            Text("\(post.numComments)")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                
             }
         }
     }
@@ -566,7 +648,9 @@ struct CompactPostRowView: View {
         case .link:
             showingSafari = true
         case .text:
-            navigationPath.navigate(to: .postComments(post: currentPost))
+            if allowsNavigation {
+                navigationPath.navigate(to: .postComments(post: currentPost))
+            }
         }
     }
     
@@ -656,21 +740,9 @@ struct CompactPostRowView: View {
     
     private func handleCopyLink() {
         UIPasteboard.general.string = post.permalinkURL
-        
-        // Show toast feedback
-        showingCopiedToast = true
-        
-        // Provide haptic feedback
+
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
-        
-        // Hide toast after delay
-        Task {
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            await MainActor.run {
-                showingCopiedToast = false
-            }
-        }
     }
     
     private func handleOpenOriginal() {

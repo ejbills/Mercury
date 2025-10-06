@@ -36,6 +36,7 @@ struct CommentView: View {
     @Default(.commentNormalShowScore) private var commentShowScore
     @Default(.commentNormalShowVoteButtons) private var commentShowVoteButtons
     @Default(.commentNormalShowActions) private var commentShowActions
+    @Default(.commentNormalUseCardStyle) private var commentUseCardStyle
 
     init(comment: RedditComment, depth: Int, post: RedditPost, isCollapsed: Bool = false, onCollapseToggle: @escaping () -> Void = {}, onCollapseParent: @escaping () -> Void = {}, onScrollToParent: @escaping () -> Void = {}, onReplyPosted: @escaping (RedditComment) -> Void = { _ in }) {
         self.comment = comment
@@ -52,21 +53,30 @@ struct CommentView: View {
     }
     
     var body: some View {
-        Card(
-                style: CardStyle.comment(depth: depth, accentColor: (comment.isSubmitter ? Color.accentColor : (depth > 0 ? depthColor : nil)))
-                    .withCornerRadius(CGFloat(depth == 0 ? Defaults[.commentRootCardCornerRadius] : Defaults[.commentChildCardCornerRadius])),
-                highlightColor: comment.stickied ? Color.green.opacity(0.10) : nil
-            ) {
-                VStack(alignment: .leading, spacing: 8) {
-                    commentHeader
-                    
-                    if !isCollapsed {
-                        commentBody
-                        commentActions
-                    }
+        Group {
+            if commentUseCardStyle {
+                Card(style: resolvedCardStyle, highlightColor: highlightColor) {
+                    commentContent
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack(alignment: .top, spacing: 0) {
+                        if let accentColor, resolvedCardStyle.accentWidth > 0 {
+                            Rectangle()
+                                .fill(accentColor)
+                                .frame(width: resolvedCardStyle.accentWidth)
+                        }
+
+                        commentContent
+                            .padding(nonCardContentInsets)
+                            .background(alignment: .leading) { nonCardBackground }
+                    }
+                    Divider()
+                }
             }
+        }
+        .contentShape(Rectangle())
         .onAppear {
             // Backwards-compat: fall back to legacy right short/long if new slots are empty
             if commentRightAction1 == .none {
@@ -239,12 +249,10 @@ struct CommentView: View {
                         }
                     }
                 } label: {
-                    Pill(size: .small) {
                         Image(systemName: "ellipsis")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .frame(width: 14, height: 14)
-                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -282,9 +290,62 @@ struct CommentView: View {
             .presentationDragIndicator(.visible)
         }
     }
-    
+
     // MARK: - Helper Properties
-    
+
+    @ViewBuilder
+    private var commentContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            commentHeader
+
+            if !isCollapsed {
+                commentBody
+                commentActions
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var resolvedCardStyle: CardStyle {
+        CardStyle.comment(depth: depth, accentColor: accentColor)
+            .withCornerRadius(nonCardCornerRadius)
+    }
+
+    private var accentColor: Color? {
+        if comment.isSubmitter {
+            return .accentColor
+        } else if depth > 0 {
+            return depthColor
+        }
+        return nil
+    }
+
+    private var highlightColor: Color? {
+        comment.stickied ? Color.green.opacity(0.10) : nil
+    }
+
+    private var nonCardCornerRadius: CGFloat {
+        CGFloat(depth == 0 ? Defaults[.commentRootCardCornerRadius] : Defaults[.commentChildCardCornerRadius])
+    }
+
+    private var nonCardContentInsets: EdgeInsets {
+        EdgeInsets(
+            top: resolvedCardStyle.padding.top,
+            leading: 0,
+            bottom: resolvedCardStyle.padding.bottom,
+            trailing: 0
+        )
+    }
+
+    @ViewBuilder
+    private var nonCardBackground: some View {
+        if commentUseCardStyle, let highlightColor {
+            RoundedRectangle(cornerRadius: nonCardCornerRadius, style: .continuous)
+                .fill(highlightColor)
+        }
+    }
+
+
     private var depthColor: Color {
         let threadColors: [Color] = [.blue, .orange, .green, .purple, .pink, .cyan, .mint, .yellow]
         if depth == 0 {

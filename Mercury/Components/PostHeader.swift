@@ -43,17 +43,17 @@ struct PostHeader: View {
                 }) {
                     HStack(alignment: .center, spacing: 6) {
                         if postShowAvatar { UserAvatar(username: post.author, size: 16, iconURL: post.authorIconURL) }
-                        if postShowTime {
-                            Text(post.timeAgo)
-                                .appFont(.small)
-                                .foregroundStyle(colorScheme.tertiaryTextColor)
-                        }
                         if postShowAuthor {
                             Text(post.author)
                                 .foregroundStyle(colorScheme.secondaryTextColor)
                                 .appFont(.caption)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
+                        }
+                        if postShowTime {
+                            Text(post.timeAgo)
+                                .appFont(.small)
+                                .foregroundStyle(colorScheme.tertiaryTextColor)
                         }
                     }
                 }
