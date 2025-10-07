@@ -72,7 +72,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         }
     }
     
-    private func saveCredentials() {
+    private func saveCredentials(shouldUpsertAccount: Bool = true) {
         Defaults[.clientId] = clientId
         Defaults[.accessToken] = accessToken
         Defaults[.refreshToken] = refreshToken
@@ -82,7 +82,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         Defaults[.lastLoginDate] = Date()
 
         // Persist multi-account info if available
-        if let user = userInfo, let rt = refreshToken {
+        if shouldUpsertAccount, let user = userInfo, let rt = refreshToken {
             upsertStoredAccount(username: user.name, refreshToken: rt)
             Defaults[.storedAccounts] = storedAccounts
             Defaults[.activeUsername] = user.name
@@ -300,11 +300,11 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             }
             return
         }
-        
+
         if isAccessTokenExpired(), let _ = refreshToken {
             _ = await refreshAccessToken()
         }
-        
+
         var request = URLRequest(url: url)
         request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
@@ -341,9 +341,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            
+
             let user = try decoder.decode(RedditUser.self, from: data)
-            
+
             await MainActor.run {
                 self.userInfo = user
                 self.apiStatus = .valid
@@ -388,11 +388,19 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     @discardableResult
     func refreshAccessToken() async -> Bool {
         // Prevent concurrent refresh attempts
-        guard !isRefreshingToken else { return false }
+        guard !isRefreshingToken else {
+            return false
+        }
+
         let useClientId = pendingClientId ?? clientId
         let useRefreshToken = pendingRefreshToken ?? refreshToken
-        guard let refreshToken = useRefreshToken, !useClientId.isEmpty else { return false }
-        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else { return false }
+
+        guard let refreshToken = useRefreshToken, !useClientId.isEmpty else {
+            return false
+        }
+        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else {
+            return false
+        }
         
         await MainActor.run {
             self.isRefreshingToken = true
@@ -441,18 +449,36 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
+
+                // Check if we're in an account switch scenario
+                let isSwitching = self.pendingRefreshToken != nil || self.pendingClientId != nil
+
+                // Apply pending tokens first (account switch scenario)
+                if let p = self.pendingClientId {
+                    self.clientId = p
+                    Defaults[.clientId] = p
+                }
+
+                if let pr = self.pendingRefreshToken {
+                    self.refreshToken = pr
+                    Defaults[.refreshToken] = pr
+                }
+
+                // Then apply new refresh token from response if provided
                 if let newRT = tokenResponse.refreshToken {
                     self.refreshToken = newRT
+                    Defaults[.refreshToken] = newRT
                 }
+
                 self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
-                if let p = self.pendingClientId { self.clientId = p; Defaults[.clientId] = p }
-                if let pr = self.pendingRefreshToken { self.refreshToken = pr; Defaults[.refreshToken] = pr }
                 self.pendingClientId = nil
                 self.pendingRefreshToken = nil
                 self.refreshRetryCount = 0 // Reset retry count on success
                 self.apiStatus = .valid
                 self.errorMessage = nil
-                self.saveCredentials()
+
+                // Don't upsert account during switch - wait until fetchUserInfo completes
+                self.saveCredentials(shouldUpsertAccount: !isSwitching)
                 self.scheduleTokenRefreshIfNeeded()
             }
             return true
@@ -543,7 +569,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     }
 
     func switchToAccount(username: String) async {
-        guard let acct = storedAccounts.first(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) else { return }
+        guard let acct = storedAccounts.first(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) else {
+            return
+        }
 
         await MainActor.run {
             // Stage pending values and mark active account; do not clear current session
@@ -554,6 +582,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         }
 
         let refreshed = await refreshAccessToken()
+
         if refreshed {
             await fetchUserInfo()
         }

@@ -46,13 +46,29 @@ class RedditAPIManager {
     // MARK: - Multi-account exposure
     var storedAccounts: [StoredAccount] { authService.storedAccounts }
     var activeUsername: String? { authService.activeUsername }
-    
+
     func switchToAccount(username: String) async {
+        // Clear caches before switching accounts
+        clearSubredditCaches()
         await authService.switchToAccount(username: username)
     }
-    
+
     func removeAccount(username: String) {
         authService.removeAccount(username: username)
+    }
+
+    // MARK: - Cache Management
+
+    func clearSubredditCaches() {
+        subredditCache = nil
+        subredditCacheDate = nil
+        multiCache = nil
+        multiCacheDate = nil
+        Defaults[.cachedSubscribedSubredditsData] = nil
+        Defaults[.cachedSubscribedSubredditsDate] = nil
+        Defaults[.cachedUserMultiredditsData] = nil
+        Defaults[.cachedUserMultiredditsDate] = nil
+        Defaults[.cachedUserMultiredditsUsername] = nil
     }
     
     // MARK: - Initialization

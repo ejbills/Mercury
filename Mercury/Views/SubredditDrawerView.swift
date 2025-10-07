@@ -40,13 +40,18 @@ struct SubredditDrawerView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var hasInitiallyLoaded = false
-    @Default(.favoriteSubreddits) private var favoriteSubreddits
     @Default(.defaultHomeFeed) private var defaultHomeFeed
+    @Default(.favoriteSubreddits) private var favoriteSubreddits
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var showingMultiEditor = false
     @State private var editingMulti: MultiReddit? = nil
     @State private var lastNavigatedDefaultFeed: String? = nil
     @State private var showingDefaultFeedPicker = false
+    @State private var lastLoadedUsername: String? = nil
+
+    private var activeUsername: String? {
+        apiService.activeUsername
+    }
     
     var body: some View {
         Group {
@@ -91,7 +96,17 @@ struct SubredditDrawerView: View {
                 await loadSubredditsInitially()
             }
         }
-        .onAppear { navigateToDefaultFeedIfNeeded() }
+        .onAppear {
+            navigateToDefaultFeedIfNeeded()
+            // Check if account changed while view was not visible
+            if lastLoadedUsername != apiService.activeUsername {
+                // Clear UI state and reload
+                subreddits = []
+                multis = []
+                lastLoadedUsername = apiService.activeUsername
+                Task { await reloadSubredditsForAccountSwitch() }
+            }
+        }
         .onChange(of: defaultHomeFeed) { _, _ in
             navigateToDefaultFeedIfNeeded()
         }
@@ -102,14 +117,6 @@ struct SubredditDrawerView: View {
                         showingDefaultFeedPicker = true
                     } label: {
                         Label("Choose Default Feed", systemImage: "house.fill")
-                    }
-                    
-                    if defaultHomeFeed != nil {
-                        Button(role: .destructive) {
-                            clearDefaultHomeFeed()
-                        } label: {
-                            Label("Clear Default Feed", systemImage: "house.slash")
-                        }
                     }
 
                     Divider()
@@ -319,9 +326,38 @@ struct SubredditDrawerView: View {
         await MainActor.run {
             isLoading = true
             errorMessage = nil
+            lastLoadedUsername = activeUsername
         }
 
-        // Try cached first (fast) for both subs and multis, then refresh in background
+        // Try cached first (fast) for both subs and multis
+        let hasCachedData = await loadCachedData()
+
+        // Always refresh in background to ensure fresh data, regardless of cache
+        do {
+            async let refreshedSubs = apiService.fetchSubscribedSubredditsCached(forceRefresh: true)
+            async let refreshedMultis = apiService.fetchUserMultiredditsCached(forceRefresh: true)
+            let (subs, ms) = try await (refreshedSubs, refreshedMultis)
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    self.subreddits = subs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                    self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                }
+                self.isLoading = false
+                self.hasInitiallyLoaded = true
+            }
+        } catch {
+            await MainActor.run {
+                // Only show error if we also have no cached data
+                if !hasCachedData {
+                    self.errorMessage = error.localizedDescription
+                }
+                self.isLoading = false
+                self.hasInitiallyLoaded = true
+            }
+        }
+    }
+
+    private func loadCachedData() async -> Bool {
         do {
             async let cachedSubs = apiService.fetchSubscribedSubredditsCached(forceRefresh: false)
             async let cachedMultis = apiService.fetchUserMultiredditsCached(forceRefresh: false)
@@ -332,28 +368,36 @@ struct SubredditDrawerView: View {
                     self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
                 }
                 self.isLoading = false
-                self.hasInitiallyLoaded = true
             }
+            return true
         } catch {
-            // Ignore, we'll still try network below
+            return false
+        }
+    }
+
+    private func reloadSubredditsForAccountSwitch() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+            lastLoadedUsername = activeUsername
         }
 
-        // Refresh subreddits (only if we didn't have cache) and load multis in parallel
-        async let refreshedSubs: [Subreddit]? = self.subreddits.isEmpty ? (try? await apiService.fetchSubscribedSubredditsCached(forceRefresh: true)) : nil
-        async let userMultis: [MultiReddit]? = (self.multis.isEmpty) ? (try? await apiService.fetchUserMultiredditsCached(forceRefresh: true)) : nil
-
-        let (subs, ms) = await (refreshedSubs, userMultis)
-        await MainActor.run {
-            withAnimation(.easeInOut(duration: 0.18)) {
-                if let subs = subs {
+        do {
+            async let fetchedSubreddits = apiService.fetchSubscribedSubredditsCached(forceRefresh: true)
+            async let fetchedMultis = apiService.fetchUserMultiredditsCached(forceRefresh: true)
+            let (subs, ms) = try await (fetchedSubreddits, fetchedMultis)
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.18)) {
                     self.subreddits = subs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
-                }
-                if let ms = ms {
                     self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
                 }
+                self.isLoading = false
             }
-            self.isLoading = false
-            self.hasInitiallyLoaded = true
+        } catch {
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
         }
     }
 
@@ -382,12 +426,6 @@ struct SubredditDrawerView: View {
         guard !trimmed.isEmpty else { return }
         defaultHomeFeed = trimmed
         Task { @MainActor in HapticManager.shared.success() }
-    }
-
-    private func clearDefaultHomeFeed() {
-        defaultHomeFeed = nil
-        lastNavigatedDefaultFeed = nil
-        Task { @MainActor in HapticManager.shared.gentleImpact() }
     }
 
     private func displayName(for value: String) -> String? {
@@ -447,7 +485,7 @@ struct SubredditDrawerView: View {
             isLoading = true
             errorMessage = nil
         }
-        
+
         do {
             async let fetchedSubreddits = apiService.fetchSubscribedSubredditsCached(forceRefresh: true)
             async let fetchedMultis = apiService.fetchUserMultiredditsCached(forceRefresh: true)
@@ -515,6 +553,8 @@ private struct DefaultFeedPickerView: View {
     let currentSelection: String?
     let username: String?
     let onSelect: (String) -> Void
+    
+    @Default(.defaultHomeFeed) private var defaultHomeFeed
 
     @Environment(\.dismiss) private var dismiss
 
@@ -593,6 +633,15 @@ private struct DefaultFeedPickerView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+
+                if currentSelection != nil {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button("Clear") {
+                            clearDefaultHomeFeed()
+                            dismiss()
+                        }
+                    }
+                }
             }
         }
     }
@@ -621,6 +670,11 @@ private struct DefaultFeedPickerView: View {
 
     private func quickLinkValue(_ link: QuickLink) -> String {
         link.endpoint.isEmpty ? "home" : link.endpoint
+    }
+    
+    private func clearDefaultHomeFeed() {
+        defaultHomeFeed = nil
+        Task { @MainActor in HapticManager.shared.gentleImpact() }
     }
 }
 

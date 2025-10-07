@@ -8,8 +8,8 @@ struct MainTabView: View {
     @State private var profileNavigationPath = NavigationPathManager()
     @State private var settingsNavigationPath = NavigationPathManager()
     @State private var searchText: String = ""
-    
-    
+
+
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
@@ -97,7 +97,7 @@ struct MainTabView: View {
                         Image(systemName: "house.fill")
                         Text("Home")
                     }
-                    
+
                     NavigationStack(path: $inboxNavigationPath.path) {
                         InboxView(apiService: apiService)
                             .environment(\.navigationPathManager, inboxNavigationPath)
@@ -109,7 +109,7 @@ struct MainTabView: View {
                         Image(systemName: "envelope.fill")
                         Text("Inbox")
                     }
-                    
+
                     NavigationStack(path: $profileNavigationPath.path) {
                         Group {
                             if let username = apiService.userInfo?.name, !username.isEmpty {

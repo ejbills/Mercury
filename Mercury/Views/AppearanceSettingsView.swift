@@ -323,7 +323,7 @@ struct AppearanceSettingsView: View {
                 TuningSliderRow(
                     title: "Post Spacing",
                     value: $feedItemSpacing,
-                    range: 0...24,
+                    range: 0...32,
                     step: 1
                 )
                 TuningSliderRow(
@@ -335,7 +335,7 @@ struct AppearanceSettingsView: View {
                 TuningSliderRow(
                     title: "Comment Spacing",
                     value: $commentRowVerticalPadding,
-                    range: 0...12,
+                    range: 0...32,
                     step: 1
                 )
                 TuningSliderRow(

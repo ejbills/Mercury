@@ -1,32 +1,29 @@
 import SwiftUI
 
-struct MultiAccountSheet: View {
-    @Binding var isPresented: Bool
+struct MultiAccountView: View {
     @Environment(\.redditAPI) private var redditAPI
-    @State private var isSwitching = false
+    @State private var switchingUsername: String? = nil
     @State private var error: String?
     @State private var newClientId: String = ""
     @State private var showingCopiedFeedback = false
+    @State private var showingOAuthSheet = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                accountsSection
-                addAccountSection
-                quickLinksSection
-            }
-            .navigationTitle("Accounts")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { isPresented = false }
-                }
-            }
-            .alert("Couldn't switch account", isPresented: .constant(error != nil)) {
-                Button("OK") { error = nil }
-            } message: {
-                Text(error ?? "Unknown error")
-            }
+        Form {
+            accountsSection
+            addAccountSection
+            quickLinksSection
+            setupInstructionsSection
+        }
+        .navigationTitle("Accounts")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Couldn't switch account", isPresented: .constant(error != nil)) {
+            Button("OK") { error = nil }
+        } message: {
+            Text(error ?? "Unknown error")
+        }
+        .overlay(alignment: .top) {
+            CopiedToast(isShowing: showingCopiedFeedback)
         }
     }
 
@@ -47,29 +44,33 @@ struct MultiAccountSheet: View {
 
     private var addAccountSection: some View {
         Section {
-            PasteableTextField(
-                placeholder: "Enter your Reddit Client ID",
-                text: $newClientId
-            )
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Client ID")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
 
-            CopyableField(label: "Redirect URI", value: "mercury://oauth", showingCopied: $showingCopiedFeedback)
-
-            if let url = (newClientId.isEmpty ? nil : redditAPI.buildAuthorizationURL(for: newClientId)) {
-                VStack(alignment: .leading, spacing: 8) {
-                    CopyableField(label: "Authorization URL", value: url.absoluteString, showingCopied: $showingCopiedFeedback)
+                    PasteableTextField(
+                        placeholder: "Enter your Reddit Client ID",
+                        text: $newClientId
+                    )
                 }
-            }
 
-            Button {
-                redditAPI.startOAuthFlow(clientId: newClientId)
-            } label: {
-                Label("Open OAuth Popup", systemImage: "rectangle.on.rectangle")
+                PrimaryButton(
+                    "Authenticate Account",
+                    icon: "person.badge.key",
+                    isDisabled: newClientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ) {
+                    redditAPI.startOAuthFlow(clientId: newClientId)
+                }
+                .padding(.top, 4)
             }
-            .disabled(newClientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         } header: {
             Text("Add Account")
         } footer: {
-            Text("After authenticating, your account will appear in the list above.")
+            Text("Enter your Reddit app's Client ID and tap Authenticate. After authenticating, your account will appear in the list above.")
+                .font(.footnote)
         }
     }
 
@@ -84,7 +85,22 @@ struct MultiAccountSheet: View {
         } header: {
             Text("Quick Links")
         } footer: {
-            Text("Refer to the OAuth setup steps for Client ID and redirect URI guidance.")
+            Text("To create a different Reddit account, you may need to sign out of Reddit in Safari manually before proceeding.")
+                .font(.footnote)
+        }
+    }
+
+    private var setupInstructionsSection: some View {
+        Section {
+            SetupInstructionsView(
+                showingCopiedFeedback: $showingCopiedFeedback,
+                clientId: .constant(""),
+                showClientIdField: false
+            )
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Setup Instructions")
         }
     }
 
@@ -92,17 +108,37 @@ struct MultiAccountSheet: View {
     private func accountRow(_ acct: StoredAccount) -> some View {
         let activeName: String? = redditAPI.userInfo?.name ?? redditAPI.activeUsername
         let isActive = (activeName?.caseInsensitiveCompare(acct.username) == .orderedSame)
-        return HStack {
-            Image(systemName: "person.circle.fill")
-                .foregroundStyle(.blue)
-            Text(acct.username)
-            Spacer()
-            if isActive {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        let isSwitchingThis = switchingUsername?.caseInsensitiveCompare(acct.username) == .orderedSame
+
+        // Check if this token is shared with another account
+        let isDuplicate = redditAPI.storedAccounts.contains(where: {
+            $0.refreshToken == acct.refreshToken && $0.username.caseInsensitiveCompare(acct.username) != .orderedSame
+        })
+
+        return Button {
+            Task { await switchTo(acct.username) }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "person.circle.fill")
+                        .foregroundStyle(isDuplicate ? .orange : .blue)
+                    Text(acct.username)
+                    Spacer()
+                    if isSwitchingThis {
+                        ProgressView()
+                    } else if isActive {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    }
+                }
+
+                if isDuplicate {
+                    Text("Shares token with another account")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { Task { await switchTo(acct.username) } }
+        .disabled(isSwitchingThis)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 redditAPI.removeAccount(username: acct.username)
@@ -113,10 +149,9 @@ struct MultiAccountSheet: View {
     }
 
     private func switchTo(_ username: String) async {
-        guard !isSwitching else { return }
-        isSwitching = true
-        defer { isSwitching = false }
+        guard switchingUsername == nil else { return }
+        switchingUsername = username
+        defer { switchingUsername = nil }
         await redditAPI.switchToAccount(username: username)
-        await MainActor.run { isPresented = false }
     }
 }
