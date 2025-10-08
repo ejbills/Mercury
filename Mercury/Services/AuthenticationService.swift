@@ -27,6 +27,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     // Pending values for seamless add/switch flows
     private var pendingClientId: String? = nil
     private var pendingRefreshToken: String? = nil
+    private let tokenOverrideLock = NSLock()
+    private var requestTokenOverride: TokenOverride?
     
     enum APIStatus {
         case unknown
@@ -115,6 +117,31 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     
     var hasStoredCredentials: Bool {
         return !clientId.isEmpty && accessToken != nil && userInfo != nil
+    }
+
+    func currentRequestAccessToken() -> String? {
+        tokenOverrideLock.lock()
+        let override = requestTokenOverride
+        tokenOverrideLock.unlock()
+        if let override {
+            return override.accessToken
+        }
+        return accessToken
+    }
+
+    func hasAccessTokenForRequests() -> Bool {
+        tokenOverrideLock.lock()
+        let overrideHasToken = requestTokenOverride?.accessToken.isEmpty == false
+        tokenOverrideLock.unlock()
+        return overrideHasToken || accessToken != nil
+    }
+
+    private func swapTokenOverride(_ newValue: TokenOverride?) -> TokenOverride? {
+        tokenOverrideLock.lock()
+        let previous = requestTokenOverride
+        requestTokenOverride = newValue
+        tokenOverrideLock.unlock()
+        return previous
     }
     
     // MARK: - OAuth Flow
@@ -648,6 +675,114 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         tokenRefreshTimer?.invalidate()
         tokenRefreshTimer = nil
     }
+
+    func performUsingAccount<T>(username: String, body: @escaping () async throws -> T) async throws -> T {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return try await body()
+        }
+
+        let isActiveAccount = await MainActor.run { () -> Bool in
+            if let active = self.userInfo?.name ?? self.activeUsername {
+                return active.caseInsensitiveCompare(trimmed) == .orderedSame
+            }
+            return false
+        }
+
+        if isActiveAccount {
+            return try await body()
+        }
+
+        let stored = await MainActor.run {
+            self.storedAccounts.first { $0.username.caseInsensitiveCompare(trimmed) == .orderedSame }
+        }
+
+        guard let stored else {
+            throw AccountImpersonationError.accountNotFound
+        }
+
+        let clientIdToUse = await MainActor.run {
+            stored.clientId ?? self.clientId
+        }
+        guard !clientIdToUse.isEmpty else {
+            throw AccountImpersonationError.missingClientId
+        }
+
+        let tokenResponse = try await requestAccessToken(clientId: clientIdToUse, refreshToken: stored.refreshToken)
+
+        if let newRT = tokenResponse.refreshToken, newRT != stored.refreshToken {
+            await MainActor.run {
+                self.updateStoredAccount(username: stored.username, refreshToken: newRT, clientId: clientIdToUse)
+            }
+        } else {
+            await MainActor.run {
+                self.updateStoredAccount(username: stored.username, refreshToken: nil, clientId: clientIdToUse)
+            }
+        }
+
+        let override = TokenOverride(
+            username: stored.username,
+            accessToken: tokenResponse.accessToken,
+            expiry: tokenResponse.expiresIn.flatMap { Date().addingTimeInterval(TimeInterval($0)) }
+        )
+
+        let previousOverride = swapTokenOverride(override)
+        defer { _ = swapTokenOverride(previousOverride) }
+
+        return try await body()
+    }
+
+    private func requestAccessToken(clientId: String, refreshToken: String) async throws -> TokenResponse {
+        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else {
+            throw AccountImpersonationError.tokenExchangeFailed("Invalid token endpoint")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        let credentials = "\(clientId):".data(using: .utf8)!.base64EncodedString()
+        request.addValue("Basic \(credentials)", forHTTPHeaderField: "Authorization")
+        let body = "grant_type=refresh_token&refresh_token=\(refreshToken)"
+        request.httpBody = body.data(using: .utf8)
+
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AccountImpersonationError.tokenExchangeFailed("Invalid response")
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                let description = HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                throw AccountImpersonationError.tokenExchangeFailed(description)
+            }
+
+            let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+
+            guard !tokenResponse.accessToken.isEmpty else {
+                throw AccountImpersonationError.tokenExchangeFailed("Empty access token")
+            }
+
+            return tokenResponse
+        } catch let error as AccountImpersonationError {
+            throw error
+        } catch {
+            throw AccountImpersonationError.tokenExchangeFailed(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func updateStoredAccount(username: String, refreshToken: String?, clientId: String?) {
+        guard let idx = storedAccounts.firstIndex(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) else { return }
+        if let refreshToken {
+            storedAccounts[idx].refreshToken = refreshToken
+        }
+        if let clientId {
+            storedAccounts[idx].clientId = clientId
+        }
+        storedAccounts[idx].lastUpdated = Date()
+        Defaults[.storedAccounts] = storedAccounts
+    }
 }
 
 struct TokenResponse: Codable {
@@ -668,6 +803,29 @@ struct TokenResponse: Codable {
 
 extension Notification.Name {
     static let mercuryAccountDidSwitch = Notification.Name("MercuryAccountDidSwitch")
+}
+
+private struct TokenOverride {
+    let username: String
+    let accessToken: String
+    let expiry: Date?
+}
+
+enum AccountImpersonationError: LocalizedError {
+    case accountNotFound
+    case missingClientId
+    case tokenExchangeFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .accountNotFound:
+            return "Selected account could not be found."
+        case .missingClientId:
+            return "Missing client ID for the selected account."
+        case .tokenExchangeFailed(let message):
+            return "Couldn't authenticate selected account: \(message)"
+        }
+    }
 }
 
 struct RedditUser: Codable, Defaults.Serializable {
