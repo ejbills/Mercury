@@ -1,5 +1,6 @@
 import SwiftUI
 import Defaults
+import Combine
 
 struct SubredditFeedView: View {
     let subreddit: String
@@ -17,8 +18,6 @@ struct SubredditFeedView: View {
     @Namespace private var mediaNamespace
     @State private var scrollPosition: String?
     @State private var hasAppeared = false
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var lastAutoRefresh: Date = .distantPast
     @State private var selectedPost: RedditPost?
     @State private var videoHandoffState: VideoHandoffState?
     @Default(.postLayoutStyle) private var postLayoutStyle
@@ -192,14 +191,8 @@ struct SubredditFeedView: View {
                 .accessibilityLabel("New Post")
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
-            let now = Date()
-            // Auto refresh on foreground if not recently refreshed and not mid-load/search
-            if now.timeIntervalSince(lastAutoRefresh) > 120, !isLoading, !isLoadingMore, !isSearching {
-                lastAutoRefresh = now
-                Task { await refreshFeed() }
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .mercuryAccountDidSwitch)) { _ in
+            Task { await handleAccountSwitch() }
         }
         .fullScreenCover(item: $selectedPost) { post in
             PostDetailContainer(
@@ -500,6 +493,29 @@ struct SubredditFeedView: View {
                 self.errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func handleAccountSwitch() async {
+        await MainActor.run {
+            searchDebounceTask?.cancel()
+            searchDebounceTask = nil
+            feedSearchText = ""
+            isSearching = false
+            isSearchLoading = false
+            searchResults = []
+            searchAfter = nil
+            searchHasMore = true
+            errorMessage = nil
+            scrollPosition = nil
+            videoHandoffState = nil
+            posts = []
+            after = nil
+            hasMore = true
+            isLoading = false
+            isLoadingMore = false
+            selectedPost = nil
+        }
+        await loadInitialPosts()
     }
 
     // MARK: - In-feed Search

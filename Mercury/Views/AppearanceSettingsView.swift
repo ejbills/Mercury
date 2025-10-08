@@ -140,13 +140,8 @@ struct AppearanceSettingsView: View {
                         }
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(UIColor.secondarySystemBackground))
-                )
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                .listRowSeparator(.hidden)
             }
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
             Section("Posts") {
                 Picker("Layout", selection: $postLayoutStyle) {
@@ -256,6 +251,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
             }
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
             Section("Comments") {
                 Picker("Layout", selection: $commentLayoutStyle) {
@@ -323,7 +319,7 @@ struct AppearanceSettingsView: View {
                 TuningSliderRow(
                     title: "Post Spacing",
                     value: $feedItemSpacing,
-                    range: 0...24,
+                    range: 0...32,
                     step: 1
                 )
                 TuningSliderRow(
@@ -335,7 +331,7 @@ struct AppearanceSettingsView: View {
                 TuningSliderRow(
                     title: "Comment Spacing",
                     value: $commentRowVerticalPadding,
-                    range: 0...12,
+                    range: 0...32,
                     step: 1
                 )
                 TuningSliderRow(
@@ -447,74 +443,76 @@ private extension AppearanceSettingsView {
     }
 
     func resetAppearance() {
+        // Theme
+        _appColorScheme.reset()
+        _customFeedBackgroundColor.reset()
+        _feedBackgroundStyle.reset()
+
         // Posts
-        Defaults[.postLayoutStyle] = .normal
+        _postLayoutStyle.reset()
         // Normal
-        Defaults[.postNormalShowSubreddit] = true
-        Defaults[.postNormalShowSubredditIcon] = true
-        Defaults[.postNormalShowAuthor] = true
-        Defaults[.postNormalShowAvatar] = true
-        Defaults[.postNormalShowTime] = true
-        Defaults[.postNormalShowDomain] = true
-        Defaults[.postNormalShowFlair] = true
-        Defaults[.postNormalShowScore] = true
-        Defaults[.postNormalShowCommentCount] = true
-        Defaults[.postNormalShowVoting] = true
-        Defaults[.postNormalVotingPosition] = .right
-        Defaults[.postNormalShowActions] = true
-        Defaults[.postNormalUseCardStyle] = true
+        _postNormalShowSubreddit.reset()
+        _postNormalShowSubredditIcon.reset()
+        _postNormalShowAuthor.reset()
+        _postNormalShowAvatar.reset()
+        _postNormalShowTime.reset()
+        _postNormalShowDomain.reset()
+        _postNormalShowFlair.reset()
+        _postNormalShowScore.reset()
+        _postNormalShowCommentCount.reset()
+        _postNormalShowVoting.reset()
+        _postNormalVotingPosition.reset()
+        _postNormalShowActions.reset()
+        _postNormalUseCardStyle.reset()
         // Compact
-        Defaults[.postCompactThumbnailSize] = .medium
-        Defaults[.postCompactShowThumbnail] = true
-        Defaults[.postCompactHideTextThumbnails] = false
-        Defaults[.postCompactShowSubredditIcon] = true
-        Defaults[.postCompactThumbnailPosition] = .right
-        Defaults[.postCompactShowSubreddit] = true
-        Defaults[.postCompactShowAuthor] = true
-        Defaults[.postCompactShowAvatar] = true
-        Defaults[.postCompactShowTime] = true
-        Defaults[.postCompactShowDomain] = true
-        Defaults[.postCompactShowFlair] = true
-        Defaults[.postCompactShowScore] = true
-        Defaults[.postCompactShowCommentCount] = true
-        Defaults[.postCompactShowVoting] = true
-        Defaults[.postCompactShowActions] = true
-        Defaults[.postCompactUseCardStyle] = true
+        _postCompactThumbSize.reset()
+        _postCompactThumbPosition.reset()
+        _postCompactShowThumbnail.reset()
+        _postCompactHideTextThumbs.reset()
+        _postCompactShowSubreddit.reset()
+        _postCompactShowSubredditIcon.reset()
+        _postCompactShowAuthor.reset()
+        _postCompactShowAvatar.reset()
+        _postCompactShowTime.reset()
+        _postCompactShowDomain.reset()
+        _postCompactShowFlair.reset()
+        _postCompactShowScore.reset()
+        _postCompactShowCommentCount.reset()
+        _postCompactShowVoting.reset()
+        _postCompactShowActions.reset()
+        _postCompactUseCardStyle.reset()
 
         // Comments
-        Defaults[.commentLayoutStyle] = .normal
+        _commentLayoutStyle.reset()
         // Normal
-        Defaults[.commentNormalShowAuthor] = true
-        Defaults[.commentNormalShowAvatar] = true
-        Defaults[.commentNormalShowTime] = true
-        Defaults[.commentNormalShowScore] = true
-        Defaults[.commentNormalShowVoteButtons] = true
-        Defaults[.commentNormalShowActions] = true
-        Defaults[.commentNormalUseCardStyle] = true
+        _commentNormalShowAuthor.reset()
+        _commentNormalShowAvatar.reset()
+        _commentNormalShowTime.reset()
+        _commentNormalShowScore.reset()
+        _commentNormalShowVoteButtons.reset()
+        _commentNormalShowActions.reset()
+        _commentNormalUseCardStyle.reset()
         // Compact
-        Defaults[.commentCompactShowAuthor] = true
-        Defaults[.commentCompactShowAvatar] = true
-        Defaults[.commentCompactShowTime] = true
-        Defaults[.commentCompactShowScore] = true
-        Defaults[.commentCompactShowVoteButtons] = true
-        Defaults[.commentCompactShowActions] = true
-        Defaults[.commentCompactUseCardStyle] = true
+        _commentCompactShowAuthor.reset()
+        _commentCompactShowAvatar.reset()
+        _commentCompactShowTime.reset()
+        _commentCompactShowScore.reset()
+        _commentCompactShowVoteButtons.reset()
+        _commentCompactShowActions.reset()
+        _commentCompactUseCardStyle.reset()
 
         // Legacy bridge
-        Defaults[.compactMode] = false
+        _legacyCompactMode.reset()
 
-        // Tuning defaults
-        Defaults[.feedItemSpacing] = 8
-        Defaults[.postHorizontalPadding] = 12
-        Defaults[.commentHorizontalPadding] = 12
-        Defaults[.commentRowVerticalPadding] = 4
-        Defaults[.postNormalCardCornerRadius] = 16
-        Defaults[.postCompactCardCornerRadius] = 8
-        Defaults[.commentRootCardCornerRadius] = 16
-        Defaults[.commentChildCardCornerRadius] = 12
-        Defaults[.appColorScheme] = .system
-        Defaults[.feedBackgroundStyle] = .system
-        Defaults[.customFeedBackgroundColor] = nil
+        // Tuning
+        _feedItemSpacing.reset()
+        _postHorizontalPadding.reset()
+        _commentHorizontalPadding.reset()
+        _commentRowVerticalPadding.reset()
+        _postNormalCorner.reset()
+        _postCompactCorner.reset()
+        _commentRootCorner.reset()
+        _commentChildCorner.reset()
     }
 
     func migrateHorizontalPaddingIfNeeded() {

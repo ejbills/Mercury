@@ -25,17 +25,6 @@ struct SwipeActionsSettingsView: View {
                     }
                 }
             }
-
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Right-Side Swipe Actions")
-                        .font(.headline)
-                    Text("iOS back gesture conflicts with left swipes. Configure up to four actions on the right: Short, Medium, Long, and Full distance.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
             
             Section("Posts") {
                 SwipeActionQuadGroup(
@@ -64,7 +53,7 @@ struct SwipeActionsSettingsView: View {
                     Text("Swipe Actions Help")
                         .font(.headline)
                     
-                    Text("Configure actions to perform when swiping left or right on posts and comments.")
+                    Text("Configure actions to perform when swiping on posts and comments.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     

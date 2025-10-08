@@ -240,9 +240,11 @@ struct PostRowView: View {
         .sheet(isPresented: $showingPostReply) {
             MarkdownComposerView(
                 title: "Reply",
+                accounts: redditAPI.availableAccountUsernames(),
+                activeAccount: redditAPI.userInfo?.name ?? redditAPI.activeUsername,
                 onCancel: { showingPostReply = false },
-                onSubmit: { text in
-                    try await submitRootReply(text: text)
+                onSubmit: { text, account in
+                    try await submitRootReply(text: text, account: account)
                 }
             )
         }
@@ -759,9 +761,11 @@ struct PostRowView: View {
         }
     }
 
-    private func submitRootReply(text: String) async throws {
+    private func submitRootReply(text: String, account: String) async throws {
         let parent = post.fullname
-        let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        let created = try await redditAPI.performUsingAccount(username: account) {
+            try await redditAPI.submitComment(parentFullname: parent, text: text)
+        }
         await MainActor.run {
             onRootReplyPosted?(created)
         }

@@ -21,7 +21,9 @@ struct PostComposerSheet: View {
     @State private var selectedImages: [UIImage] = []
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var isSubmitting = false
+    @State private var selectedAccount: String = ""
     @State private var errorMessage: String?
+    @State private var flairErrorMessage: String?
     @State private var flairs: [LinkFlair] = []
     @State private var selectedFlairId: String? = nil
     @State private var isFlairRequired: Bool = false
@@ -31,156 +33,231 @@ struct PostComposerSheet: View {
 
     enum PostType: String, CaseIterable, Identifiable { case text, link, image; var id: String { rawValue } }
 
+    private var accounts: [String] {
+        availableAccounts
+    }
+
+    private var accountSection: some View {
+        Section(header: Text("Posting As")) {
+            if accounts.isEmpty {
+                Text("Add an account in Settings to post.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Account", selection: Binding(
+                    get: {
+                        // Ensure selection is always valid
+                        if selectedAccount.isEmpty || !accounts.contains(selectedAccount) {
+                            return accounts.first ?? ""
+                        }
+                        return selectedAccount
+                    },
+                    set: { selectedAccount = $0 }
+                )) {
+                    ForEach(accounts, id: \.self) { username in
+                        Text(username)
+                            .lineLimit(1)
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+        }
+    }
+
+    private var subredditSection: some View {
+        Section(header: Text("Subreddit")) {
+            HStack(spacing: 8) {
+                TextField("r/subreddit", text: $selectedSubreddit)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                if isLoadingFlairs {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(action: { Task { await loadFlairsIfNeeded(force: true) } }) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(selectedSubreddit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help("Fetch flairs for this subreddit")
+                }
+            }
+        }
+    }
+
+    private var typeSection: some View {
+        Section(header: Text("Type")) {
+            Picker("Type", selection: $postType) {
+                Text("Text").tag(PostType.text)
+                Text("Link").tag(PostType.link)
+                Text("Image").tag(PostType.image)
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private var titleSection: some View {
+        Section(header: Text("Title")) {
+            TextField("Post title", text: $title)
+                .textInputAutocapitalization(.sentences)
+        }
+    }
+
+    private var flairSection: some View {
+        Section(header: Text("Flair")) {
+            if let flairError = flairErrorMessage {
+                Text(flairError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            } else if !flairs.isEmpty {
+                Picker("Flair", selection: Binding(
+                    get: { selectedFlairId ?? "" },
+                    set: { v in selectedFlairId = v.isEmpty ? nil : v }
+                )) {
+                    Text("None").tag("")
+                    ForEach(flairs, id: \.id) { flair in
+                        Text(flair.text).tag(flair.id)
+                    }
+                }
+                .pickerStyle(.menu)
+            } else {
+                Text(isFlairRequired ? "Flair required. Tap the refresh icon to load flairs." : "No flairs available.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if isFlairRequired && selectedFlairId == nil {
+                Text("This subreddit requires a post flair.")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private var linkURLSection: some View {
+        Section(header: Text("Link URL")) {
+            TextField("https://example.com", text: $linkURL)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+        }
+    }
+
+    private var bodySection: some View {
+        Section(header: Text(postType == .text ? "Body (optional)" : "Caption (optional)")) {
+            VStack(spacing: 0) {
+                modeSwitcher
+                markdownToolbar
+                editorOrPreview
+                if postType == .image {
+                    imageCounter
+                }
+            }
+        }
+    }
+
+    private var modeSwitcher: some View {
+        HStack {
+            Picker("Mode", selection: $mode) {
+                Text("Write").tag(Mode.write)
+                Text("Preview").tag(Mode.preview)
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.bottom, 8)
+    }
+
+    private var markdownToolbar: some View {
+        MarkdownToolsBar(
+            onH1: { insertAtLineStart("# ") },
+            onH2: { insertAtLineStart("## ") },
+            onH3: { insertAtLineStart("### ") },
+            onBold: { wrap("**") },
+            onItalic: { wrap("*") },
+            onStrike: { wrap("~~") },
+            onCode: { wrap("`") },
+            onBlock: { wrapBlockFence() },
+            onQuote: { prefixLines("> ") },
+            onUL: { prefixLines("- ") },
+            onOL: { prefixLinesNumbered() },
+            onLink: { insertLink() },
+            onHR: { insert("\n\n---\n\n") }
+        )
+    }
+
+    private var editorOrPreview: some View {
+        Group {
+            if mode == .preview {
+                previewContent
+            } else {
+                editorContent
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.2), lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var previewContent: some View {
+        ScrollView {
+            if postType == .image {
+                if !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 8)
+                }
+                let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { _, img in
+                        Image(uiImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            } else {
+                MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
+                    .frame(maxWidth: .infinity, minHeight: 200, alignment: .topLeading)
+            }
+        }
+    }
+
+    private var editorContent: some View {
+        ZStack(alignment: .topLeading) {
+            MarkdownTextView(text: $bodyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
+                .frame(minHeight: 200, alignment: .topLeading)
+            if bodyText.isEmpty {
+                Text(postType == .image ? "Write an optional caption in Markdown…" : "Write your post in Markdown…")
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var imageCounter: some View {
+        Group {
+            Divider().padding(.vertical, 6)
+            let count = selectedImages.count
+            Text(count == 0 ? "No images attached" : "\(count) image\(count == 1 ? "" : "s") attached")
+                .font(.footnote)
+                .foregroundStyle(count == 0 ? .tertiary : .secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Subreddit")) {
-                    HStack(spacing: 8) {
-                        TextField("r/subreddit", text: $selectedSubreddit)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled(true)
-                        if isLoadingFlairs {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Button(action: { Task { await loadFlairsIfNeeded(force: true) } }) {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            .disabled(selectedSubreddit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .help("Fetch flairs for this subreddit")
-                        }
-                    }
-                }
-
-                Section(header: Text("Type")) {
-                    Picker("Type", selection: $postType) {
-                        Text("Text").tag(PostType.text)
-                        Text("Link").tag(PostType.link)
-                        Text("Image").tag(PostType.image)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section(header: Text("Title")) {
-                    TextField("Post title", text: $title)
-                        .textInputAutocapitalization(.sentences)
-                }
-
-                Section(header: Text("Flair")) {
-                    if !flairs.isEmpty {
-                        Picker("Flair", selection: Binding(
-                            get: { selectedFlairId ?? "" },
-                            set: { v in selectedFlairId = v.isEmpty ? nil : v }
-                        )) {
-                            Text("None").tag("")
-                            ForEach(flairs, id: \.id) { flair in
-                                Text(flair.text).tag(flair.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    } else {
-                        Text(isFlairRequired ? "Flair required. Tap the refresh icon to load flairs." : "No flairs available.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    if isFlairRequired && selectedFlairId == nil {
-                        Text("This subreddit requires a post flair.")
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                    }
-                }
-
+                accountSection
+                subredditSection
+                typeSection
+                titleSection
+                flairSection
                 if postType == .link {
-                    Section(header: Text("Link URL")) {
-                        TextField("https://example.com", text: $linkURL)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled(true)
-                    }
+                    linkURLSection
                 }
-
                 if postType != .link {
-                Section(header: Text(postType == .text ? "Body (optional)" : "Caption (optional)")) {
-                    VStack(spacing: 0) {
-                        // Mode switcher
-                        HStack {
-                            Picker("Mode", selection: $mode) {
-                                Text("Write").tag(Mode.write)
-                                Text("Preview").tag(Mode.preview)
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        .padding(.bottom, 8)
-
-                        // Shared markdown toolbar
-                        MarkdownToolsBar(
-                            onH1: { insertAtLineStart("# ") },
-                            onH2: { insertAtLineStart("## ") },
-                            onH3: { insertAtLineStart("### ") },
-                            onBold: { wrap("**") },
-                            onItalic: { wrap("*") },
-                            onStrike: { wrap("~~") },
-                            onCode: { wrap("`") },
-                            onBlock: { wrapBlockFence() },
-                            onQuote: { prefixLines("> ") },
-                            onUL: { prefixLines("- ") },
-                            onOL: { prefixLinesNumbered() },
-                            onLink: { insertLink() },
-                            onHR: { insert("\n\n---\n\n") }
-                        )
-
-                        // Editor / Preview
-                        Group {
-                            if mode == .preview {
-                                ScrollView {
-                                    if postType == .image {
-                                        // Show caption if present
-                                        if !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                            MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.bottom, 8)
-                                        }
-                                        let columns = [GridItem(.flexible()), GridItem(.flexible())]
-                                        LazyVGrid(columns: columns, spacing: 8) {
-                                            ForEach(Array(selectedImages.enumerated()), id: \.offset) { _, img in
-                                                Image(uiImage: img)
-                                                    .resizable()
-                                                    .aspectRatio(contentMode: .fit)
-                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                            }
-                                        }
-                                    } else {
-                                        MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
-                                            .frame(maxWidth: .infinity, minHeight: 200, alignment: .topLeading)
-                                    }
-                                }
-                            } else {
-                                ZStack(alignment: .topLeading) {
-                                    MarkdownTextView(text: $bodyText, selectedRange: $selectedRange, isFirstResponder: $isFirstResponder)
-                                        .frame(minHeight: 200, alignment: .topLeading)
-                                    if bodyText.isEmpty {
-                                        Text(postType == .image ? "Write an optional caption in Markdown…" : "Write your post in Markdown…")
-                                            .foregroundStyle(.secondary)
-                                            .padding(.top, 8)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.2), lineWidth: 0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                        if postType == .image {
-                            Divider().padding(.vertical, 6)
-                            let count = selectedImages.count
-                            Text(count == 0 ? "No images attached" : "\(count) image\(count == 1 ? "" : "s") attached")
-                                .font(.footnote)
-                                .foregroundStyle(count == 0 ? .tertiary : .secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
+                    bodySection
                 }
             }
             .navigationTitle("New Post")
@@ -209,6 +286,9 @@ struct PostComposerSheet: View {
                 }
             }
             .task {
+                if selectedAccount.isEmpty, let first = availableAccounts.first {
+                    selectedAccount = first
+                }
                 // Prefill only if a concrete subreddit was provided; otherwise leave empty placeholder
                 if initialSubreddit.lowercased().hasPrefix("r/") {
                     selectedSubreddit = initialSubreddit
@@ -236,6 +316,9 @@ struct PostComposerSheet: View {
         }
         .onChange(of: selectedSubreddit) { _, _ in
             Task { await loadFlairsIfNeeded(force: false) }
+        }
+        .onChange(of: selectedAccount) { _, _ in
+            Task { await loadFlairsIfNeeded(force: true) }
         }
     }
 
@@ -321,6 +404,18 @@ struct PostComposerSheet: View {
         return NSRange(location: loc, length: len)
     }
 
+    private var availableAccounts: [String] {
+        redditAPI.availableAccountUsernames()
+    }
+
+    private func resolvedPostingAccount() -> String? {
+        let trimmed = selectedAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        return availableAccounts.first
+    }
+
     private func submit() async {
         guard !isSubmitting else { return }
         let trimmedSub = selectedSubreddit.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -328,17 +423,23 @@ struct PostComposerSheet: View {
             await MainActor.run { errorMessage = "Please enter a subreddit (e.g. r/Swift)" }
             return
         }
+        guard let account = resolvedPostingAccount() else {
+            await MainActor.run { errorMessage = "Select an account before posting." }
+            return
+        }
         isSubmitting = true
         do {
             let clean = trimmedSub.hasPrefix("r/") ? String(trimmedSub.dropFirst(2)) : trimmedSub
             print("[Composer] submit subreddit=\(clean) postType=\(postType) flairId=\(selectedFlairId ?? "<none>")")
-            switch postType {
-            case .text:
-                try await redditAPI.submitTextPost(subreddit: clean, title: title, text: bodyText, flairId: selectedFlairId)
-            case .link:
-                try await redditAPI.submitLinkPost(subreddit: clean, title: title, url: linkURL, flairId: selectedFlairId)
-            case .image:
-                try await redditAPI.submitImagePost(subreddit: clean, title: title, caption: bodyText.isEmpty ? nil : bodyText, images: selectedImages, flairId: selectedFlairId)
+            try await redditAPI.performUsingAccount(username: account) {
+                switch postType {
+                case .text:
+                    try await redditAPI.submitTextPost(subreddit: clean, title: title, text: bodyText, flairId: selectedFlairId)
+                case .link:
+                    try await redditAPI.submitLinkPost(subreddit: clean, title: title, url: linkURL, flairId: selectedFlairId)
+                case .image:
+                    try await redditAPI.submitImagePost(subreddit: clean, title: title, caption: bodyText.isEmpty ? nil : bodyText, images: selectedImages, flairId: selectedFlairId)
+                }
             }
             isSubmitting = false
             let h = UINotificationFeedbackGenerator()
@@ -360,43 +461,62 @@ struct PostComposerSheet: View {
                 flairs = []
                 selectedFlairId = nil
                 isFlairRequired = false
+                flairErrorMessage = nil
             }
             return
         }
         if !force && !flairs.isEmpty { return }
-        isLoadingFlairs = true
-        print("[Composer] loadFlairsIfNeeded(force=\(force)) subreddit=\(sub)")
+
+        await MainActor.run { isLoadingFlairs = true }
+        defer { Task { await MainActor.run { isLoadingFlairs = false } } }
+
+        guard let account = resolvedPostingAccount() else {
+            await MainActor.run {
+                flairs = []
+                selectedFlairId = nil
+                isFlairRequired = false
+                flairErrorMessage = "Select an account before loading flairs."
+            }
+            return
+        }
+
+        print("[Composer] loadFlairsIfNeeded(force=\(force)) subreddit=\(sub) account=\(account)")
+
         do {
             let clean = sub.hasPrefix("r/") ? String(sub.dropFirst(2)) : sub
-            async let a: [LinkFlair] = try redditAPI.fetchLinkFlairs(subreddit: clean)
-            let pt: String = {
-                switch postType {
-                case .text: return "self"
-                case .link: return "link"
-                case .image: return "image"
-                }
-            }()
-            async let b: PostRequirements? = try redditAPI.fetchPostRequirements(subreddit: clean, postType: pt)
-            var (f, req) = try await (a, b)
-            // Filter out mod-only flairs for non-mod users
-            f = f.filter { ($0.modOnly ?? false) == false }
+            let result = try await redditAPI.performUsingAccount(username: account) { () async throws -> ([LinkFlair], PostRequirements?) in
+                async let flairTask: [LinkFlair] = try redditAPI.fetchLinkFlairs(subreddit: clean)
+                let postTypeKey: String = {
+                    switch postType {
+                    case .text: return "self"
+                    case .link: return "link"
+                    case .image: return "image"
+                    }
+                }()
+                async let requirementsTask: PostRequirements? = try redditAPI.fetchPostRequirements(subreddit: clean, postType: postTypeKey)
+                return try await (flairTask, requirementsTask)
+            }
+
+            var (list, requirements) = result
+            list = list.filter { ($0.modOnly ?? false) == false }
+
             await MainActor.run {
-                self.flairs = f
-                self.isFlairRequired = (req?.isFlairRequired ?? false)
-                print("[Composer] fetched flairs=\(f.count) isFlairRequired=\(self.isFlairRequired)")
-                if self.isFlairRequired && self.selectedFlairId == nil { /* keep nil, user must choose */ }
-                if !self.isFlairRequired, self.selectedFlairId != nil, !f.contains(where: { $0.id == self.selectedFlairId }) {
+                self.flairs = list
+                self.isFlairRequired = requirements?.isFlairRequired ?? false
+                self.flairErrorMessage = nil
+
+                if let current = self.selectedFlairId, !list.contains(where: { $0.id == current }) {
                     self.selectedFlairId = nil
                 }
             }
         } catch {
             print("[Composer] flair fetch error=\(error.localizedDescription)")
             await MainActor.run {
-                self.flairs = []
-                self.isFlairRequired = false
+                flairs = []
+                isFlairRequired = false
+                selectedFlairId = nil
+                flairErrorMessage = error.localizedDescription
             }
         }
-        isLoadingFlairs = false
-        print("[Composer] loadFlairsIfNeeded finished")
     }
 }

@@ -4,15 +4,17 @@ struct CopyableField: View {
     let label: String
     let value: String
     @Binding var showingCopied: Bool
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            
+            if !label.isEmpty {
+                Text(label)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+            }
+
             Button {
                 UIPasteboard.general.string = value
                 showingCopied = true
@@ -24,15 +26,16 @@ struct CopyableField: View {
                     Text(value)
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(.primary)
-                    
-                    Spacer()
-                    
+                        .lineLimit(1)
+
+                    Spacer(minLength: 8)
+
                     Image(systemName: "doc.on.doc")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, 10)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)

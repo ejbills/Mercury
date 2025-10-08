@@ -42,6 +42,62 @@ class RedditAPIManager {
     var hasStoredCredentials: Bool {
         authService.hasStoredCredentials
     }
+
+    // MARK: - Multi-account exposure
+    var storedAccounts: [StoredAccount] { authService.storedAccounts }
+    var activeUsername: String? { authService.activeUsername }
+
+    func performUsingAccount<T>(username: String, operation: @escaping () async throws -> T) async throws -> T {
+        try await authService.performUsingAccount(username: username, body: operation)
+    }
+
+    func availableAccountUsernames() -> [String] {
+        var result: [String] = []
+        var seen = Set<String>()
+
+        func append(_ username: String) {
+            let key = username.lowercased()
+            if !seen.contains(key) {
+                seen.insert(key)
+                result.append(username)
+            }
+        }
+
+        if let active = userInfo?.name ?? activeUsername {
+            append(active)
+        }
+
+        let sortedAccounts = storedAccounts.sorted { $0.lastUpdated > $1.lastUpdated }
+        for account in sortedAccounts {
+            append(account.username)
+        }
+
+        return result
+    }
+
+    func switchToAccount(username: String) async {
+        // Clear caches before switching accounts
+        clearSubredditCaches()
+        await authService.switchToAccount(username: username)
+    }
+
+    func removeAccount(username: String) {
+        authService.removeAccount(username: username)
+    }
+
+    // MARK: - Cache Management
+
+    func clearSubredditCaches() {
+        subredditCache = nil
+        subredditCacheDate = nil
+        multiCache = nil
+        multiCacheDate = nil
+        Defaults[.cachedSubscribedSubredditsData] = nil
+        Defaults[.cachedSubscribedSubredditsDate] = nil
+        Defaults[.cachedUserMultiredditsData] = nil
+        Defaults[.cachedUserMultiredditsDate] = nil
+        Defaults[.cachedUserMultiredditsUsername] = nil
+    }
     
     // MARK: - Initialization
     
@@ -83,12 +139,21 @@ class RedditAPIManager {
         authService.startOAuthFlow()
     }
     
+    func startOAuthFlow(clientId: String) {
+        authService.startOAuthFlow(clientId: clientId)
+    }
+    
     func validateCredentials() async {
         await authService.validateCredentials()
     }
     
     func clearStoredCredentials() {
         authService.clearStoredCredentials()
+    }
+
+    // Helpers for account flows
+    func buildAuthorizationURL(for clientId: String) -> URL? {
+        authService.buildAuthorizationURL(for: clientId)
     }
     
     // MARK: - Content Methods (Delegated)

@@ -11,6 +11,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     var accessToken: String?
     var refreshToken: String?
     var accessTokenExpiry: Date?
+    // Multi-account
+    var storedAccounts: [StoredAccount] = []
+    var activeUsername: String? = nil
     
     private var clientId: String = ""
     private let redirectURI = "mercury://oauth"
@@ -20,6 +23,12 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     private var isRefreshingToken = false
     private var refreshRetryCount = 0
     private let maxRefreshRetries = 3
+    private var refreshWaiters: [CheckedContinuation<Bool, Never>] = []
+    // Pending values for seamless add/switch flows
+    private var pendingClientId: String? = nil
+    private var pendingRefreshToken: String? = nil
+    private let tokenOverrideLock = NSLock()
+    private var requestTokenOverride: TokenOverride?
     
     enum APIStatus {
         case unknown
@@ -53,6 +62,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         self.refreshToken = Defaults[.refreshToken]
         self.accessTokenExpiry = Defaults[.accessTokenExpiry]
         self.userInfo = Defaults[.userInfo]
+        self.storedAccounts = Defaults[.storedAccounts]
+        self.activeUsername = Defaults[.activeUsername]
         
         if !clientId.isEmpty && accessToken != nil && userInfo != nil {
             self.apiStatus = .valid
@@ -64,7 +75,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         }
     }
     
-    private func saveCredentials() {
+    private func saveCredentials(shouldUpsertAccount: Bool = true) {
         Defaults[.clientId] = clientId
         Defaults[.accessToken] = accessToken
         Defaults[.refreshToken] = refreshToken
@@ -72,6 +83,14 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         Defaults[.userInfo] = userInfo
         Defaults[.isSetupComplete] = true
         Defaults[.lastLoginDate] = Date()
+
+        // Persist multi-account info if available
+        if shouldUpsertAccount, let user = userInfo, let rt = refreshToken {
+            upsertStoredAccount(username: user.name, refreshToken: rt)
+            Defaults[.storedAccounts] = storedAccounts
+            Defaults[.activeUsername] = user.name
+            activeUsername = user.name
+        }
     }
     
     func clearStoredCredentials() {
@@ -82,7 +101,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         Defaults[.userInfo] = nil
         Defaults[.isSetupComplete] = false
         Defaults[.lastLoginDate] = nil
-        
+
         self.clientId = ""
         self.accessToken = nil
         self.refreshToken = nil
@@ -98,6 +117,31 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     
     var hasStoredCredentials: Bool {
         return !clientId.isEmpty && accessToken != nil && userInfo != nil
+    }
+
+    func currentRequestAccessToken() -> String? {
+        tokenOverrideLock.lock()
+        let override = requestTokenOverride
+        tokenOverrideLock.unlock()
+        if let override {
+            return override.accessToken
+        }
+        return accessToken
+    }
+
+    func hasAccessTokenForRequests() -> Bool {
+        tokenOverrideLock.lock()
+        let overrideHasToken = requestTokenOverride?.accessToken.isEmpty == false
+        tokenOverrideLock.unlock()
+        return overrideHasToken || accessToken != nil
+    }
+
+    private func swapTokenOverride(_ newValue: TokenOverride?) -> TokenOverride? {
+        tokenOverrideLock.lock()
+        let previous = requestTokenOverride
+        requestTokenOverride = newValue
+        tokenOverrideLock.unlock()
+        return previous
     }
     
     // MARK: - OAuth Flow
@@ -119,8 +163,10 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         preconditionFailure("No UIWindowScene available for ASWebAuthenticationSession presentation anchor")
     }
     
-    func startOAuthFlow() {
-        guard !clientId.isEmpty else {
+    func startOAuthFlow(clientId override: String? = nil) {
+        if let override, !override.isEmpty { pendingClientId = override }
+        let useClientId = pendingClientId ?? clientId
+        guard !useClientId.isEmpty else {
             self.apiStatus = .invalid
             self.errorMessage = "Client ID is required"
             return
@@ -133,7 +179,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         
         var components = URLComponents(string: "https://www.reddit.com/api/v1/authorize")!
         components.queryItems = [
-            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_id", value: useClientId),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
@@ -210,7 +256,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
         request.httpMethod = "POST"
         request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         
-        let credentials = "\(clientId):".data(using: .utf8)!.base64EncodedString()
+        let useClientId = pendingClientId ?? clientId
+        let credentials = "\(useClientId):".data(using: .utf8)!.base64EncodedString()
         request.addValue("Basic \(credentials)", forHTTPHeaderField: "Authorization")
         
         let bodyData = "grant_type=authorization_code&code=\(code)&redirect_uri=\(redirectURI)".data(using: .utf8)
@@ -281,11 +328,11 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             }
             return
         }
-        
+
         if isAccessTokenExpired(), let _ = refreshToken {
             _ = await refreshAccessToken()
         }
-        
+
         var request = URLRequest(url: url)
         request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
@@ -322,14 +369,26 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            
+
             let user = try decoder.decode(RedditUser.self, from: data)
-            
+
             await MainActor.run {
+                let previousUsername = self.userInfo?.name ?? self.activeUsername
+
                 self.userInfo = user
                 self.apiStatus = .valid
+                if let p = self.pendingClientId {
+                    self.clientId = p
+                    Defaults[.clientId] = p
+                    self.pendingClientId = nil
+                }
                 self.saveCredentials()
                 self.scheduleTokenRefreshIfNeeded()
+
+                let currentUsername = user.name
+                if previousUsername?.caseInsensitiveCompare(currentUsername) != .orderedSame {
+                    NotificationCenter.default.post(name: .mercuryAccountDidSwitch, object: currentUsername)
+                }
             }
             
         } catch {
@@ -363,27 +422,37 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     
     @discardableResult
     func refreshAccessToken() async -> Bool {
-        // Prevent concurrent refresh attempts
-        guard !isRefreshingToken else { return false }
-        guard let refreshToken = refreshToken, !clientId.isEmpty else { return false }
-        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else { return false }
-        
-        await MainActor.run {
-            self.isRefreshingToken = true
+        let useClientId = pendingClientId ?? clientId
+        let useRefreshToken = pendingRefreshToken ?? refreshToken
+
+        let shouldWaitForInFlight = await MainActor.run { () -> Bool in
+            if self.isRefreshingToken {
+                return true
+            } else {
+                self.isRefreshingToken = true
+                return false
+            }
         }
-        
-        defer {
-            Task {
-                await MainActor.run {
-                    self.isRefreshingToken = false
+
+        if shouldWaitForInFlight {
+            return await withCheckedContinuation { continuation in
+                Task { @MainActor in
+                    self.refreshWaiters.append(continuation)
                 }
             }
         }
-        
+
+        guard let refreshToken = useRefreshToken, !useClientId.isEmpty else {
+            return await finishRefresh(success: false)
+        }
+        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else {
+            return await finishRefresh(success: false)
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        let credentials = "\(clientId):".data(using: .utf8)!.base64EncodedString()
+        let credentials = "\(useClientId):".data(using: .utf8)!.base64EncodedString()
         request.addValue("Basic \(credentials)", forHTTPHeaderField: "Authorization")
         
         let body = "grant_type=refresh_token&refresh_token=\(refreshToken)"
@@ -394,13 +463,13 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 await handleRefreshError("Network error during token refresh")
-                return false
+                return await finishRefresh(success: false)
             }
             
             guard httpResponse.statusCode == 200 else {
                 let errorMsg = "Token refresh failed with status \(httpResponse.statusCode)"
                 await handleRefreshError(errorMsg)
-                return false
+                return await finishRefresh(success: false)
             }
             
             let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
@@ -410,27 +479,64 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                   let expiresIn = tokenResponse.expiresIn,
                   expiresIn > 0 else {
                 await handleRefreshError("Invalid token response from server")
-                return false
+                return await finishRefresh(success: false)
             }
             
             await MainActor.run {
                 self.accessToken = tokenResponse.accessToken
+
+                // Check if we're in an account switch scenario
+                let isSwitching = self.pendingRefreshToken != nil || self.pendingClientId != nil
+
+                // Apply pending tokens first (account switch scenario)
+                if let p = self.pendingClientId {
+                    self.clientId = p
+                    Defaults[.clientId] = p
+                }
+
+                if let pr = self.pendingRefreshToken {
+                    self.refreshToken = pr
+                    Defaults[.refreshToken] = pr
+                }
+
+                // Then apply new refresh token from response if provided
                 if let newRT = tokenResponse.refreshToken {
                     self.refreshToken = newRT
+                    Defaults[.refreshToken] = newRT
                 }
+
                 self.accessTokenExpiry = Date().addingTimeInterval(TimeInterval(expiresIn))
+                self.pendingClientId = nil
+                self.pendingRefreshToken = nil
                 self.refreshRetryCount = 0 // Reset retry count on success
                 self.apiStatus = .valid
                 self.errorMessage = nil
-                self.saveCredentials()
+
+                // Don't upsert account during switch - wait until fetchUserInfo completes
+                self.saveCredentials(shouldUpsertAccount: !isSwitching)
                 self.scheduleTokenRefreshIfNeeded()
             }
-            return true
+            return await finishRefresh(success: true)
             
         } catch {
             await handleRefreshError("Token refresh error: \(error.localizedDescription)")
-            return false
+            return await finishRefresh(success: false)
         }
+    }
+
+    private func finishRefresh(success: Bool) async -> Bool {
+        let waiters = await MainActor.run { () -> [CheckedContinuation<Bool, Never>] in
+            self.isRefreshingToken = false
+            let pending = self.refreshWaiters
+            self.refreshWaiters.removeAll()
+            return pending
+        }
+        
+        for waiter in waiters {
+            waiter.resume(returning: success)
+        }
+        
+        return success
     }
     
     // MARK: - Error Handling
@@ -484,6 +590,206 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             }
         }
     }
+
+    // Public helper for building an authorization URL for display/copy
+    func buildAuthorizationURL(for clientId: String) -> URL? {
+        let scope = "identity,edit,flair,history,modconfig,modflair,modlog,modposts,modwiki,mysubreddits,privatemessages,read,report,save,submit,subscribe,vote,wikiedit,wikiread"
+        var components = URLComponents(string: "https://www.reddit.com/api/v1/authorize")!
+        components.queryItems = [
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "state", value: UUID().uuidString),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "duration", value: "permanent"),
+            URLQueryItem(name: "scope", value: scope)
+        ]
+        return components.url
+    }
+
+    // MARK: - Multi-account helpers
+    private func upsertStoredAccount(username: String, refreshToken: String) {
+        if let idx = storedAccounts.firstIndex(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) {
+            storedAccounts[idx].refreshToken = refreshToken
+            storedAccounts[idx].lastUpdated = Date()
+            storedAccounts[idx].clientId = self.clientId
+        } else {
+            storedAccounts.append(StoredAccount(username: username, refreshToken: refreshToken, lastUpdated: Date(), clientId: self.clientId))
+        }
+        Defaults[.storedAccounts] = storedAccounts
+    }
+
+    func switchToAccount(username: String) async {
+        guard let acct = storedAccounts.first(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) else {
+            return
+        }
+
+        var didChangeAccount = false
+        await MainActor.run {
+            let previousUsername = self.activeUsername
+            // Stage pending values and mark active account; do not clear current session
+            self.pendingRefreshToken = acct.refreshToken
+            self.pendingClientId = acct.clientId ?? self.clientId
+            self.activeUsername = acct.username
+            Defaults[.activeUsername] = acct.username
+            didChangeAccount = previousUsername?.caseInsensitiveCompare(acct.username) != .orderedSame
+        }
+
+        let refreshed = await refreshAccessToken()
+
+        if refreshed {
+            await fetchUserInfo()
+            if didChangeAccount {
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .mercuryAccountDidSwitch, object: self.activeUsername)
+                }
+            }
+        }
+    }
+
+    func removeAccount(username: String) {
+        storedAccounts.removeAll { $0.username.caseInsensitiveCompare(username) == .orderedSame }
+        Defaults[.storedAccounts] = storedAccounts
+        // If removing current account
+        if activeUsername?.caseInsensitiveCompare(username) == .orderedSame {
+            if let next = storedAccounts.first {
+                Task { await switchToAccount(username: next.username) }
+            } else {
+                // No accounts left: clear session but keep app config (clientId)
+                clearActiveSessionPreservingAppConfig()
+                Defaults[.activeUsername] = nil
+                activeUsername = nil
+                Task { @MainActor in
+                    NotificationCenter.default.post(name: .mercuryAccountDidSwitch, object: nil)
+                }
+            }
+        }
+    }
+
+    // Clear tokens/user info while preserving clientId and setup state
+    private func clearActiveSessionPreservingAppConfig() {
+        Defaults[.accessToken] = nil
+        Defaults[.refreshToken] = nil
+        Defaults[.accessTokenExpiry] = nil
+        Defaults[.userInfo] = nil
+        self.accessToken = nil
+        self.refreshToken = nil
+        self.accessTokenExpiry = nil
+        self.userInfo = nil
+        self.apiStatus = .unknown
+        self.errorMessage = nil
+        self.refreshRetryCount = 0
+        self.isRefreshingToken = false
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = nil
+    }
+
+    func performUsingAccount<T>(username: String, body: @escaping () async throws -> T) async throws -> T {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return try await body()
+        }
+
+        let isActiveAccount = await MainActor.run { () -> Bool in
+            if let active = self.userInfo?.name ?? self.activeUsername {
+                return active.caseInsensitiveCompare(trimmed) == .orderedSame
+            }
+            return false
+        }
+
+        if isActiveAccount {
+            return try await body()
+        }
+
+        let stored = await MainActor.run {
+            self.storedAccounts.first { $0.username.caseInsensitiveCompare(trimmed) == .orderedSame }
+        }
+
+        guard let stored else {
+            throw AccountImpersonationError.accountNotFound
+        }
+
+        let clientIdToUse = await MainActor.run {
+            stored.clientId ?? self.clientId
+        }
+        guard !clientIdToUse.isEmpty else {
+            throw AccountImpersonationError.missingClientId
+        }
+
+        let tokenResponse = try await requestAccessToken(clientId: clientIdToUse, refreshToken: stored.refreshToken)
+
+        if let newRT = tokenResponse.refreshToken, newRT != stored.refreshToken {
+            await MainActor.run {
+                self.updateStoredAccount(username: stored.username, refreshToken: newRT, clientId: clientIdToUse)
+            }
+        } else {
+            await MainActor.run {
+                self.updateStoredAccount(username: stored.username, refreshToken: nil, clientId: clientIdToUse)
+            }
+        }
+
+        let override = TokenOverride(
+            username: stored.username,
+            accessToken: tokenResponse.accessToken,
+            expiry: tokenResponse.expiresIn.flatMap { Date().addingTimeInterval(TimeInterval($0)) }
+        )
+
+        let previousOverride = swapTokenOverride(override)
+        defer { _ = swapTokenOverride(previousOverride) }
+
+        return try await body()
+    }
+
+    private func requestAccessToken(clientId: String, refreshToken: String) async throws -> TokenResponse {
+        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else {
+            throw AccountImpersonationError.tokenExchangeFailed("Invalid token endpoint")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        let credentials = "\(clientId):".data(using: .utf8)!.base64EncodedString()
+        request.addValue("Basic \(credentials)", forHTTPHeaderField: "Authorization")
+        let body = "grant_type=refresh_token&refresh_token=\(refreshToken)"
+        request.httpBody = body.data(using: .utf8)
+
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AccountImpersonationError.tokenExchangeFailed("Invalid response")
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                let description = HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                throw AccountImpersonationError.tokenExchangeFailed(description)
+            }
+
+            let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+
+            guard !tokenResponse.accessToken.isEmpty else {
+                throw AccountImpersonationError.tokenExchangeFailed("Empty access token")
+            }
+
+            return tokenResponse
+        } catch let error as AccountImpersonationError {
+            throw error
+        } catch {
+            throw AccountImpersonationError.tokenExchangeFailed(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func updateStoredAccount(username: String, refreshToken: String?, clientId: String?) {
+        guard let idx = storedAccounts.firstIndex(where: { $0.username.caseInsensitiveCompare(username) == .orderedSame }) else { return }
+        if let refreshToken {
+            storedAccounts[idx].refreshToken = refreshToken
+        }
+        if let clientId {
+            storedAccounts[idx].clientId = clientId
+        }
+        storedAccounts[idx].lastUpdated = Date()
+        Defaults[.storedAccounts] = storedAccounts
+    }
 }
 
 struct TokenResponse: Codable {
@@ -499,6 +805,33 @@ struct TokenResponse: Codable {
         case scope
         case refreshToken = "refresh_token"
         case expiresIn = "expires_in"
+    }
+}
+
+extension Notification.Name {
+    static let mercuryAccountDidSwitch = Notification.Name("MercuryAccountDidSwitch")
+}
+
+private struct TokenOverride {
+    let username: String
+    let accessToken: String
+    let expiry: Date?
+}
+
+enum AccountImpersonationError: LocalizedError {
+    case accountNotFound
+    case missingClientId
+    case tokenExchangeFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .accountNotFound:
+            return "Selected account could not be found."
+        case .missingClientId:
+            return "Missing client ID for the selected account."
+        case .tokenExchangeFailed(let message):
+            return "Couldn't authenticate selected account: \(message)"
+        }
     }
 }
 

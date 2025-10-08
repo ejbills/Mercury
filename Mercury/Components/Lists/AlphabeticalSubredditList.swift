@@ -66,21 +66,27 @@ struct AlphabeticalSubredditList: View {
     
     private var groupedSubreddits: [(String, [Subreddit])] {
         let sorted = subreddits.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
-        
-        let grouped = Dictionary(grouping: sorted) { subreddit in
+
+        // Filter out favorites from regular sections
+        let nonFavorites = sorted.filter { !favoriteSubreddits.contains($0.displayName) }
+
+        let grouped = Dictionary(grouping: nonFavorites) { subreddit in
             let firstChar = subreddit.displayName.prefix(1).uppercased()
             return firstChar.rangeOfCharacter(from: CharacterSet.letters) != nil ? firstChar : "#"
         }
-        
-        return grouped.sorted { first, second in
-            if first.key == "#" && second.key != "#" {
-                return false
-            } else if first.key != "#" && second.key == "#" {
-                return true
-            } else {
-                return first.key < second.key
+
+        // Only return sections that actually have subreddits
+        return grouped
+            .filter { !$0.value.isEmpty }
+            .sorted { first, second in
+                if first.key == "#" && second.key != "#" {
+                    return false
+                } else if first.key != "#" && second.key == "#" {
+                    return true
+                } else {
+                    return first.key < second.key
+                }
             }
-        }
     }
     
     private var sectionIndexTitles: [String] {
@@ -100,7 +106,11 @@ struct AlphabeticalSubredditList: View {
     }
     
     var body: some View {
-        ScrollViewReader { proxy in
+        // Calculate expensive properties ONCE per render
+        let sections = contentSections
+        let indexTitles = sectionIndexTitles
+
+        return ScrollViewReader { proxy in
             ZStack {
                 List {
                     if hasQuickAccess {
@@ -110,7 +120,7 @@ struct AlphabeticalSubredditList: View {
                             .id("★")
                     }
 
-                    ForEach(contentSections, id: \.0) { section in
+                    ForEach(sections, id: \.0) { section in
                         Section(header: sectionHeader(section.0)) {
                             switch section.1 {
                             case .multis(let items):
@@ -158,12 +168,12 @@ struct AlphabeticalSubredditList: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                
+
                 // Section index overlay
-                if !sectionIndexTitles.isEmpty {
+                if !indexTitles.isEmpty {
                     SectionIndexTitles(
                         proxy: proxy,
-                        titles: sectionIndexTitles
+                        titles: indexTitles
                     )
                 }
             }
@@ -215,12 +225,13 @@ struct SectionIndexTitles: View {
     let proxy: ScrollViewProxy
     let titles: [String]
     @State private var currentIndex: Int? = nil
-    
-    private let itemHeight: CGFloat = 16
-    private let itemSpacing: CGFloat = 2
+    @GestureState private var isDragging = false
+
+    private let itemHeight: CGFloat = 18
+    private let itemSpacing: CGFloat = 4
     private let horizontalPadding: CGFloat = 2
     private let verticalPadding: CGFloat = 4
-    
+
     var body: some View {
         VStack {
             Spacer()
@@ -229,23 +240,25 @@ struct SectionIndexTitles: View {
                 VStack(spacing: itemSpacing) {
                     ForEach(Array(titles.enumerated()), id: \.0) { idx, title in
                         indexLabel(for: title, isActive: currentIndex == idx)
-                            .frame(width: 20, height: itemHeight)
+                            .frame(width: 28, height: itemHeight)
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                currentIndex = idx
-                                proxy.animatedScrollTo(title, anchor: UnitPoint.top)
-                            }
                     }
                 }
                 .padding(.vertical, verticalPadding)
                 .padding(.horizontal, horizontalPadding)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 14)
                         .fill(.clear)
                         .modifier(GlassContainer())
                 )
-                .gesture(
+                .scaleEffect(isDragging ? 1.05 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isDragging)
+                .contentShape(Rectangle())
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
+                        .updating($isDragging) { _, state, _ in
+                            state = true
+                        }
                         .onChanged { value in
                             // Map local Y to index using fixed metrics
                             let localY = value.location.y - verticalPadding
@@ -260,7 +273,10 @@ struct SectionIndexTitles: View {
                             }
                         }
                         .onEnded { _ in
-                            // No-op; keep size and layout unchanged
+                            // Reset after a short delay to allow smooth transition
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                currentIndex = nil
+                            }
                         }
                 )
             }

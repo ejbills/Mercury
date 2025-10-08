@@ -181,9 +181,11 @@ struct MediaDetailView: View {
         .sheet(isPresented: $showingPostReply) {
             MarkdownComposerView(
                 title: "Reply",
+                accounts: redditAPI.availableAccountUsernames(),
+                activeAccount: redditAPI.userInfo?.name ?? redditAPI.activeUsername,
                 onCancel: { showingPostReply = false },
-                onSubmit: { text in
-                    try await submitRootReply(text: text)
+                onSubmit: { text, account in
+                    try await submitRootReply(text: text, account: account)
                 }
             )
         }
@@ -219,9 +221,11 @@ struct MediaDetailView: View {
     }
 
 
-    private func submitRootReply(text: String) async throws {
+    private func submitRootReply(text: String, account: String) async throws {
         let parent = post.fullname
-        _ = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        _ = try await redditAPI.performUsingAccount(username: account) {
+            try await redditAPI.submitComment(parentFullname: parent, text: text)
+        }
     }
     
     @ViewBuilder
