@@ -266,9 +266,11 @@ struct CommentView: View {
         .sheet(isPresented: $showingReply) {
             MarkdownComposerView(
                 title: "Reply",
+                accounts: redditAPI.availableAccountUsernames(),
+                activeAccount: redditAPI.userInfo?.name ?? redditAPI.activeUsername,
                 onCancel: { showingReply = false },
-                onSubmit: { text in
-                    try await postReply(text: text)
+                onSubmit: { text, account in
+                    try await postReply(text: text, account: account)
                 }
             )
         }
@@ -491,9 +493,11 @@ struct CommentView: View {
         }
     }
 
-    private func postReply(text: String) async throws {
+    private func postReply(text: String, account: String) async throws {
         let parent = comment.fullname
-        let created = try await redditAPI.submitComment(parentFullname: parent, text: text)
+        let created = try await redditAPI.performUsingAccount(username: account) {
+            try await redditAPI.submitComment(parentFullname: parent, text: text)
+        }
         await MainActor.run {
             onReplyPosted(created)
         }

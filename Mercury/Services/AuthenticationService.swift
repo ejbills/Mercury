@@ -373,6 +373,8 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             let user = try decoder.decode(RedditUser.self, from: data)
 
             await MainActor.run {
+                let previousUsername = self.userInfo?.name ?? self.activeUsername
+
                 self.userInfo = user
                 self.apiStatus = .valid
                 if let p = self.pendingClientId {
@@ -382,6 +384,11 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                 }
                 self.saveCredentials()
                 self.scheduleTokenRefreshIfNeeded()
+
+                let currentUsername = user.name
+                if previousUsername?.caseInsensitiveCompare(currentUsername) != .orderedSame {
+                    NotificationCenter.default.post(name: .mercuryAccountDidSwitch, object: currentUsername)
+                }
             }
             
         } catch {

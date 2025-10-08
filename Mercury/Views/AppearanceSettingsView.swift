@@ -140,13 +140,13 @@ struct AppearanceSettingsView: View {
                         }
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(UIColor.secondarySystemBackground))
-                )
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                .listRowSeparator(.hidden)
             }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(UIColor.secondarySystemBackground))
+            )
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            .listRowSeparator(.hidden)
 
             Section("Posts") {
                 Picker("Layout", selection: $postLayoutStyle) {

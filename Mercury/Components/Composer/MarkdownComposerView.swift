@@ -5,8 +5,12 @@ import UIKit
 
 struct MarkdownComposerView: View {
     let title: String
+    let accounts: [String]
+    let activeAccount: String?
     let onCancel: () -> Void
-    let onSubmit: (_ text: String) async throws -> Void
+    let onSubmit: (_ text: String, _ account: String) async throws -> Void
+
+    @State private var selectedAccount: String
 
     @State private var text: String = ""
     @State private var selectedRange: NSRange = NSRange(location: 0, length: 0)
@@ -16,10 +20,34 @@ struct MarkdownComposerView: View {
     @State private var mode: Mode = .write
     @State private var errorMessage: String? = nil
 
+    init(
+        title: String,
+        accounts: [String],
+        activeAccount: String?,
+        onCancel: @escaping () -> Void,
+        onSubmit: @escaping (_ text: String, _ account: String) async throws -> Void
+    ) {
+        self.title = title
+        self.accounts = accounts
+        self.activeAccount = activeAccount
+        self.onCancel = onCancel
+        self.onSubmit = onSubmit
+
+        if let active = activeAccount,
+           accounts.contains(where: { $0.caseInsensitiveCompare(active) == .orderedSame }) {
+            _selectedAccount = State(initialValue: active)
+        } else if let first = accounts.first {
+            _selectedAccount = State(initialValue: first)
+        } else {
+            _selectedAccount = State(initialValue: "")
+        }
+    }
+
     @ViewBuilder
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                accountPicker
                 modeSwitcher
                 toolbar
                 content
@@ -47,12 +75,52 @@ struct MarkdownComposerView: View {
                             Label("Post", systemImage: "paperplane.fill")
                         }
                     }
-                    .disabled(isSubmitting || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isSubmitting || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || resolvedAccount() == nil)
                 }
             }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private var accountPicker: some View {
+        if accounts.isEmpty {
+            VStack(spacing: 6) {
+                Text("No accounts available")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("Add an account in Settings to reply.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+        } else {
+            VStack(spacing: 6) {
+                HStack {
+                    Text("Posting as")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Picker("Account", selection: $selectedAccount) {
+                        ForEach(accounts, id: \.self) { username in
+                            Text(username)
+                                .lineLimit(1)
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                .lineLimit(1)
+                Divider()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+        }
     }
 
     @ViewBuilder
@@ -267,10 +335,16 @@ struct MarkdownComposerView: View {
 
     private func submit() {
         guard !isSubmitting else { return }
+        guard let account = resolvedAccount() else {
+            errorMessage = "Select an account before posting."
+            return
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         isSubmitting = true
         Task {
             do {
-                try await onSubmit(text)
+                try await onSubmit(trimmed, account)
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
@@ -287,5 +361,12 @@ struct MarkdownComposerView: View {
         }
     }
 
+    private func resolvedAccount() -> String? {
+        let trimmed = selectedAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        return accounts.first
+    }
     
 }

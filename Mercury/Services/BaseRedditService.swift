@@ -13,7 +13,7 @@ class BaseRedditService {
     /// Creates a URLRequest with common headers
     func createRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
-        if let accessToken = authService?.accessToken {
+        if let accessToken = authService?.currentRequestAccessToken() {
             request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
         return request
@@ -29,7 +29,7 @@ class BaseRedditService {
     
     /// Validates that we have a valid access token
     func validateAccessToken() throws {
-        guard authService?.accessToken != nil else {
+        guard authService?.hasAccessTokenForRequests() == true else {
             throw APIError.missingAccessToken
         }
     }
@@ -75,7 +75,7 @@ enum APIError: LocalizedError {
         case .invalidToken:
             return "Access token expired or invalid"
         case .insufficientScope:
-            return "Insufficient permissions - please re-authenticate"
+            return "Insufficient permissions (possibly not allowed to post here)"
         case .parseError:
             return "Failed to parse response data"
         case .serverError(let code):

@@ -416,6 +416,7 @@ struct SubredditDrawerView: View {
             lastLoadedUsername = activeUsername
         }
         Task {
+            apiService.clearSubredditCaches()
             await reloadSubredditsForAccountSwitch()
             await MainActor.run {
                 navigateToDefaultFeedIfNeeded()

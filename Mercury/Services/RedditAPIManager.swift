@@ -47,6 +47,34 @@ class RedditAPIManager {
     var storedAccounts: [StoredAccount] { authService.storedAccounts }
     var activeUsername: String? { authService.activeUsername }
 
+    func performUsingAccount<T>(username: String, operation: @escaping () async throws -> T) async throws -> T {
+        try await authService.performUsingAccount(username: username, body: operation)
+    }
+
+    func availableAccountUsernames() -> [String] {
+        var result: [String] = []
+        var seen = Set<String>()
+
+        func append(_ username: String) {
+            let key = username.lowercased()
+            if !seen.contains(key) {
+                seen.insert(key)
+                result.append(username)
+            }
+        }
+
+        if let active = userInfo?.name ?? activeUsername {
+            append(active)
+        }
+
+        let sortedAccounts = storedAccounts.sorted { $0.lastUpdated > $1.lastUpdated }
+        for account in sortedAccounts {
+            append(account.username)
+        }
+
+        return result
+    }
+
     func switchToAccount(username: String) async {
         // Clear caches before switching accounts
         clearSubredditCaches()

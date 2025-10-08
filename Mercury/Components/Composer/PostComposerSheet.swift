@@ -55,11 +55,11 @@ struct PostComposerSheet: View {
                     set: { selectedAccount = $0 }
                 )) {
                     ForEach(accounts, id: \.self) { username in
-                        Text("u/\(username)")
-                            .tag(username)
+                        Text(username)
+                            .lineLimit(1)
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
-                .lineLimit(1)
                 .pickerStyle(.menu)
             }
         }
