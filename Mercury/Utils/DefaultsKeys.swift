@@ -131,9 +131,9 @@ extension Defaults.Keys {
     static let feedItemSpacing = Key<Double>("feedItemSpacing", default: 8.0)
     static let postHorizontalPadding = Key<Double>("postHorizontalPadding", default: 8.0)
     static let commentHorizontalPadding = Key<Double>("commentHorizontalPadding", default: 8.0)
-    static let feedHorizontalPadding = Key<Double>("feedHorizontalPadding", default: 12.0)
+    static let feedHorizontalPadding = Key<Double>("feedHorizontalPadding", default: 8.0)
     static let customFeedBackgroundColor = Key<SerializableColor?>("customFeedBackgroundColor")
-    static let commentRowVerticalPadding = Key<Double>("commentRowVerticalPadding", default: 2.0)
+    static let commentRowVerticalPadding = Key<Double>("commentRowVerticalPadding", default: 3.0)
 
     static let postNormalCardCornerRadius = Key<Double>("postNormalCardCornerRadius", default: 16.0)
     static let postCompactCardCornerRadius = Key<Double>("postCompactCardCornerRadius", default: 8.0)
