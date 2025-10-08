@@ -23,6 +23,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     private var isRefreshingToken = false
     private var refreshRetryCount = 0
     private let maxRefreshRetries = 3
+    private var refreshWaiters: [CheckedContinuation<Bool, Never>] = []
     // Pending values for seamless add/switch flows
     private var pendingClientId: String? = nil
     private var pendingRefreshToken: String? = nil
@@ -387,33 +388,33 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
     
     @discardableResult
     func refreshAccessToken() async -> Bool {
-        // Prevent concurrent refresh attempts
-        guard !isRefreshingToken else {
-            return false
-        }
-
         let useClientId = pendingClientId ?? clientId
         let useRefreshToken = pendingRefreshToken ?? refreshToken
 
-        guard let refreshToken = useRefreshToken, !useClientId.isEmpty else {
-            return false
+        let shouldWaitForInFlight = await MainActor.run { () -> Bool in
+            if self.isRefreshingToken {
+                return true
+            } else {
+                self.isRefreshingToken = true
+                return false
+            }
         }
-        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else {
-            return false
-        }
-        
-        await MainActor.run {
-            self.isRefreshingToken = true
-        }
-        
-        defer {
-            Task {
-                await MainActor.run {
-                    self.isRefreshingToken = false
+
+        if shouldWaitForInFlight {
+            return await withCheckedContinuation { continuation in
+                Task { @MainActor in
+                    self.refreshWaiters.append(continuation)
                 }
             }
         }
-        
+
+        guard let refreshToken = useRefreshToken, !useClientId.isEmpty else {
+            return await finishRefresh(success: false)
+        }
+        guard let url = URL(string: "https://www.reddit.com/api/v1/access_token") else {
+            return await finishRefresh(success: false)
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -428,13 +429,13 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 await handleRefreshError("Network error during token refresh")
-                return false
+                return await finishRefresh(success: false)
             }
             
             guard httpResponse.statusCode == 200 else {
                 let errorMsg = "Token refresh failed with status \(httpResponse.statusCode)"
                 await handleRefreshError(errorMsg)
-                return false
+                return await finishRefresh(success: false)
             }
             
             let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
@@ -444,7 +445,7 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                   let expiresIn = tokenResponse.expiresIn,
                   expiresIn > 0 else {
                 await handleRefreshError("Invalid token response from server")
-                return false
+                return await finishRefresh(success: false)
             }
             
             await MainActor.run {
@@ -481,12 +482,27 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                 self.saveCredentials(shouldUpsertAccount: !isSwitching)
                 self.scheduleTokenRefreshIfNeeded()
             }
-            return true
+            return await finishRefresh(success: true)
             
         } catch {
             await handleRefreshError("Token refresh error: \(error.localizedDescription)")
-            return false
+            return await finishRefresh(success: false)
         }
+    }
+
+    private func finishRefresh(success: Bool) async -> Bool {
+        let waiters = await MainActor.run { () -> [CheckedContinuation<Bool, Never>] in
+            self.isRefreshingToken = false
+            let pending = self.refreshWaiters
+            self.refreshWaiters.removeAll()
+            return pending
+        }
+        
+        for waiter in waiters {
+            waiter.resume(returning: success)
+        }
+        
+        return success
     }
     
     // MARK: - Error Handling
@@ -573,18 +589,26 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
             return
         }
 
+        var didChangeAccount = false
         await MainActor.run {
+            let previousUsername = self.activeUsername
             // Stage pending values and mark active account; do not clear current session
             self.pendingRefreshToken = acct.refreshToken
             self.pendingClientId = acct.clientId ?? self.clientId
             self.activeUsername = acct.username
             Defaults[.activeUsername] = acct.username
+            didChangeAccount = previousUsername?.caseInsensitiveCompare(acct.username) != .orderedSame
         }
 
         let refreshed = await refreshAccessToken()
 
         if refreshed {
             await fetchUserInfo()
+            if didChangeAccount {
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .mercuryAccountDidSwitch, object: self.activeUsername)
+                }
+            }
         }
     }
 
@@ -600,6 +624,9 @@ class AuthenticationService: NSObject, ASWebAuthenticationPresentationContextPro
                 clearActiveSessionPreservingAppConfig()
                 Defaults[.activeUsername] = nil
                 activeUsername = nil
+                Task { @MainActor in
+                    NotificationCenter.default.post(name: .mercuryAccountDidSwitch, object: nil)
+                }
             }
         }
     }
@@ -637,6 +664,10 @@ struct TokenResponse: Codable {
         case refreshToken = "refresh_token"
         case expiresIn = "expires_in"
     }
+}
+
+extension Notification.Name {
+    static let mercuryAccountDidSwitch = Notification.Name("MercuryAccountDidSwitch")
 }
 
 struct RedditUser: Codable, Defaults.Serializable {

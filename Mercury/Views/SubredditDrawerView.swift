@@ -1,5 +1,6 @@
 import SwiftUI
 import Defaults
+import Combine
 
 private func canonicalFeedIdentifier(_ value: String) -> String {
     var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -109,6 +110,9 @@ struct SubredditDrawerView: View {
         }
         .onChange(of: defaultHomeFeed) { _, _ in
             navigateToDefaultFeedIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mercuryAccountDidSwitch)) { _ in
+            handleAccountSwitchNotification()
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -397,6 +401,24 @@ struct SubredditDrawerView: View {
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
+            }
+        }
+    }
+
+    private func handleAccountSwitchNotification() {
+        Task { @MainActor in
+            navigationPath.popToRoot()
+            lastNavigatedDefaultFeed = nil
+            subreddits = []
+            multis = []
+            isLoading = true
+            errorMessage = nil
+            lastLoadedUsername = activeUsername
+        }
+        Task {
+            await reloadSubredditsForAccountSwitch()
+            await MainActor.run {
+                navigateToDefaultFeedIfNeeded()
             }
         }
     }
