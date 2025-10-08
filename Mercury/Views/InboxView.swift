@@ -12,7 +12,6 @@ struct InboxView: View {
     @Namespace private var filterNamespace
     @State private var selectedItem: InboxItem?
     @Environment(\.navigationPathManager) private var navigationPath
-    @State private var isRefreshing = false
     @State private var hasLoaded = false
     
     enum InboxFilter: String, CaseIterable, SectionPickerIconProvider {
@@ -290,17 +289,18 @@ struct InboxView: View {
     
     private func reload(preservingData: Bool = false) async {
         if preservingData {
-            await MainActor.run { isRefreshing = true; errorMessage = nil }
+            await MainActor.run { errorMessage = nil }
             do {
                 let page = try await apiService.fetchInbox(category: selectedFilter.apiCategory, limit: 25)
                 await MainActor.run {
-                    self.messages = page.items
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        self.messages = page.items
+                    }
                     self.after = page.after
                     self.hasMore = page.after != nil && !page.items.isEmpty
-                    self.isRefreshing = false
                 }
             } catch {
-                await MainActor.run { self.isRefreshing = false }
+                await MainActor.run { self.errorMessage = error.localizedDescription }
             }
         } else {
             await MainActor.run {
@@ -313,7 +313,9 @@ struct InboxView: View {
             do {
                 let page = try await apiService.fetchInbox(category: selectedFilter.apiCategory, limit: 25)
                 await MainActor.run {
-                    self.messages = page.items
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        self.messages = page.items
+                    }
                     self.after = page.after
                     self.hasMore = page.after != nil && !page.items.isEmpty
                     self.isLoading = false
@@ -336,7 +338,9 @@ struct InboxView: View {
                 let newItems = page.items.filter { newItem in
                     !messages.contains { $0.id == newItem.id }
                 }
-                self.messages.append(contentsOf: newItems)
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    self.messages.append(contentsOf: newItems)
+                }
                 self.after = page.after
                 self.hasMore = page.after != nil && !newItems.isEmpty
                 self.isLoadingMore = false

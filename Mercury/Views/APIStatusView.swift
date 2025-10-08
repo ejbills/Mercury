@@ -46,7 +46,6 @@ struct APIStatusView: View {
         }
     }
     
-    
     private var statusText: VStack<some View> {
         VStack(spacing: 8) {
             Text(statusTitle)

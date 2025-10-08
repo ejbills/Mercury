@@ -224,6 +224,9 @@ struct PostCommentsView: View {
                 MediaShareSheet(post: post, mediaURL: shareItem)
             }
         }
+        .onDisappear {
+            searchDebounceTask?.cancel()
+        }
     }
     
     
@@ -436,7 +439,7 @@ struct PostCommentsView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     // MARK: - Helper Functions
     
     @MainActor

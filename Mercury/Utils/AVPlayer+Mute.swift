@@ -8,6 +8,8 @@ extension AVPlayer {
     func applyMuteState(muted: Bool) {
         isMuted = muted
         volume = muted ? 0.0 : 1.0
+        if !muted {
+            AudioSessionManager.ensurePlaybackSessionActive()
+        }
     }
 }
-

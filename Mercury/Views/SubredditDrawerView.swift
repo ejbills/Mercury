@@ -45,10 +45,10 @@ struct SubredditDrawerView: View {
     @Default(.favoriteSubreddits) private var favoriteSubreddits
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var showingMultiEditor = false
-    @State private var editingMulti: MultiReddit? = nil
-    @State private var lastNavigatedDefaultFeed: String? = nil
-    @State private var showingDefaultFeedPicker = false
-    @State private var lastLoadedUsername: String? = nil
+   @State private var editingMulti: MultiReddit? = nil
+   @State private var lastNavigatedDefaultFeed: String? = nil
+   @State private var showingDefaultFeedPicker = false
+   @State private var lastLoadedUsername: String? = nil
 
     private var activeUsername: String? {
         apiService.activeUsername
@@ -514,8 +514,10 @@ struct SubredditDrawerView: View {
             async let fetchedMultis = apiService.fetchUserMultiredditsCached(forceRefresh: true)
             let (subs, ms) = try await (fetchedSubreddits, fetchedMultis)
             await MainActor.run {
-                self.subreddits = subs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
-                self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    self.subreddits = subs.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                    self.multis = ms.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+                }
                 self.isLoading = false
             }
         } catch {
@@ -568,7 +570,6 @@ struct SubredditDrawerView: View {
         }
     }
 }
-
 private struct DefaultFeedPickerView: View {
     let subreddits: [Subreddit]
     let multis: [MultiReddit]

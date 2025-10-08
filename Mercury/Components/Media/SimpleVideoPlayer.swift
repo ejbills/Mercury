@@ -141,13 +141,7 @@ private struct PlayerLayerRepresentable: UIViewRepresentable {
 
 // Shared
 private func configureAudioSession() {
-    do {
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-        try audioSession.setActive(true)
-    } catch {
-        // Silent failure ok
-    }
+    AudioSessionManager.ensurePlaybackSessionActive()
 }
 
 private final class PlayerContainerView: UIView {

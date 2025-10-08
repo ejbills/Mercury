@@ -29,7 +29,7 @@ struct NukeVideoPlayer: UIViewRepresentable {
         view.videoGravity = gravity
         view.isLooping = isLooping
         // Ensure audio session is configured to mix with other audio sources
-        AudioSessionManager.configureIfNeeded()
+        AudioSessionManager.ensurePlaybackSessionActive()
         context.coordinator.load(
             url: url,
             into: view,

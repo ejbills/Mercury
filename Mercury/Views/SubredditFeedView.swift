@@ -32,12 +32,13 @@ struct SubredditFeedView: View {
     @State private var searchHasMore = true
     @State private var searchDebounceTask: Task<Void, Never>? = nil
     @State private var showingPostComposer = false
-
+    
     private let pageSize = 25
     @Default(.feedItemSpacing) private var feedItemSpacing
     @Default(.feedBackgroundStyle) private var feedBackgroundStyle
     @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
     @Default(.postHorizontalPadding) private var postHorizontalPadding
+    
     
     var body: some View {
         let base = isSearching ? searchResults : posts
@@ -128,6 +129,8 @@ struct SubredditFeedView: View {
                         }
                     }
                 }
+                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: posts)
+                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: searchResults)
                 .padding(.top, 6)
             }
             .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
@@ -411,7 +414,7 @@ struct SubredditFeedView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     private func loadInitialPosts() async {
         await MainActor.run {
             isLoading = true
@@ -472,7 +475,7 @@ struct SubredditFeedView: View {
     }
     
     private func refreshFeed() async {
-        await MainActor.run { 
+        await MainActor.run {
             errorMessage = nil
             after = nil
             hasMore = true
@@ -480,16 +483,19 @@ struct SubredditFeedView: View {
         
         do {
             let response = try await fetchPosts(after: nil)
+            let newPosts = response.data.children.compactMap { $0.data }
             await MainActor.run {
-                let newPosts = response.data.children.compactMap { $0.data }
-                self.posts = newPosts
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    self.posts = newPosts
+                }
                 self.after = response.data.after
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.errorMessage = nil // Clear any previous error on success
             }
             MediaPrefetcher.shared.prefetch(posts: self.posts)
         } catch {
-            await MainActor.run { 
+            if Task.isCancelled { return }
+            await MainActor.run {
                 self.errorMessage = error.localizedDescription
             }
         }

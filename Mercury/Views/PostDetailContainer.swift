@@ -18,7 +18,8 @@ struct PostDetailContainer: View {
             onVideoHandoffReturn: { returnedState in
                 videoHandoffState = returnedState
                 onDismiss()
-            }
+            },
+            onDismiss: onDismiss
         )
     }
 }

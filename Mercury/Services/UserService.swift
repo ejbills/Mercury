@@ -6,6 +6,10 @@ class UserService: BaseRedditService {
         guard let auth = self.authService else { fatalError("Missing authService") }
         return AvatarManager(authService: auth)
     }()
+    private lazy var subredditIconManager: SubredditIconManager = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return SubredditIconManager(authService: auth)
+    }()
     
     // MARK: - User Profiles
     
@@ -199,11 +203,15 @@ class UserService: BaseRedditService {
                 }
 
                 let usernames = Array(Set(filteredChildren.compactMap { $0.data?.author }))
-                let avatarMap = await avatarManager.fetchAvatars(for: usernames)
+                let subreddits = Array(Set(filteredChildren.compactMap { $0.data?.subreddit }))
+                async let avatarMapTask = avatarManager.fetchAvatars(for: usernames)
+                async let subredditIconMapTask = subredditIconManager.fetchIcons(for: subreddits)
+                let (avatarMap, subredditIconMap) = await (avatarMapTask, subredditIconMapTask)
 
                 let enrichedChildren = filteredChildren.map { child in
                     var post = child.data!
                     if let url = avatarMap[post.author] { post.authorIconURL = url }
+                    if let subIcon = subredditIconMap[post.subreddit] { post.subredditIconURL = subIcon }
                     return PostChild(kind: child.kind, data: post)
                 }
 
