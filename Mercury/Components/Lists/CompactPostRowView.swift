@@ -755,7 +755,7 @@ struct CompactPostRowView: View {
                 navigationPath.navigate(to: .subredditFeed(subreddit: post.subreddit))
             case .copyLink:
                 handleCopyLink()
-            case .hide, .hideAbove, .collapse, .collapseToTop, .parentComment, .markRead, .markUnread, .deleteMessage, .none:
+            case .hide, .hideAbove, .collapse, .collapseToTop, .parentComment, .none:
                 break
             }
         }

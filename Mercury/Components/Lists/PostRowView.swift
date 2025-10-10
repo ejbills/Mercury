@@ -788,8 +788,8 @@ struct PostRowView: View {
                 onHidePostsAbove?(post.id)
             case .copyLink:
                 handleCopyLink()
-            case .collapse, .collapseToTop, .parentComment, .markRead, .markUnread, .deleteMessage, .none:
-                // Comment-specific or inbox-specific actions not applicable to posts
+            case .collapse, .collapseToTop, .parentComment, .none:
+                // Comment-specific actions not applicable to posts
                 break
             }
         }
