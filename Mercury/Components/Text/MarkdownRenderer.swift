@@ -152,19 +152,6 @@ struct MarkdownRenderer: View {
         } catch {
             
         }
-        do {
-            let spoilerRegex = try NSRegularExpression(pattern: ">!([^!]+)!<", options: [])
-            let range = NSRange(location: 0, length: processed.utf16.count)
-            processed = spoilerRegex.stringByReplacingMatches(
-                in: processed,
-                options: [],
-                range: range,
-                withTemplate: "[SPOILER: $1]"
-            )
-        } catch {
-            
-        }
-        
         return processed
     }
     
