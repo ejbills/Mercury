@@ -61,7 +61,13 @@ struct InboxView: View {
                     }
                 }
             }
-            .refreshable { await reload(preservingData: false) }
+            .refreshable {
+                await MainActor.run {
+                    errorMessage = nil
+                    isLoading = true
+                }
+                await reload(preservingData: false)
+            }
         }
         .sheet(item: $selectedItem) { item in
             InboxDetailView(item: item)
@@ -185,21 +191,16 @@ struct InboxView: View {
                 }
                 .padding(.horizontal, 12)
                 .feedListRowStyle()
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        Task { await deleteMessageItem(message) }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    Button {
-                        Task { await toggleReadStatus(for: message) }
-                    } label: {
-                        Label(message.isUnread ? "Read" : "Unread", systemImage: message.isUnread ? "envelope.open" : "envelope.badge")
-                    }
-                    .tint(message.isUnread ? .blue : .orange)
-                }
+                .customSwipeGesture(
+                    right1: SwipeAction(
+                        type: message.isUnread ? .markRead : .markUnread,
+                        action: { await toggleReadStatus(for: message) }
+                    ),
+                    right2: SwipeAction(
+                        type: .deleteMessage,
+                        action: { await deleteMessageItem(message) }
+                    )
+                )
                 .onAppear {
                     if message.id == filteredMessages.last?.id && hasMore && !isLoadingMore {
                         Task { await loadMore() }

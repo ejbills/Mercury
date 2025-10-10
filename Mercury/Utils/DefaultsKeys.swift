@@ -214,8 +214,12 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
     case collapseToTop = "collapseToTop"
     case parentComment = "parentComment"
     case copyLink = "copyLink"
+    // Inbox-specific actions
+    case markRead = "markRead"
+    case markUnread = "markUnread"
+    case deleteMessage = "deleteMessage"
     case none = "none"
-    
+
     var displayName: String {
         switch self {
         case .upvote: return "Upvote"
@@ -231,10 +235,13 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .collapseToTop: return "Collapse to Top"
         case .parentComment: return "Parent Comment"
         case .copyLink: return "Copy Link"
+        case .markRead: return "Mark Read"
+        case .markUnread: return "Mark Unread"
+        case .deleteMessage: return "Delete"
         case .none: return "None"
         }
     }
-    
+
     var systemImageName: String {
         switch self {
         case .upvote: return "arrow.up"
@@ -250,10 +257,13 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .collapseToTop: return "arrow.up.to.line"
         case .parentComment: return "arrow.uturn.up"
         case .copyLink: return "link"
+        case .markRead: return "envelope.open"
+        case .markUnread: return "envelope.badge"
+        case .deleteMessage: return "trash"
         case .none: return "slash.circle"
         }
     }
-    
+
     var color: SwiftUI.Color {
         switch self {
         case .upvote: return .orange
@@ -269,6 +279,9 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
         case .collapseToTop: return .cyan
         case .parentComment: return .pink
         case .copyLink: return .cyan
+        case .markRead: return .blue
+        case .markUnread: return .orange
+        case .deleteMessage: return .red
         case .none: return .gray
         }
     }
