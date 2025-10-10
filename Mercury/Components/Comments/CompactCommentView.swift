@@ -476,7 +476,7 @@ struct CompactCommentView: View {
                 onCollapseToggle()
             case .collapseToTop:
                 onCollapseToggle()
-            case .subreddit, .hide, .hideAbove, .copyLink, .none:
+            case .subreddit, .hide, .hideAbove, .copyLink, .markRead, .markUnread, .deleteMessage, .none:
                 break
             }
         }

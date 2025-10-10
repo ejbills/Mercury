@@ -544,9 +544,7 @@ struct CommentView: View {
                 UIPasteboard.general.string = "https://www.reddit.com\(comment.permalink)"
                 let h = UINotificationFeedbackGenerator()
                 h.notificationOccurred(.success)
-            case .hide, .hideAbove:
-                break
-            case .none:
+            case .hide, .hideAbove, .markRead, .markUnread, .deleteMessage, .none:
                 break
             }
         }

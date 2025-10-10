@@ -288,14 +288,14 @@ enum SwipeActionType: String, CaseIterable, Codable, Defaults.Serializable {
     
     var availableForPosts: Bool {
         switch self {
-        case .collapse, .collapseToTop, .parentComment: return false
+        case .collapse, .collapseToTop, .parentComment, .markRead, .markUnread, .deleteMessage: return false
         default: return true
         }
     }
-    
+
     var availableForComments: Bool {
         switch self {
-        case .subreddit, .hide, .hideAbove: return false
+        case .subreddit, .hide, .hideAbove, .markRead, .markUnread, .deleteMessage: return false
         default: return true
         }
     }
