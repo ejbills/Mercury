@@ -18,7 +18,13 @@ struct InboxItem: Identifiable, Equatable {
         case commentReply
         case mention
     }
-    
+
+    var canBeDeleted: Bool {
+        // Only private messages can be deleted from inbox
+        // Comment replies and mentions are actual comments and require different handling
+        type == .privateMessage
+    }
+
     var timeAgo: String {
         let now = Date()
         let timeInterval = now.timeIntervalSince(created)

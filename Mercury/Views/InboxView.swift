@@ -188,23 +188,25 @@ struct InboxView: View {
                     .onTapGesture {
                         Task { await handleTapAndMarkRead(on: message) }
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if message.canBeDeleted {
+                            Button(role: .destructive) {
+                                Task { await deleteMessageItem(message) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+
+                        Button {
+                            Task { await toggleReadStatus(for: message) }
+                        } label: {
+                            Label(message.isUnread ? "Read" : "Unread", systemImage: message.isUnread ? "envelope.open" : "envelope.badge")
+                        }
+                        .tint(message.isUnread ? .blue : .orange)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .feedListRowStyle()
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        Task { await deleteMessageItem(message) }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-
-                    Button {
-                        Task { await toggleReadStatus(for: message) }
-                    } label: {
-                        Label(message.isUnread ? "Read" : "Unread", systemImage: message.isUnread ? "envelope.open" : "envelope.badge")
-                    }
-                    .tint(message.isUnread ? .blue : .orange)
-                }
                 .onAppear {
                     if message.id == filteredMessages.last?.id && hasMore && !isLoadingMore {
                         Task { await loadMore() }
