@@ -460,7 +460,11 @@ struct CompactPostRowView: View {
                 titlePointSize: CGFloat(14) * CGFloat(titleScale),
                 titleWeight: .medium,
                 pillPointSize: CGFloat(12) * CGFloat(captionScale),
-                pillWeight: .medium
+                pillWeight: .medium,
+                isPinned: post.isPinned || post.isStickied,
+                isLocked: post.locked,
+                isArchived: post.archived,
+                gildedCount: post.gilded
             )
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)

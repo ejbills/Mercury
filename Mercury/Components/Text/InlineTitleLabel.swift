@@ -22,6 +22,10 @@ public struct InlineTitleLabel: UIViewRepresentable {
     let titleWeight: UIFont.Weight
     let pillPointSize: CGFloat
     let pillWeight: UIFont.Weight
+    let isPinned: Bool
+    let isLocked: Bool
+    let isArchived: Bool
+    let gildedCount: Int
 
     public init(title: String,
                 flairText: String?,
@@ -35,7 +39,11 @@ public struct InlineTitleLabel: UIViewRepresentable {
                 titlePointSize: CGFloat,
                 titleWeight: UIFont.Weight,
                 pillPointSize: CGFloat,
-                pillWeight: UIFont.Weight) {
+                pillWeight: UIFont.Weight,
+                isPinned: Bool = false,
+                isLocked: Bool = false,
+                isArchived: Bool = false,
+                gildedCount: Int = 0) {
         self.title = title
         self.flairText = flairText
         self.isNSFW = isNSFW
@@ -49,6 +57,10 @@ public struct InlineTitleLabel: UIViewRepresentable {
         self.titleWeight = titleWeight
         self.pillPointSize = pillPointSize
         self.pillWeight = pillWeight
+        self.isPinned = isPinned
+        self.isLocked = isLocked
+        self.isArchived = isArchived
+        self.gildedCount = gildedCount
     }
 
     public func makeUIView(context: Context) -> UILabel {
@@ -98,6 +110,23 @@ public struct InlineTitleLabel: UIViewRepresentable {
             appendSpace()
             out.append(NSAttributedString(attachment: pillAttachment(text: domainText, textColor: .secondaryLabel, backgroundColor: .secondarySystemFill)))
         }
+        if isPinned {
+            appendSpace()
+            out.append(NSAttributedString(attachment: iconPillAttachment(systemName: "pin.fill", tintColor: .systemGreen)))
+        }
+        if gildedCount > 0 {
+            appendSpace()
+            let text = gildedCount > 1 ? "\(gildedCount)" : nil
+            out.append(NSAttributedString(attachment: iconPillAttachment(systemName: "seal.fill", tintColor: .systemYellow, text: text)))
+        }
+        if isLocked {
+            appendSpace()
+            out.append(NSAttributedString(attachment: iconPillAttachment(systemName: "lock.fill", tintColor: .systemOrange)))
+        }
+        if isArchived {
+            appendSpace()
+            out.append(NSAttributedString(attachment: iconPillAttachment(systemName: "archivebox.fill", tintColor: .secondaryLabel)))
+        }
         return out
     }
 
@@ -129,6 +158,61 @@ public struct InlineTitleLabel: UIViewRepresentable {
             path.fill()
             let textOrigin = CGPoint(x: paddingH, y: paddingV)
             (text as NSString).draw(at: textOrigin, withAttributes: attributes)
+        }
+    }
+
+    private func iconPillAttachment(systemName: String, tintColor: UIColor, text: String? = nil) -> NSTextAttachment {
+        let image = renderIconPill(systemName: systemName, tintColor: tintColor, text: text)
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        let baselineFont = UIFont.systemFont(ofSize: titlePointSize, weight: titleWeight)
+        let yOffset = (baselineFont.capHeight - image.size.height) / 2
+        attachment.bounds = CGRect(x: 0, y: yOffset, width: image.size.width, height: image.size.height)
+        return attachment
+    }
+
+    private func renderIconPill(systemName: String, tintColor: UIColor, text: String?) -> UIImage {
+        let paddingH: CGFloat = 5
+        let paddingV: CGFloat = 2
+        let iconSize = pillPointSize
+        let config = UIImage.SymbolConfiguration(pointSize: iconSize, weight: .medium)
+        guard let icon = UIImage(systemName: systemName, withConfiguration: config)?.withTintColor(tintColor, renderingMode: .alwaysOriginal) else {
+            return UIImage()
+        }
+
+        var totalWidth = icon.size.width + paddingH * 2
+        var textSize: CGSize = .zero
+
+        if let text = text {
+            let font = UIFont.systemFont(ofSize: pillPointSize, weight: pillWeight)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font]
+            textSize = (text as NSString).size(withAttributes: attributes)
+            totalWidth += textSize.width + 3 // 3pt spacing between icon and text
+        }
+
+        let height = max(icon.size.height, textSize.height) + paddingV * 2
+        let size = CGSize(width: ceil(totalWidth), height: ceil(height))
+        let renderer = UIGraphicsImageRenderer(size: size)
+
+        return renderer.image { context in
+            let rect = CGRect(origin: .zero, size: size)
+            let path = UIBezierPath(roundedRect: rect, cornerRadius: size.height / 2)
+            UIColor.secondarySystemFill.setFill()
+            path.fill()
+
+            let iconY = (size.height - icon.size.height) / 2
+            icon.draw(at: CGPoint(x: paddingH, y: iconY))
+
+            if let text = text {
+                let font = UIFont.systemFont(ofSize: pillPointSize, weight: pillWeight)
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: UIColor.secondaryLabel
+                ]
+                let textX = paddingH + icon.size.width + 3
+                let textY = (size.height - textSize.height) / 2
+                (text as NSString).draw(at: CGPoint(x: textX, y: textY), withAttributes: attributes)
+            }
         }
     }
 }

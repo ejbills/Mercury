@@ -306,64 +306,26 @@ struct PostRowView: View {
     }
     
     private var postTitle: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            InlineTitleLabel(
-                title: post.title,
-                flairText: postShowFlair ? post.linkFlairText : nil,
-                isNSFW: post.isNsfw,
-                isSpoiler: post.isSpoiler,
-                showDomain: postShowDomain && (postType == .link && !(post.domain?.isEmpty ?? true)),
-                domainText: shortenedDomain,
-                flairBackground: UIColor(flairBackgroundColor),
-                flairTextColor: UIColor(flairTextColor),
-                textColor: UIColor.label,
-                titlePointSize: CGFloat(16) * CGFloat(titleScale),
-                titleWeight: .medium,
-                pillPointSize: CGFloat(12) * CGFloat(captionScale),
-                pillWeight: .medium
-            )
-            .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 6) {
-                if post.isPinned || post.isStickied {
-                    Pill(size: .small) {
-                        Image(systemName: "pin.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
-                    }
-                }
-                if post.gilded > 0 {
-                    Pill(size: .small) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "seal.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.yellow)
-                            if post.gilded > 1 {
-                                Text("\(post.gilded)")
-                                    .appFont(.small)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                if post.locked {
-                    Pill(size: .small) {
-                        Image(systemName: "lock.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                    }
-                }
-                if post.archived {
-                    Pill(size: .small) {
-                        Image(systemName: "archivebox.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-            }
-        }
+        InlineTitleLabel(
+            title: post.title,
+            flairText: postShowFlair ? post.linkFlairText : nil,
+            isNSFW: post.isNsfw,
+            isSpoiler: post.isSpoiler,
+            showDomain: postShowDomain && (postType == .link && !(post.domain?.isEmpty ?? true)),
+            domainText: shortenedDomain,
+            flairBackground: UIColor(flairBackgroundColor),
+            flairTextColor: UIColor(flairTextColor),
+            textColor: UIColor.label,
+            titlePointSize: CGFloat(16) * CGFloat(titleScale),
+            titleWeight: .medium,
+            pillPointSize: CGFloat(12) * CGFloat(captionScale),
+            pillWeight: .medium,
+            isPinned: post.isPinned || post.isStickied,
+            isLocked: post.locked,
+            isArchived: post.archived,
+            gildedCount: post.gilded
+        )
+        .fixedSize(horizontal: false, vertical: true)
     }
     
     private var shortenedDomain: String {
