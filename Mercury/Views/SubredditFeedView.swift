@@ -42,107 +42,83 @@ struct SubredditFeedView: View {
     
     var body: some View {
         let base = isSearching ? searchResults : posts
-        let visiblePosts = base.filter { !hiddenPostIds.contains($0.id) }
-        
-        return ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: CGFloat(feedItemSpacing)) {
-                    Color.clear
-                        .frame(height: 0)
-                        .id("top")
-                    
-                    if (isSearching ? searchResults.isEmpty : posts.isEmpty) && (isSearching ? isSearchLoading : isLoading) {
-                        skeletonLoadingView
-                            .padding(.horizontal, CGFloat(postHorizontalPadding))
-                    } else if !isSearching && posts.isEmpty && errorMessage != nil && !isLoading {
-                        errorView
-                            .padding(.horizontal, CGFloat(postHorizontalPadding))
-                            .padding(.top, 100)
-                    } else if (!isSearching && posts.isEmpty) || (isSearching && searchResults.isEmpty && !isSearchLoading) {
-                        emptyStateView
-                            .padding(.horizontal, CGFloat(postHorizontalPadding))
-                            .padding(.top, 100)
-                    } else {
-                        ForEach(visiblePosts) { post in
+
+        return ScrollView {
+            LazyVStack(spacing: CGFloat(feedItemSpacing)) {
+                if (isSearching ? searchResults.isEmpty : posts.isEmpty) && (isSearching ? isSearchLoading : isLoading) {
+                    skeletonLoadingView
+                        .padding(.horizontal, CGFloat(postHorizontalPadding))
+                } else if !isSearching && posts.isEmpty && errorMessage != nil && !isLoading {
+                    errorView
+                        .padding(.horizontal, CGFloat(postHorizontalPadding))
+                        .padding(.top, 100)
+                } else if (!isSearching && posts.isEmpty) || (isSearching && searchResults.isEmpty && !isSearchLoading) {
+                    emptyStateView
+                        .padding(.horizontal, CGFloat(postHorizontalPadding))
+                        .padding(.top, 100)
+                } else {
+                    ForEach(base) { post in
+                        if !hiddenPostIds.contains(post.id) {
                             Group {
-                            if postLayoutStyle == .compact {
-                                CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
-                                    .id(post.id) // Important for scroll position tracking
-                                    .onAppear {
-                                        if post.id == posts.last?.id && hasMore && !isLoadingMore {
-                                            Task {
-                                                await loadMorePosts()
+                                if postLayoutStyle == .compact {
+                                    CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
+                                } else {
+                                    PostRowView(
+                                        post: post,
+                                        namespace: mediaNamespace,
+                                        selectedPost: $selectedPost,
+                                        onVideoHandoff: { handoffState in
+                                            videoHandoffState = handoffState
+                                        },
+                                        onHidePost: { id in
+                                            hiddenPostIds.insert(id)
+                                        },
+                                        onHidePostsAbove: { id in
+                                            if let index = posts.firstIndex(where: { $0.id == id }) {
+                                                let ids = posts.prefix(index).map { $0.id }
+                                                hiddenPostIds.formUnion(ids)
+                                                let nextVisibleId = posts.first { !hiddenPostIds.contains($0.id) }?.id
+                                                scrollToTop(targetId: nextVisibleId)
                                             }
                                         }
-                                    }
-                            } else {
-                                PostRowView(
-                                    post: post,
-                                    namespace: mediaNamespace,
-                                    selectedPost: $selectedPost,
-                                    onVideoHandoff: { handoffState in
-                                        videoHandoffState = handoffState
-                                    },
-                                    onHidePost: { id in
-                                        hiddenPostIds.insert(id)
-                                    },
-                                    onHidePostsAbove: { id in
-                                        if let index = posts.firstIndex(where: { $0.id == id }) {
-                                            let ids = posts.prefix(index).map { $0.id }
-                                            hiddenPostIds.formUnion(ids)
-                                            proxy.animatedScrollTo("top", anchor: .top)
-                                        }
-                                    }
-                                )
-                            }
+                                    )
+                                }
                             }
                             .id(post.id)
-                                    .onAppear {
-                                        if isSearching {
-                                            if post.id == searchResults.last?.id && searchHasMore && !isSearchLoading {
-                                                Task { await loadMoreSearch() }
-                                            }
-                                        } else {
-                                            if post.id == posts.last?.id && hasMore && !isLoadingMore {
-                                                Task { await loadMorePosts() }
-                                            }
-                                        }
+                            .onAppear {
+                                if isSearching {
+                                    if post.id == searchResults.last?.id && searchHasMore && !isSearchLoading {
+                                        Task { await loadMoreSearch() }
                                     }
-                            }
-                        
-                        if isSearching {
-                            if searchHasMore {
-                                searchLoadMoreSection
-                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
-                            } else if !searchResults.isEmpty {
-                                endOfFeedView
-                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
-                            }
-                        } else {
-                            if hasMore {
-                                loadMoreSection
-                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
-                            } else {
-                                endOfFeedView
-                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                                } else if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                    Task { await loadMorePosts() }
+                                }
                             }
                         }
                     }
-                }
-                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: posts)
-                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: searchResults)
-                .padding(.top, 6)
-            }
-            .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
-            .scrollPosition(id: $scrollPosition)
-            
-            .onAppear {
-                if !hasAppeared && posts.isEmpty && !isLoading {
-                    hasAppeared = true
-                    Task {
-                        await loadInitialPosts()
-                        await preloadSidebarFlag()
+
+                    if isSearching {
+                        if !searchHasMore && !searchResults.isEmpty {
+                            endOfFeedView
+                                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                        }
+                    } else {
+                        if !hasMore {
+                            endOfFeedView
+                                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                        }
                     }
+                }
+            }
+        }
+        .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
+        .scrollPosition(id: $scrollPosition)
+        .onAppear {
+            if !hasAppeared && posts.isEmpty && !isLoading {
+                hasAppeared = true
+                Task {
+                    await loadInitialPosts()
+                    await preloadSidebarFlag()
                 }
             }
         }
@@ -269,33 +245,6 @@ struct SubredditFeedView: View {
         }
     }
     
-    private var loadMoreSection: some View {
-        Group {
-            if isLoadingMore {
-                HStack(spacing: 12) {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    
-                    Text("Loading more posts...")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            } else {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        if hasMore && !isLoadingMore {
-                            Task {
-                                await loadMorePosts()
-                            }
-                        }
-                    }
-            }
-        }
-    }
-    
     private var endOfFeedView: some View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
@@ -324,6 +273,18 @@ struct SubredditFeedView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 100)
+    }
+
+    private func scrollToTop(targetId: String?) {
+        withAnimation(.snappy(duration: 0.2)) {
+            scrollPosition = targetId
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            if scrollPosition == targetId {
+                scrollPosition = nil
+            }
+        }
     }
     
     private var errorView: some View {
@@ -444,11 +405,11 @@ struct SubredditFeedView: View {
     
     private func loadMorePosts() async {
         guard hasMore && !isLoadingMore && after != nil else { return }
-        
+
         await MainActor.run {
             isLoadingMore = true
         }
-        
+
         do {
             let response = try await fetchPosts(after: after)
             await MainActor.run {
@@ -460,7 +421,9 @@ struct SubredditFeedView: View {
                     }
                 }
                 
-                self.posts.append(contentsOf: uniqueNewPosts)
+                if !uniqueNewPosts.isEmpty {
+                    self.posts.append(contentsOf: uniqueNewPosts)
+                }
                 self.after = response.data.after
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.isLoadingMore = false
@@ -480,14 +443,12 @@ struct SubredditFeedView: View {
             after = nil
             hasMore = true
         }
-        
+
         do {
             let response = try await fetchPosts(after: nil)
             let newPosts = response.data.children.compactMap { $0.data }
             await MainActor.run {
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                    self.posts = newPosts
-                }
+                self.posts = newPosts
                 self.after = response.data.after
                 self.hasMore = response.data.after != nil && !newPosts.isEmpty
                 self.errorMessage = nil // Clear any previous error on success
@@ -543,28 +504,21 @@ struct SubredditFeedView: View {
             let res = try await apiService.searchPosts(query: query, subreddit: clean, after: searchAfter, limit: pageSize, sort: "relevance", timeFrame: nil)
             let new = res.data.children.compactMap { $0.data }
             let unique = new.filter { n in !searchResults.contains(where: { $0.id == n.id }) }
-            searchResults.append(contentsOf: unique)
+
+            let currentAnchor = scrollPosition
+            if !unique.isEmpty {
+                searchResults.append(contentsOf: unique)
+            }
             searchAfter = res.data.after
             searchHasMore = res.data.after != nil && !unique.isEmpty
             isSearchLoading = false
+            if let currentAnchor {
+                scrollPosition = currentAnchor
+            }
+
             MediaPrefetcher.shared.prefetch(posts: self.searchResults)
         } catch {
             isSearchLoading = false
-        }
-    }
-
-    private var searchLoadMoreSection: some View {
-        Group {
-            if isSearchLoading {
-                HStack(spacing: 12) {
-                    ProgressView().scaleEffect(0.8)
-                    Text("Loading more results…").font(.body).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            } else {
-                Color.clear.frame(height: 1).onAppear { Task { await loadMoreSearch() } }
-            }
         }
     }
 
@@ -580,7 +534,8 @@ struct SubredditFeedView: View {
         case "popular":
             return try await apiService.fetchPopularFeed(after: after, limit: pageSize)
         case "home", "hot":
-            return try await apiService.fetchHomeFeed(after: after, limit: pageSize)
+            let timeFrame = postSort.supportsTimeFrame ? topTimeFrame : nil
+            return try await apiService.fetchHomeFeed(sort: postSort, timeFrame: timeFrame, after: after, limit: pageSize)
         case "user/saved", "saved":
             return try await apiService.fetchSavedPosts(after: after, limit: pageSize)
         default:

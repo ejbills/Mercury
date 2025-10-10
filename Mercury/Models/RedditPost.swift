@@ -214,15 +214,11 @@ struct RedditPost: Codable, Identifiable, Hashable {
         if isGalleryPost {
             return .gallery
         }
-        
-        if isYouTubeLink {
-            return .youtube
-        }
-        
+
         if isRedGifsLink {
             return .video
         }
-        
+
         if isVideo || hasVideoURL {
             return .video
         } else if let hint = postHint {
@@ -682,29 +678,26 @@ enum PostType {
     case image
     case gif
     case video
-    case youtube
     case gallery
     case link
-    
+
     var iconName: String {
         switch self {
         case .text: return "text.alignleft"
         case .image: return "photo"
         case .gif: return "play.rectangle.fill"
         case .video: return "play.rectangle"
-        case .youtube: return "play.rectangle.on.rectangle"
         case .gallery: return "photo.stack"
         case .link: return "link"
         }
     }
-    
+
     var displayName: String {
         switch self {
         case .text: return "Text"
         case .image: return "Image"
         case .gif: return "GIF"
         case .video: return "Video"
-        case .youtube: return "YouTube"
         case .gallery: return "Gallery"
         case .link: return "Link"
         }

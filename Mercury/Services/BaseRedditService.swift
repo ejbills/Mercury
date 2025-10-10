@@ -13,6 +13,10 @@ class BaseRedditService {
     /// Creates a URLRequest with common headers
     func createRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 30
+        request.addValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.addValue("no-cache", forHTTPHeaderField: "Pragma")
         if let accessToken = authService?.currentRequestAccessToken() {
             request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }

@@ -191,8 +191,8 @@ class RedditAPIManager {
         try await contentService.fetchSubredditPosts(subreddit: subreddit, sort: sort, timeFrame: timeFrame, after: after, limit: limit)
     }
     
-    func fetchHomeFeed(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
-        try await contentService.fetchHomeFeed(after: after, limit: limit)
+    func fetchHomeFeed(sort: PostSort = .hot, timeFrame: TopTimeFrame? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+        try await contentService.fetchHomeFeed(sort: sort, timeFrame: timeFrame, after: after, limit: limit)
     }
     
     func fetchPopularFeed(after: String? = nil, limit: Int = 25) async throws -> PostResponse {

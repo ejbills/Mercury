@@ -55,14 +55,13 @@ class MetadataService {
         guard let requestURL = URL(string: normalized) else { return nil }
         
         var request = URLRequest(url: requestURL)
-        
-        request.setValue("facebookexternalhit/1.1", forHTTPHeaderField: "User-Agent")
-        request.setValue("UTF-8", forHTTPHeaderField: "charset")
-        request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
-        request.setValue("en-US,en;q=0.5", forHTTPHeaderField: "Accept-Language")
-        request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
-        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
-        request.setValue("upgrade-insecure-requests", forHTTPHeaderField: "Upgrade-Insecure-Requests")
+        request.timeoutInterval = 10
+
+        // Use a modern browser user agent for better compatibility
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
+        request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+        request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
         
         do {
             let (data, response) = try await session.data(for: request)

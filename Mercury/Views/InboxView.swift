@@ -136,85 +136,86 @@ struct InboxView: View {
     }
     
     private var messagesList: some View {
-        ScrollView {
-            LazyVStack(spacing: 8) {
-                ForEach(filteredMessages) { message in
-                    Card(style: .compact) {
-                        HStack(alignment: .top, spacing: 12) {
-                            UserAvatar(username: message.author, size: 32)
+        List {
+            ForEach(filteredMessages) { message in
+                Card(style: .compact) {
+                    HStack(alignment: .top, spacing: 12) {
+                        UserAvatar(username: message.author, size: 32)
 
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(alignment: .firstTextBaseline) {
-                                    if message.isUnread {
-                                        Circle()
-                                            .fill(Color.blue)
-                                            .frame(width: 6, height: 6)
-                                    }
-                                    Text(message.subject)
-                                        .font(.headline)
-                                        .fontWeight(message.isUnread ? .semibold : .medium)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Text(message.timeAgo)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline) {
+                                if message.isUnread {
+                                    Circle()
+                                        .fill(Color.blue)
+                                        .frame(width: 6, height: 6)
                                 }
+                                Text(message.subject)
+                                    .font(.headline)
+                                    .fontWeight(message.isUnread ? .semibold : .medium)
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(message.timeAgo)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
 
-                                HStack(spacing: 6) {
-                                    Text("u/\(message.author)")
+                            HStack(spacing: 6) {
+                                Text("u/\(message.author)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                if let subreddit = message.subreddit {
+                                    Text("• r/\(subreddit)")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
-                                    if let subreddit = message.subreddit {
-                                        Text("• r/\(subreddit)")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                    }
                                 }
-
-                                Text(message.body)
-                                    .font(.body)
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(3)
                             }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            Task { await handleTapAndMarkRead(on: message) }
+
+                            Text(message.body)
+                                .font(.body)
+                                .foregroundStyle(.primary)
+                                .lineLimit(3)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .onAppear {
-                        if message.id == filteredMessages.last?.id && hasMore && !isLoadingMore {
-                            Task { await loadMore() }
-                        }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        Task { await handleTapAndMarkRead(on: message) }
                     }
                 }
-                
-                if hasMore {
-                    Group {
-                        if isLoadingMore {
-                            HStack(spacing: 12) {
-                                ProgressView().scaleEffect(0.8)
-                                Text("Loading more…").font(.body).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
-                        } else {
-                            Color.clear.frame(height: 1)
-                        }
+                .padding(.horizontal, 12)
+                .feedListRowStyle()
+                .onAppear {
+                    if message.id == filteredMessages.last?.id && hasMore && !isLoadingMore {
+                        Task { await loadMore() }
                     }
-                } else if !messages.isEmpty {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text("You're up to date").font(.subheadline).fontWeight(.medium)
+                }
+            }
+            
+            if hasMore {
+                if isLoadingMore {
+                    HStack(spacing: 12) {
+                        ProgressView().scaleEffect(0.8)
+                        Text("Loading more…").font(.body).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
+                    .feedListRowStyle()
+                } else {
+                    Color.clear
+                        .frame(height: 1)
+                        .feedListRowStyle()
                 }
+            } else if !messages.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text("You're up to date").font(.subheadline).fontWeight(.medium)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .feedListRowStyle()
             }
-            .padding(.top, 8)
         }
+        .feedListBaseStyle(rowSpacing: 8)
     }
     
     private var filteredMessages: [InboxItem] {

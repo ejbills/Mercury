@@ -641,7 +641,6 @@ struct PostCommentsView: View {
                 VStack(spacing: 4) {
                     let downloadText = switch post.postType {
                     case .video: "Downloading Video"
-                    case .youtube: "Opening YouTube"
                     case .gif: "Downloading GIF"
                     case .image: "Downloading Image"
                     case .gallery: "Downloading Gallery"

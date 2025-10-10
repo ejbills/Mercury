@@ -102,8 +102,6 @@ struct PostRowView: View {
             return post.gifURL != nil
         case .video:
             return post.videoURL != nil
-        case .youtube:
-            return post.url != nil
         case .gallery:
             return !post.galleryImages.isEmpty
         case .link:
@@ -314,7 +312,7 @@ struct PostRowView: View {
                 flairText: postShowFlair ? post.linkFlairText : nil,
                 isNSFW: post.isNsfw,
                 isSpoiler: post.isSpoiler,
-                showDomain: postShowDomain && ((postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true)),
+                showDomain: postShowDomain && (postType == .link && !(post.domain?.isEmpty ?? true)),
                 domainText: shortenedDomain,
                 flairBackground: UIColor(flairBackgroundColor),
                 flairTextColor: UIColor(flairTextColor),
@@ -431,10 +429,6 @@ struct PostRowView: View {
                     },
                     resumeFromState: videoHandoffState
                 )
-            }
-        case .youtube:
-            if let youtubeURL = post.url {
-                YouTubeEmbedView(url: youtubeURL)
             }
         case .gallery:
             VStack(alignment: .leading, spacing: 12) {
@@ -816,13 +810,12 @@ struct PostRowView: View {
                 VStack(spacing: 4) {
                     let downloadText = switch post.postType {
                     case .video: "Downloading Video"
-                    case .youtube: "Opening YouTube"
                     case .gif: "Downloading GIF"
                     case .image: "Downloading Image"
                     case .gallery: "Downloading Gallery"
                     default: "Downloading"
                     }
-                    
+
                     Text(downloadText)
                         .font(.headline)
                         .foregroundStyle(.white)

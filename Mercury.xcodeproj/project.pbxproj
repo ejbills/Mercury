@@ -13,7 +13,6 @@
 		BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB157DCC2E4E6C9000375C89 /* NukeUI */; };
 		BB3917502E517BE800529397 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = BB39174F2E517BE800529397 /* Zoomable */; };
 		BB39177A2E51AFC600529397 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB3917792E51AFC600529397 /* MarkdownUI */; };
-		BB88549B2E57BFB4009CA1D0 /* YouTubePlayerKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB88549A2E57BFB4009CA1D0 /* YouTubePlayerKit */; };
 		BBD10C992E56C65A00E13AA3 /* Glur in Frameworks */ = {isa = PBXBuildFile; productRef = BBD10C982E56C65A00E13AA3 /* Glur */; };
 		BBDE23412E6B6BC5007487FB /* FLAnimatedImage in Frameworks */ = {isa = PBXBuildFile; productRef = BBDE23402E6B6BC5007487FB /* FLAnimatedImage */; };
 		BBDF6A1B2E6B46830056ED15 /* NukeVideo in Frameworks */ = {isa = PBXBuildFile; productRef = BBDF6A1A2E6B46830056ED15 /* NukeVideo */; };
@@ -65,7 +64,6 @@
 				BBDE23412E6B6BC5007487FB /* FLAnimatedImage in Frameworks */,
 				BB157DCB2E4E6C9000375C89 /* Nuke in Frameworks */,
 				BB39177A2E51AFC600529397 /* MarkdownUI in Frameworks */,
-				BB88549B2E57BFB4009CA1D0 /* YouTubePlayerKit in Frameworks */,
 				BB157DC02E4E59FC00375C89 /* Defaults in Frameworks */,
 				BB157DC22E4E59FC00375C89 /* DefaultsMacros in Frameworks */,
 				BB157DCD2E4E6C9000375C89 /* NukeUI in Frameworks */,
@@ -131,7 +129,6 @@
 				BB39174F2E517BE800529397 /* Zoomable */,
 				BB3917792E51AFC600529397 /* MarkdownUI */,
 				BBD10C982E56C65A00E13AA3 /* Glur */,
-				BB88549A2E57BFB4009CA1D0 /* YouTubePlayerKit */,
 				BBDF6A1A2E6B46830056ED15 /* NukeVideo */,
 				BBDE23402E6B6BC5007487FB /* FLAnimatedImage */,
 			);
@@ -169,7 +166,6 @@
 				BB39174E2E517BE800529397 /* XCRemoteSwiftPackageReference "Zoomable" */,
 				BB3917782E51AFC600529397 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				BBD10C972E56C65A00E13AA3 /* XCRemoteSwiftPackageReference "Glur" */,
-				BB8854992E57BFB4009CA1D0 /* XCRemoteSwiftPackageReference "YouTubePlayerKit" */,
 				BBDE233F2E6B6BC5007487FB /* XCRemoteSwiftPackageReference "FLAnimatedImage" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -485,14 +481,6 @@
 				minimumVersion = 2.4.1;
 			};
 		};
-		BB8854992E57BFB4009CA1D0 /* XCRemoteSwiftPackageReference "YouTubePlayerKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/SvenTiigi/YouTubePlayerKit.git";
-			requirement = {
-				branch = "feature/xcode-26";
-				kind = branch;
-			};
-		};
 		BBD10C972E56C65A00E13AA3 /* XCRemoteSwiftPackageReference "Glur" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/joogps/Glur.git";
@@ -541,11 +529,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB3917782E51AFC600529397 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
 			productName = MarkdownUI;
-		};
-		BB88549A2E57BFB4009CA1D0 /* YouTubePlayerKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BB8854992E57BFB4009CA1D0 /* XCRemoteSwiftPackageReference "YouTubePlayerKit" */;
-			productName = YouTubePlayerKit;
 		};
 		BBD10C982E56C65A00E13AA3 /* Glur */ = {
 			isa = XCSwiftPackageProductDependency;

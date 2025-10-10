@@ -115,6 +115,7 @@ class ContentService: BaseRedditService {
         var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
         if let after = after { queryItems.append(URLQueryItem(name: "after", value: after)) }
         if let timeFrame = timeFrame, sort.supportsTimeFrame { queryItems.append(URLQueryItem(name: "t", value: timeFrame.rawValue)) }
+        queryItems.append(URLQueryItem(name: "cache_buster", value: cacheBusterValue()))
         components.queryItems = queryItems
         guard let url = components.url else { throw APIError.parseError }
         let request = createRequest(url: url)
@@ -302,6 +303,7 @@ class ContentService: BaseRedditService {
         if let timeFrame = timeFrame, sort.supportsTimeFrame {
             queryItems.append(URLQueryItem(name: "t", value: timeFrame.rawValue))
         }
+        queryItems.append(URLQueryItem(name: "cache_buster", value: cacheBusterValue()))
         
         components.queryItems = queryItems
         
@@ -313,22 +315,27 @@ class ContentService: BaseRedditService {
         return try await performPostRequest(request: request, endpoint: "r/\(subreddit)")
     }
     
-    func fetchHomeFeed(after: String? = nil, limit: Int = 25) async throws -> PostResponse {
+    func fetchHomeFeed(sort: PostSort = .hot, timeFrame: TopTimeFrame? = nil, after: String? = nil, limit: Int = 25) async throws -> PostResponse {
         try validateAccessToken()
-        
-        var components = URLComponents(string: "\(baseURL)/.json")!
+
+        var components = URLComponents(string: "\(baseURL)/\(sort.rawValue).json")!
         var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
-        
+
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
         }
-        
+
+        if let timeFrame = timeFrame, sort.supportsTimeFrame {
+            queryItems.append(URLQueryItem(name: "t", value: timeFrame.rawValue))
+        }
+        queryItems.append(URLQueryItem(name: "cache_buster", value: cacheBusterValue()))
+
         components.queryItems = queryItems
-        
+
         guard let url = components.url else {
             throw APIError.parseError
         }
-        
+
         let request = createRequest(url: url)
         return try await performPostRequest(request: request, endpoint: "home")
     }
@@ -342,6 +349,7 @@ class ContentService: BaseRedditService {
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
         }
+        queryItems.append(URLQueryItem(name: "cache_buster", value: cacheBusterValue()))
         
         components.queryItems = queryItems
         
@@ -362,6 +370,7 @@ class ContentService: BaseRedditService {
         if let after = after {
             queryItems.append(URLQueryItem(name: "after", value: after))
         }
+        queryItems.append(URLQueryItem(name: "cache_buster", value: cacheBusterValue()))
         
         components.queryItems = queryItems
         
@@ -410,7 +419,7 @@ class ContentService: BaseRedditService {
     
     func voteOnPost(postId: String, voteDirection: VoteDirection) async throws {
         try validateAccessToken()
-        
+
         guard let url = URL(string: "\(baseURL)/api/vote") else {
             throw APIError.parseError
         }
@@ -776,6 +785,11 @@ extension ContentService {
         if let submit = try? JSONDecoder().decode(SubmitResponse.self, from: respData), let errs = submit.json.errors, !errs.isEmpty {
             throw APIError.serverError(http.statusCode)
         }
+    }
+
+    private func cacheBusterValue() -> String {
+        let milliseconds = Int(Date().timeIntervalSince1970 * 1_000)
+        return String(milliseconds)
     }
 }
 

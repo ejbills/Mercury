@@ -100,8 +100,6 @@ struct CompactPostRowView: View {
             return post.gifURL != nil
         case .video:
             return post.videoURL != nil
-        case .youtube:
-            return post.url != nil
         case .gallery:
             return !post.galleryImages.isEmpty
         case .link:
@@ -124,7 +122,7 @@ struct CompactPostRowView: View {
             return .image
         case .gif:
             return .gif
-        case .video, .youtube:
+        case .video:
             return .video
         case .gallery:
             return .gallery
@@ -317,25 +315,6 @@ struct CompactPostRowView: View {
                     .font(.title2)
                     .foregroundStyle(.secondary)
             }
-        case .youtube:
-            if let thumb = post.videoThumbnailURL ?? post.imageURL ?? validThumbnailURL {
-                LazyImage(url: URL(string: thumb)) { state in
-                    if let image = state.image {
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } else {
-                        Image(systemName: "play.rectangle.on.rectangle")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .matchedTransitionSource(id: "\(post.id)-youtube", in: namespace)
-            } else {
-                Image(systemName: "play.rectangle.on.rectangle")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-            }
         case .gallery:
             if let firstImage = post.galleryImages.first {
                 LazyImage(url: URL(string: firstImage.url)) { state in
@@ -473,7 +452,7 @@ struct CompactPostRowView: View {
                 flairText: postShowFlair ? post.linkFlairText : nil,
                 isNSFW: post.isNsfw,
                 isSpoiler: post.isSpoiler,
-                showDomain: postShowDomain && ((postType == .link || postType == .youtube) && !(post.domain?.isEmpty ?? true)),
+                showDomain: postShowDomain && (postType == .link && !(post.domain?.isEmpty ?? true)),
                 domainText: shortenedDomain,
                 flairBackground: UIColor(flairBackgroundColor),
                 flairTextColor: UIColor(flairTextColor),
@@ -596,7 +575,7 @@ struct CompactPostRowView: View {
     }
     
     private var shouldShowOpenOriginal: Bool {
-        return post.url != nil && (postType == .link || postType == .youtube)
+        return post.url != nil && postType == .link
     }
     
     // Subtle corner media badge for compact thumbnails
@@ -606,10 +585,6 @@ struct CompactPostRowView: View {
         case .video:
             badgeBackground {
                 Image(systemName: "play.fill").font(.caption2).fontWeight(.bold)
-            }
-        case .youtube:
-            badgeBackground {
-                Image(systemName: "play.rectangle.fill").font(.caption2)
             }
         case .gif:
             badgeBackground {
@@ -645,7 +620,7 @@ struct CompactPostRowView: View {
     
     private func handleThumbnailTap() {
         switch postType {
-        case .image, .gif, .video, .gallery, .youtube:
+        case .image, .gif, .video, .gallery:
             selectedPost = post
         case .link:
             showingSafari = true

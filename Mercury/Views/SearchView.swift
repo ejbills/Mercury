@@ -204,22 +204,18 @@ struct SearchView: View {
     
     @ViewBuilder
     private var searchResultsView: some View {
-        ScrollView {
-            LazyVStack(spacing: CGFloat(feedItemSpacing)) {
-                switch selectedTab {
-                case .posts:
-                    postsResultsView
-                case .subreddits:
-                    subredditsResultsView
-                case .users:
-                    usersResultsView
-                }
+        List {
+            switch selectedTab {
+            case .posts:
+                postsResultsView
+            case .subreddits:
+                subredditsResultsView
+            case .users:
+                usersResultsView
             }
-            .padding(.horizontal, CGFloat(postHorizontalPadding))
-            .padding(.top, 12)
-            // Dismiss focus without stealing taps from children
-            .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
         }
+        .feedListBaseStyle(rowSpacing: CGFloat(feedItemSpacing))
+        .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
     }
     
     @ViewBuilder
@@ -229,6 +225,9 @@ struct SearchView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .padding(.top, 40)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                .feedListRowStyle()
         } else {
             ForEach(searchResults) { post in
                     Group {
@@ -242,6 +241,8 @@ struct SearchView: View {
                             )
                         }
                     }
+                    .padding(.horizontal, CGFloat(postHorizontalPadding))
+                    .feedListRowStyle()
                     .onAppear {
                         if post.id == searchResults.last?.id && hasMore && !isLoading {
                             Task {
@@ -263,6 +264,8 @@ struct SearchView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
+                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                .feedListRowStyle()
             }
         }
     }
@@ -274,6 +277,9 @@ struct SearchView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .padding(.top, 40)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                .feedListRowStyle()
         } else {
             ForEach(Array(subredditResults.enumerated()), id: \.1.id) { _, subreddit in
                 SubredditRow(
@@ -289,6 +295,8 @@ struct SearchView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                .feedListRowStyle()
             }
         }
     }
@@ -352,6 +360,9 @@ struct SearchView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .padding(.top, 40)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                .feedListRowStyle()
         } else {
             ForEach(Array(userResults.enumerated()), id: \.1.id) { _, user in
                 UserRowView(user: user) {
@@ -360,6 +371,8 @@ struct SearchView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                .feedListRowStyle()
             }
         }
     }

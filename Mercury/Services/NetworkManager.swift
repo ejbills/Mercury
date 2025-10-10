@@ -23,6 +23,8 @@ final class NetworkManager: NSObject, URLSessionDelegate, URLSessionTaskDelegate
     func rebuildSession() {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = URLCache(memoryCapacity: 0, diskCapacity: 0, diskPath: nil)
 
         if Defaults[.proxyEnabled], let dict = Self.makeProxyDictionary() {
             config.connectionProxyDictionary = dict
@@ -142,4 +144,3 @@ final class NetworkManager: NSObject, URLSessionDelegate, URLSessionTaskDelegate
         }
     }
 }
-

@@ -16,10 +16,10 @@ struct PostDetailRouter: View {
             MediaDetailView(
                 post: post, 
                 namespace: namespace, 
-                videoHandoffState: videoHandoffState, 
+                videoHandoffState: videoHandoffState,
                 onVideoHandoffReturn: onVideoHandoffReturn
             )
-        case .text, .link, .youtube:
+        case .text, .link:
             UnsupportedMediaDetailView(onDismiss: onDismiss)
         }
     }
