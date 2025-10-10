@@ -385,6 +385,14 @@ class RedditAPIManager {
         try await inboxService.markMessagesRead(fullnames: fullnames)
     }
 
+    func markMessagesUnread(fullnames: [String]) async throws {
+        try await inboxService.markMessagesUnread(fullnames: fullnames)
+    }
+
+    func deleteMessage(fullname: String) async throws {
+        try await inboxService.deleteMessage(fullname: fullname)
+    }
+
     func markAllInboxRead(for category: InboxService.Category) async throws {
         try await inboxService.markAllRead(for: category)
     }

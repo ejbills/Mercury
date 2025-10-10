@@ -195,6 +195,36 @@ class InboxService: BaseRedditService {
         } catch is URLError { throw APIError.networkError }
     }
 
+    /// Mark specific inbox items as unread by fullname(s)
+    func markMessagesUnread(fullnames: [String]) async throws {
+        try validateAccessToken()
+        guard !fullnames.isEmpty else { return }
+        guard let url = URL(string: "\(baseURL)/api/unread_message") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: url)
+        let ids = fullnames.joined(separator: ",")
+        let body = "id=\(ids)"
+        request.httpBody = body.data(using: .utf8)
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError { throw APIError.networkError }
+    }
+
+    /// Delete inbox message by fullname
+    func deleteMessage(fullname: String) async throws {
+        try validateAccessToken()
+        guard let url = URL(string: "\(baseURL)/api/del_msg") else { throw APIError.parseError }
+        var request = createPOSTRequest(url: url)
+        let body = "id=\(fullname)"
+        request.httpBody = body.data(using: .utf8)
+        do {
+            let (_, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw APIError.networkError }
+            try validateResponse(http)
+        } catch is URLError { throw APIError.networkError }
+    }
+
     /// Mark all unread messages as read for a given category.
     /// - Note: For `.all` and `.unread`, falls back to Reddit's `read_all_messages` endpoint.
     func markAllRead(for category: Category) async throws {

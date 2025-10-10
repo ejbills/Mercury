@@ -36,7 +36,8 @@ struct InboxView: View {
         NavigationView {
             VStack(spacing: 0) {
                 filterPickerSection
-                
+                    .padding(.bottom, 8)
+
                 if isLoading && messages.isEmpty {
                     loadingView
                 } else if let errorMessage = errorMessage, messages.isEmpty {
@@ -184,6 +185,21 @@ struct InboxView: View {
                 }
                 .padding(.horizontal, 12)
                 .feedListRowStyle()
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        Task { await deleteMessageItem(message) }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    Button {
+                        Task { await toggleReadStatus(for: message) }
+                    } label: {
+                        Label(message.isUnread ? "Read" : "Unread", systemImage: message.isUnread ? "envelope.open" : "envelope.badge")
+                    }
+                    .tint(message.isUnread ? .blue : .orange)
+                }
                 .onAppear {
                     if message.id == filteredMessages.last?.id && hasMore && !isLoadingMore {
                         Task { await loadMore() }
@@ -412,6 +428,70 @@ struct InboxView: View {
             }
         }
         return nil
+    }
+
+    // MARK: - Swipe Actions
+
+    private func deleteMessageItem(_ item: InboxItem) async {
+        guard let fullname = item.fullName else { return }
+
+        // Optimistically remove from UI
+        await MainActor.run {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                messages.removeAll { $0.id == item.id }
+            }
+        }
+
+        do {
+            try await apiService.deleteMessage(fullname: fullname)
+        } catch {
+            // On failure, restore the item
+            await MainActor.run {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    messages.append(item)
+                    messages.sort { $0.created > $1.created }
+                }
+            }
+        }
+    }
+
+    private func toggleReadStatus(for item: InboxItem) async {
+        guard let fullname = item.fullName else { return }
+
+        let newReadState = !item.isUnread
+
+        // Optimistically update UI
+        await MainActor.run {
+            if let idx = messages.firstIndex(where: { $0.id == item.id }) {
+                messages[idx] = InboxItem(
+                    id: item.id,
+                    fullName: item.fullName,
+                    subject: item.subject,
+                    body: item.body,
+                    author: item.author,
+                    subreddit: item.subreddit,
+                    isUnread: newReadState,
+                    created: item.created,
+                    type: item.type,
+                    contextURL: item.contextURL
+                )
+            }
+        }
+
+        do {
+            if newReadState {
+                try await apiService.markMessagesUnread(fullnames: [fullname])
+            } else {
+                try await apiService.markMessagesRead(fullnames: [fullname])
+            }
+        } catch {
+            // On failure, revert the change
+            await MainActor.run {
+                if let idx = messages.firstIndex(where: { $0.id == item.id }) {
+                    messages[idx] = item
+                }
+            }
+        }
     }
 }
 
