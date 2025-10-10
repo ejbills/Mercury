@@ -221,7 +221,7 @@ struct SubredditFeedView: View {
 
     private var isRealSubreddit: Bool {
         let s = subreddit.lowercased()
-        if s == "popular" || s == "all" || s == "user/saved" || s == "saved" { return false }
+        if s == "popular" || s == "all" || s == "user/saved" || s == "saved" || s == "home" || s == "hot" { return false }
         if s.contains("/m/") { return false }
         return true
     }

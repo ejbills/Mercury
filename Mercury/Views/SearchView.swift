@@ -241,7 +241,6 @@ struct SearchView: View {
                             )
                         }
                     }
-                    .padding(.horizontal, CGFloat(postHorizontalPadding))
                     .feedListRowStyle()
                     .onAppear {
                         if post.id == searchResults.last?.id && hasMore && !isLoading {

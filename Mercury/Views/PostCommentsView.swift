@@ -45,6 +45,7 @@ struct PostCommentsView: View {
     @Default(.postCompactShowScore) private var postCompactShowScore
     @Default(.postCompactShowCommentCount) private var postCompactShowCommentCount
     @Default(.postCompactShowVoting) private var postCompactShowVoting
+    @State private var scrollPosition: String?
 
         init(post: RedditPost, targetCommentId: String? = nil) {
             self.post = post
@@ -53,9 +54,8 @@ struct PostCommentsView: View {
             self._postDisplayScore = State(initialValue: post.displayScore)
             self._postSavedState = State(initialValue: post.saved)
         }
-    
+
     var body: some View {
-        ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if postLayoutStyle == .compact {
@@ -130,20 +130,20 @@ struct PostCommentsView: View {
                             .padding(.horizontal, CGFloat(commentHorizontalPadding))
                     }
 
-                    commentsSection(proxy: proxy)
+                    commentsSection
 
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 20)
             }
+            .scrollPosition(id: $scrollPosition)
             .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
             .onChange(of: threadManager.commentThreads.count) { _, _ in
-                scrollToTargetIfNeeded(proxy: proxy)
+                scrollToTargetIfNeeded()
             }
             .onAppear {
-                scrollToTargetIfNeeded(proxy: proxy)
+                scrollToTargetIfNeeded()
             }
-        }
         .navigationTitle("Comments")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -230,7 +230,7 @@ struct PostCommentsView: View {
     }
     
     
-    private func commentsSection(proxy: ScrollViewProxy) -> some View {
+    private var commentsSection: some View {
         Group {
             if (isSearching && isSearchLoading) {
                 loadingView
@@ -262,7 +262,7 @@ struct PostCommentsView: View {
                 emptyCommentsView
                     .padding(.horizontal, CGFloat(commentHorizontalPadding))
             } else {
-                commentsListView(proxy: proxy)
+                commentsListView
             }
         }
     }
@@ -300,7 +300,7 @@ struct PostCommentsView: View {
         }
         }
     
-    private func commentsListView(proxy: ScrollViewProxy) -> some View {
+    private var commentsListView: some View {
         VStack(spacing: 0) {
             let allComments = threadManager.commentThreads.map { $0.parentComment }
 
@@ -308,7 +308,7 @@ struct PostCommentsView: View {
                 comments: allComments,
                 post: post,
                 sort: commentSort,
-                scrollProxy: proxy
+                scrollTarget: $scrollPosition
             )
             .padding(.horizontal, CGFloat(commentHorizontalPadding))
 
@@ -475,10 +475,12 @@ struct PostCommentsView: View {
         }
     }
 
-    private func scrollToTargetIfNeeded(proxy: ScrollViewProxy) {
+    private func scrollToTargetIfNeeded() {
         guard let targetId = targetCommentId, !targetId.isEmpty else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            proxy.animatedScrollTo(targetId, anchor: .center)
+            withAnimation(.snappy(duration: 0.3)) {
+                scrollPosition = targetId
+            }
         }
     }
 

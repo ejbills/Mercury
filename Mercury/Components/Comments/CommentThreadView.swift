@@ -11,8 +11,8 @@ struct CommentThreadView: View {
     let comments: [RedditComment]
     let post: RedditPost
     let sort: CommentSort
-    let scrollProxy: ScrollViewProxy?
-    
+    @Binding var scrollTarget: String?
+
     // Unified flat state management for entire thread
     @State private var flatItems: [FlatCommentItem] = []
     @State private var loadingMoreIds: Set<String> = []
@@ -20,15 +20,15 @@ struct CommentThreadView: View {
     @State private var itemVisibility: [Bool] = []
     @Default(.commentLayoutStyle) private var commentLayoutStyle
     @Default(.commentRowVerticalPadding) private var commentRowVerticalPadding
-    
+
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
-    
-    init(comments: [RedditComment], post: RedditPost, sort: CommentSort, scrollProxy: ScrollViewProxy? = nil) {
+
+    init(comments: [RedditComment], post: RedditPost, sort: CommentSort, scrollTarget: Binding<String?>) {
         self.comments = comments
         self.post = post
         self.sort = sort
-        self.scrollProxy = scrollProxy
+        self._scrollTarget = scrollTarget
         
         // Initialize flat structure from all comments
         let initialFlatItems = Self.flattenAllComments(comments: comments)
@@ -119,9 +119,17 @@ struct CommentThreadView: View {
                         },
                         onScrollToParent: {
                             let rootCommentId = findRootComment(for: flatComment)
-                            
+
                             if let rootCommentId = rootCommentId {
-                                scrollProxy?.animatedScrollTo(rootCommentId, anchor: .center)
+                                withAnimation(.snappy(duration: 0.3)) {
+                                    scrollTarget = rootCommentId
+                                }
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 300_000_000)
+                                    if scrollTarget == rootCommentId {
+                                        scrollTarget = nil
+                                    }
+                                }
                             }
                         },
                         onReplyPosted: { newComment in
