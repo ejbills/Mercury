@@ -7,7 +7,7 @@ struct SubredditFeedView: View {
     let apiService: RedditAPIManager
     @Environment(\.navigationPathManager) private var navigationPathManager
     @State private var posts: [RedditPost] = []
-    @State private var isLoading = false
+    @State private var isLoading = true
     @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var after: String?
@@ -98,12 +98,18 @@ struct SubredditFeedView: View {
                     }
 
                     if isSearching {
-                        if !searchHasMore && !searchResults.isEmpty {
+                        if isSearchLoading && !searchResults.isEmpty {
+                            loadingFooter(text: "Loading more results…")
+                                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                        } else if !searchHasMore && !searchResults.isEmpty {
                             endOfFeedView
                                 .padding(.horizontal, CGFloat(postHorizontalPadding))
                         }
                     } else {
-                        if !hasMore {
+                        if isLoadingMore {
+                            loadingFooter(text: "Loading more posts…")
+                                .padding(.horizontal, CGFloat(postHorizontalPadding))
+                        } else if !hasMore {
                             endOfFeedView
                                 .padding(.horizontal, CGFloat(postHorizontalPadding))
                         }
@@ -114,7 +120,7 @@ struct SubredditFeedView: View {
         .feedBackground(style: feedBackgroundStyle, customColor: customFeedBackgroundColor?.color)
         .scrollPosition(id: $scrollPosition)
         .onAppear {
-            if !hasAppeared && posts.isEmpty && !isLoading {
+            if !hasAppeared && posts.isEmpty {
                 hasAppeared = true
                 Task {
                     await loadInitialPosts()
@@ -273,6 +279,18 @@ struct SubredditFeedView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 100)
+    }
+
+    private func loadingFooter(text: String) -> some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .scaleEffect(0.9)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     private func scrollToTop(targetId: String?) {

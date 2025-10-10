@@ -12,6 +12,7 @@ struct InboxItem: Identifiable, Equatable {
     let created: Date
     let type: ItemType
     let contextURL: URL?
+    var authorIconURL: URL?
     
     enum ItemType {
         case privateMessage

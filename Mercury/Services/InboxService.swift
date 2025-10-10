@@ -2,6 +2,11 @@ import Foundation
 
 /// Service responsible for fetching and mapping Reddit inbox data
 class InboxService: BaseRedditService {
+    private lazy var avatarManager: AvatarManager = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return AvatarManager(authService: auth)
+    }()
+
     enum Category {
         case all
         case unread
@@ -46,12 +51,24 @@ class InboxService: BaseRedditService {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let listing = try decoder.decode(MessageListingResponse.self, from: data)
-            
+
             let items = listing.data.children.compactMap { thing -> InboxItem? in
                 mapThingToInboxItem(thing)
             }
-            
-            return Page(items: items, after: listing.data.after)
+
+            // Enrich items with avatar URLs
+            let usernames = Array(Set(items.map { $0.author }))
+            let avatarMap = await avatarManager.fetchAvatars(for: usernames)
+
+            let enrichedItems = items.map { item in
+                var enrichedItem = item
+                if let url = avatarMap[item.author] {
+                    enrichedItem.authorIconURL = url
+                }
+                return enrichedItem
+            }
+
+            return Page(items: enrichedItems, after: listing.data.after)
         } catch is URLError {
             throw APIError.networkError
         } catch {
@@ -105,7 +122,8 @@ class InboxService: BaseRedditService {
                 isUnread: isUnread,
                 created: createdDate,
                 type: .privateMessage,
-                contextURL: contextURL
+                contextURL: contextURL,
+                authorIconURL: nil
             )
         case "t1": // Comment-based (reply or mention)
             let apiType = (raw.type ?? "").lowercased()
@@ -122,7 +140,8 @@ class InboxService: BaseRedditService {
                 isUnread: isUnread,
                 created: createdDate,
                 type: inferredType,
-                contextURL: contextURL
+                contextURL: contextURL,
+                authorIconURL: nil
             )
         default:
             return nil

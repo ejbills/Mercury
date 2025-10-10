@@ -101,7 +101,18 @@ class ProfileViewModel {
         errorMessage = nil
         postsAfter = nil
         commentsAfter = nil
-        
+
+        // Show loading state if data is empty
+        let shouldShowLoading = posts.isEmpty && comments.isEmpty
+        if shouldShowLoading {
+            isLoading = true
+        }
+        defer {
+            if shouldShowLoading {
+                isLoading = false
+            }
+        }
+
         do {
             async let p = redditAPI.fetchUserProfile(username: username)
             async let postsResp = redditAPI.fetchUserPosts(username: username, after: nil, limit: 25)

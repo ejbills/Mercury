@@ -2,7 +2,15 @@ import Foundation
 
 /// Service responsible for search functionality
 class SearchService: BaseRedditService {
-    
+    private lazy var avatarManager: AvatarManager = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return AvatarManager(authService: auth)
+    }()
+    private lazy var subredditIconManager: SubredditIconManager = {
+        guard let auth = self.authService else { fatalError("Missing authService") }
+        return SubredditIconManager(authService: auth)
+    }()
+
     // MARK: - Search Operations
     
     func searchSubreddits(query: String, limit: Int = 25) async throws -> [Subreddit] {
@@ -87,18 +95,43 @@ class SearchService: BaseRedditService {
     private func performPostRequest(request: URLRequest, endpoint: String) async throws -> PostResponse {
         do {
             let (data, response) = try await NetworkManager.shared.session.data(for: request)
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.networkError
             }
-            
+
             try validateResponse(httpResponse)
-            
+
             let decoder = JSONDecoder()
-            
+
             do {
                 let postResponse = try decoder.decode(PostResponse.self, from: data)
-                return postResponse
+
+                // Enrich posts with avatar and subreddit icons
+                let filteredChildren = postResponse.data.children.filter { $0.data != nil }
+
+                let usernames = Array(Set(filteredChildren.compactMap { $0.data?.author }))
+                let subreddits = Array(Set(filteredChildren.compactMap { $0.data?.subreddit }))
+                async let avatarMapTask = avatarManager.fetchAvatars(for: usernames)
+                async let subredditIconMapTask = subredditIconManager.fetchIcons(for: subreddits)
+                let (avatarMap, subredditIconMap) = await (avatarMapTask, subredditIconMapTask)
+
+                let enrichedChildren: [PostChild] = filteredChildren.map { child in
+                    var post = child.data!
+                    if let url = avatarMap[post.author] { post.authorIconURL = url }
+                    if let subIcon = subredditIconMap[post.subreddit] { post.subredditIconURL = subIcon }
+                    return PostChild(kind: child.kind, data: post)
+                }
+
+                let enrichedData = PostListData(
+                    children: enrichedChildren,
+                    after: postResponse.data.after,
+                    before: postResponse.data.before,
+                    dist: postResponse.data.dist,
+                    modhash: postResponse.data.modhash
+                )
+
+                return PostResponse(data: enrichedData)
             } catch {
                 throw APIError.parseError
             }

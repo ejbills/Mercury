@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct InboxView: View {
     let apiService: RedditAPIManager
@@ -13,6 +14,9 @@ struct InboxView: View {
     @State private var selectedItem: InboxItem?
     @Environment(\.navigationPathManager) private var navigationPath
     @State private var hasLoaded = false
+    
+    @Default(.postHorizontalPadding) private var postHorizontalPadding
+    @Default(.feedItemSpacing) private var feedItemSpacing
     
     enum InboxFilter: String, CaseIterable, SectionPickerIconProvider {
         case all = "All"
@@ -35,8 +39,7 @@ struct InboxView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                filterPickerSection
-                    .padding(.bottom, 8)
+                    filterPickerSection
 
                 if isLoading && messages.isEmpty {
                     loadingView
@@ -121,7 +124,8 @@ struct InboxView: View {
                         isUnread: false,
                         created: item.created,
                         type: item.type,
-                        contextURL: item.contextURL
+                        contextURL: item.contextURL,
+                        authorIconURL: item.authorIconURL
                     )
                 } else { return item }
             }
@@ -147,7 +151,7 @@ struct InboxView: View {
             ForEach(filteredMessages) { message in
                 Card(style: .compact) {
                     HStack(alignment: .top, spacing: 12) {
-                        UserAvatar(username: message.author, size: 32)
+                        UserAvatar(username: message.author, size: 32, iconURL: message.authorIconURL)
 
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(alignment: .firstTextBaseline) {
@@ -205,7 +209,7 @@ struct InboxView: View {
                         .tint(message.isUnread ? .blue : .orange)
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, postHorizontalPadding)
                 .feedListRowStyle()
                 .onAppear {
                     if message.id == filteredMessages.last?.id && hasMore && !isLoadingMore {
@@ -238,7 +242,8 @@ struct InboxView: View {
                 .feedListRowStyle()
             }
         }
-        .feedListBaseStyle(rowSpacing: 8)
+        .feedListBaseStyle(rowSpacing: CGFloat(feedItemSpacing))
+        .padding(.top, 12)
     }
     
     private var filteredMessages: [InboxItem] {
@@ -417,7 +422,8 @@ struct InboxView: View {
                     isUnread: false,
                     created: item.created,
                     type: item.type,
-                    contextURL: item.contextURL
+                    contextURL: item.contextURL,
+                    authorIconURL: item.authorIconURL
                 )
             }
         }
@@ -480,7 +486,8 @@ struct InboxView: View {
                     isUnread: newReadState,
                     created: item.created,
                     type: item.type,
-                    contextURL: item.contextURL
+                    contextURL: item.contextURL,
+                    authorIconURL: item.authorIconURL
                 )
             }
         }
