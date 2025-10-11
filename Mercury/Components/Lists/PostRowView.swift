@@ -426,7 +426,7 @@ struct PostRowView: View {
     private var linkPostContent: some View {
         if let urlString = post.url {
             if isRedditPostURL(urlString) {
-                RedditPostCard(url: urlString) { linkedPost in
+                CompactRedditPostCard(url: urlString) { linkedPost in
                     if let linkedPost = linkedPost {
                         navigationPath.navigate(to: .postComments(post: linkedPost))
                     } else {
@@ -443,7 +443,7 @@ struct PostRowView: View {
                 }
                 .sensitiveContentBlurred(post: post, contentType: .link, isBlurred: $linkPreviewBlurred)
             } else {
-                RichArticleCard(
+                CompactArticleCard(
                     url: urlString,
                     fallbackThumbnail: validThumbnailURL,
                     fallbackDomain: post.domain,

@@ -274,7 +274,7 @@ struct LinkItemView: View {
     }
     
     private var redditPostView: some View {
-        RedditPostCard(url: link) { post in
+        CompactRedditPostCard(url: link) { post in
             if let post = post {
                 navigationPath.navigate(to: .postComments(post: post))
             } else {
