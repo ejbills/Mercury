@@ -32,6 +32,7 @@ struct PostCommentsView: View {
     @State private var showShareSheet = false
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0.0
+    @State private var isPostCollapsed = false
     @Default(.postHorizontalPadding) private var postHorizontalPadding
     @Default(.feedBackgroundStyle) private var feedBackgroundStyle
     @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
@@ -58,14 +59,41 @@ struct PostCommentsView: View {
     var body: some View {
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    if postLayoutStyle == .compact {
-                        VStack(alignment: .leading, spacing: 8) {
-                            CompactPostRowView(
+                    if !isPostCollapsed {
+                        if postLayoutStyle == .compact {
+                            VStack(alignment: .leading, spacing: 8) {
+                                CompactPostRowView(
+                                    post: post,
+                                    namespace: mediaNamespace,
+                                    selectedPost: $selectedPost,
+                                    onRootReplyPosted: { newComment in
+                                        threadManager.addRootComment(newComment)
+                                    },
+                                    allowsNavigation: false
+                                )
+                                .overlay {
+                                    if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
+                                        downloadProgressOverlay
+                                    }
+                                }
+
+                                if let bodyText = post.selftext, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
+                                        .padding(.horizontal, CGFloat(postHorizontalPadding))
+                                }
+                            }
+                        } else {
+                            PostRowView(
                                 post: post,
                                 namespace: mediaNamespace,
                                 selectedPost: $selectedPost,
+                                showLargeToolbar: true,
+                                showFullText: true,
                                 onRootReplyPosted: { newComment in
                                     threadManager.addRootComment(newComment)
+                                },
+                                onVideoHandoff: { handoffState in
+                                    videoHandoffState = handoffState
                                 },
                                 allowsNavigation: false
                             )
@@ -74,37 +102,11 @@ struct PostCommentsView: View {
                                     downloadProgressOverlay
                                 }
                             }
-
-                            if let bodyText = post.selftext, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                MarkdownRenderer(content: bodyText, compactMode: false, showEmbeddedContent: true)
-                                    .padding(.horizontal, CGFloat(postHorizontalPadding))
-                            }
                         }
-                    } else {
-                        PostRowView(
-                            post: post,
-                            namespace: mediaNamespace,
-                            selectedPost: $selectedPost,
-                            showLargeToolbar: true,
-                            showFullText: true,
-                            onRootReplyPosted: { newComment in
-                                threadManager.addRootComment(newComment)
-                            },
-                            onVideoHandoff: { handoffState in
-                                videoHandoffState = handoffState
-                            },
-                            allowsNavigation: false
-                        )
-                        .overlay {
-                            if isDownloading && (post.postType == .video || post.postType == .gif || post.postType == .image || post.postType == .gallery) {
-                                downloadProgressOverlay
-                            }
-                        }
-                    }
 
-                    // Post Action Toolbar
-                    if (postLayoutStyle == .normal && postNormalShowActions) || (postLayoutStyle == .compact && postCompactShowActions) {
-                        PostActionToolbar(
+                        // Post Action Toolbar
+                        if (postLayoutStyle == .normal && postNormalShowActions) || (postLayoutStyle == .compact && postCompactShowActions) {
+                            PostActionToolbar(
                             post: post,
                             voteState: $postVoteState,
                             displayScore: $postDisplayScore,
@@ -123,6 +125,7 @@ struct PostCommentsView: View {
                             showCommentCount: postLayoutStyle == .normal ? postNormalShowCommentCount : postCompactShowCommentCount,
                             showVoting: postLayoutStyle == .normal ? postNormalShowVoting : postCompactShowVoting
                         )
+                        }
                     }
 
                     if targetCommentId != nil {
@@ -144,9 +147,21 @@ struct PostCommentsView: View {
             .onAppear {
                 scrollToTargetIfNeeded()
             }
-        .navigationTitle("Comments")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Button(action: {
+                    withAnimation(.snappy(duration: 0.125)) {
+                        isPostCollapsed.toggle()
+                    }
+                }) {
+                    Text("Comments")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+                .buttonStyle(.plain)
+            }
+
             ToolbarItem(placement: .navigationBarTrailing) {
                 sortButton
             }

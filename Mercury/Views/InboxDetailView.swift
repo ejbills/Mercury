@@ -40,9 +40,8 @@ struct InboxDetailView: View {
                             }
                             
                             Divider()
-                            
-                            Text(item.body)
-                                .font(.body)
+
+                            MarkdownRenderer(content: item.body, compactMode: false, showEmbeddedContent: true)
                                 .foregroundStyle(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }

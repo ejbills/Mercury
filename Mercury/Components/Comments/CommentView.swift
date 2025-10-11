@@ -125,7 +125,7 @@ struct CommentView: View {
                                 .foregroundStyle(authorColor)
                                 .lineLimit(1)
 
-                            if comment.isSubmitter {
+                            if isOriginalPoster {
                                 Text("OP")
                                     .appFont(.small)
                                     .fontWeight(.bold)
@@ -295,6 +295,10 @@ struct CommentView: View {
 
     // MARK: - Helper Properties
 
+    private var isOriginalPoster: Bool {
+        return comment.author.caseInsensitiveCompare(post.author) == .orderedSame
+    }
+
     @ViewBuilder
     private var commentContent: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -314,7 +318,7 @@ struct CommentView: View {
     }
 
     private var accentColor: Color? {
-        if comment.isSubmitter {
+        if isOriginalPoster {
             return .accentColor
         } else if depth > 0 {
             return depthColor
@@ -360,7 +364,7 @@ struct CommentView: View {
     private var authorColor: Color {
         if isDeletedUser {
             return .secondary
-        } else if comment.isSubmitter {
+        } else if isOriginalPoster {
             return .accentColor
         } else if comment.distinguished != nil {
             return .green

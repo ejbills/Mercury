@@ -167,14 +167,14 @@ struct CompactCommentView: View {
         HStack(spacing: 6) {
             if commentShowAuthor {
                 HStack(spacing: 4) {
-                    if commentShowAvatar { UserAvatar(username: comment.author, size: 16) }
+                    if commentShowAvatar { UserAvatar(username: comment.author, size: 16, iconURL: comment.authorIconURL) }
 
                     Text(isDeletedUser ? "[deleted]" : comment.author)
                         .appFont(.caption, weight: .medium)
                         .foregroundStyle(authorColor)
                         .lineLimit(1)
 
-                    if comment.isSubmitter {
+                    if isOriginalPoster {
                         Text("OP")
                             .appFont(.small, weight: .bold)
                             .foregroundStyle(.white)
@@ -261,13 +261,17 @@ struct CompactCommentView: View {
         }
     }
 
+    private var isOriginalPoster: Bool {
+        return comment.author.caseInsensitiveCompare(post.author) == .orderedSame
+    }
+
     private var resolvedCardStyle: CardStyle {
         CardStyle.comment(depth: depth, accentColor: accentColor)
             .withCornerRadius(nonCardCornerRadius)
     }
 
     private var accentColor: Color? {
-        if comment.isSubmitter {
+        if isOriginalPoster {
             return .accentColor
         } else if depth > 0 {
             return depthColor
@@ -313,7 +317,7 @@ struct CompactCommentView: View {
     private var authorColor: Color {
         if isDeletedUser {
             return .secondary
-        } else if comment.isSubmitter {
+        } else if isOriginalPoster {
             return .accentColor
         } else if comment.distinguished != nil {
             return .green
