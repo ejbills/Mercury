@@ -38,6 +38,18 @@ struct MediaDetailView: View {
     @State private var gifProgress: Double = 0 // 0..1 for GIF scrubbing
     @State private var isScrubbingGestureActive: Bool = false
 
+    // Comments sheet
+    @State private var showCommentsSheet: Bool = false
+    @State private var threadManager = CommentThreadManager()
+    @State private var isLoadingComments = false
+    @State private var commentSort: CommentSort = .best
+
+    // Drag gesture for comments
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging: Bool = false
+    @State private var hasTriggeredCommentsDrag: Bool = false
+    private let dragThreshold: CGFloat = 80
+
     init(post: RedditPost, namespace: Namespace.ID, videoHandoffState: VideoHandoffState? = nil, onVideoHandoffReturn: ((VideoHandoffState) -> Void)? = nil) {
         self.post = post
         self.namespace = namespace
@@ -54,12 +66,12 @@ struct MediaDetailView: View {
         updatedPost.displayScore = displayScore
         return updatedPost
     }
-    
+
     var body: some View {
         ZStack {
             (colorScheme == .dark ? Color.black : Color.white)
                 .ignoresSafeArea()
-            
+
             Group {
                 if post.postType != .video {
                     mediaContent
@@ -79,9 +91,6 @@ struct MediaDetailView: View {
                         downloadProgressOverlay
                     }
                 }
-            
-            
-            
         }
         .overlay(bottomOverlay, alignment: .bottom)
         .navigationBarHidden(true)
@@ -103,6 +112,39 @@ struct MediaDetailView: View {
             // Clear our reference (but don't destroy the shared player)
             self.player = nil
         }
+        .sheet(isPresented: $showShareSheet) {
+            if let urls = shareItems {
+                MediaShareSheet(post: post, mediaURLs: urls)
+            } else {
+                MediaShareSheet(post: post, mediaURL: shareItem)
+            }
+        }
+        .sheet(isPresented: $showingPostReply) {
+            MarkdownComposerView(
+                title: "Reply",
+                accounts: redditAPI.availableAccountUsernames(),
+                activeAccount: redditAPI.userInfo?.name ?? redditAPI.activeUsername,
+                onCancel: { showingPostReply = false },
+                onSubmit: { text, account in
+                    try await submitRootReply(text: text, account: account)
+                }
+            )
+        }
+        .sheet(isPresented: $showCommentsSheet) {
+            commentsSheetView
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var bottomOverlay: some View {
+        Group {
+            if isContentVisible, post.postType != .video {
+                bottomContentOverlay
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: isContentVisible)
+            }
+        }
     }
     
     
@@ -123,11 +165,11 @@ struct MediaDetailView: View {
                     Spacer()
                 }
             }
-            
+
             // Post context
             VStack(alignment: .leading, spacing: 8) {
                 PostHeader(post: post, colorScheme: .dark)
-                
+
                 Text(post.title)
                     .font(.title3)
                     .fontWeight(.medium)
@@ -135,8 +177,8 @@ struct MediaDetailView: View {
                     .multilineTextAlignment(.leading)
                     .lineLimit(3)
             }
-            
-            // Action bar matching post layout exactly
+
+            // Action bar
             PostActionToolbar(
                 post: currentPost,
                 voteState: $voteState,
@@ -156,9 +198,21 @@ struct MediaDetailView: View {
                 showCommentCount: true,
                 showVoting: true
             )
+
+            // Drag handle for comments
+            HStack {
+                Spacer()
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color.white.opacity(0.5 + min(dragOffset / dragThreshold, 1) * 0.3))
+                    .frame(width: 40, height: 5)
+                    .scaleEffect(x: 1 + min(dragOffset / dragThreshold, 1) * 0.5, y: 1, anchor: .center)
+                Spacer()
+            }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
+        .offset(y: -dragOffset)
+        .scaleEffect(1 + min(dragOffset / dragThreshold, 1) * 0.05, anchor: .bottom)
         .background(
             GeometryReader { geometry in
                 LinearGradient(
@@ -166,31 +220,124 @@ struct MediaDetailView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 250)
-                .offset(y: geometry.safeAreaInsets.bottom)
+                .frame(height: 250 + dragOffset * 0.5)
+                .offset(y: geometry.safeAreaInsets.bottom - dragOffset)
             }
             .ignoresSafeArea(edges: .bottom)
         )
-        .sheet(isPresented: $showShareSheet) {
-            if let urls = shareItems {
-                MediaShareSheet(post: post, mediaURLs: urls)
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if showCommentsSheet && hasTriggeredCommentsDrag { return }
+                    isDragging = true
+                    // Only allow upward drag (negative translation)
+                    let offset = max(0, -value.translation.height)
+                    dragOffset = min(offset, dragThreshold * 1.2)
+                    if !hasTriggeredCommentsDrag && offset >= dragThreshold && !showCommentsSheet {
+                        hasTriggeredCommentsDrag = true
+                        showCommentsSheet = true
+                        loadCommentsIfNeeded()
+                    }
+                }
+                .onEnded { value in
+                    isDragging = false
+                    hasTriggeredCommentsDrag = false
+                    // Reset drag offset
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        dragOffset = 0
+                    }
+                }
+        )
+        .onChange(of: showCommentsSheet) { _, isPresented in
+            if isPresented {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    dragOffset = 0
+                }
             } else {
-                MediaShareSheet(post: post, mediaURL: shareItem)
+                hasTriggeredCommentsDrag = false
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    dragOffset = 0
+                }
             }
         }
-        .sheet(isPresented: $showingPostReply) {
-            MarkdownComposerView(
-                title: "Reply",
-                accounts: redditAPI.availableAccountUsernames(),
-                activeAccount: redditAPI.userInfo?.name ?? redditAPI.activeUsername,
-                onCancel: { showingPostReply = false },
-                onSubmit: { text, account in
-                    try await submitRootReply(text: text, account: account)
+    }
+
+    private var commentsSheetView: some View {
+        NavigationStack {
+            Group {
+                if isLoadingComments && threadManager.commentThreads.isEmpty {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+
+                        Text("Loading comments...")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+                } else if threadManager.commentThreads.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "bubble.left")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.secondary)
+
+                        Text("No comments yet")
+                            .font(.headline)
+                            .fontWeight(.medium)
+
+                        Text("Be the first to comment on this post")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 60)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            let allComments = threadManager.commentThreads.map { $0.parentComment }
+
+                            CommentThreadView(
+                                comments: allComments,
+                                post: post,
+                                sort: commentSort,
+                                scrollTarget: .constant(nil)
+                            )
+                            .padding(.horizontal, 16)
+                        }
+                        .padding(.top, 8)
+                        .padding(.bottom, 20)
+                    }
                 }
-            )
+            }
+            .navigationTitle("Comments")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        ForEach(CommentSort.allCases, id: \.self) { sort in
+                            Button(action: {
+                                commentSort = sort
+                                Task { await loadComments() }
+                            }) {
+                                HStack {
+                                    if commentSort == sort { Image(systemName: "checkmark") }
+                                    Image(systemName: sort.iconName)
+                                    Text(sort.displayName)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: commentSort.iconName)
+                            .font(.callout)
+                    }
+                }
+            }
         }
     }
-    
+
     private var mediaId: String {
         "\(post.id)-\(post.postType.displayName.lowercased())"
     }
@@ -208,17 +355,6 @@ struct MediaDetailView: View {
         .animation(.linear(duration: 0.05), value: gifProgress)
     }
     
-    private var bottomOverlay: some View {
-        Group {
-            if isContentVisible, post.postType != .video {
-                bottomContentOverlay
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.25), value: isContentVisible)
-    
-                
-            }
-        }
-    }
 
 
     private func submitRootReply(text: String, account: String) async throws {
@@ -526,7 +662,49 @@ struct MediaDetailView: View {
             }
         }
     }
-    
+
+    // MARK: - Comments Loading
+
+    private func loadCommentsIfNeeded() {
+        guard threadManager.commentThreads.isEmpty && !isLoadingComments else { return }
+        Task {
+            await loadComments()
+        }
+    }
+
+    @MainActor
+    private func loadComments() async {
+        isLoadingComments = true
+
+        do {
+            let response = try await redditAPI.fetchPostComments(
+                postId: post.id,
+                sort: commentSort,
+                focusCommentId: nil,
+                context: nil
+            )
+
+            if response.count > 1 {
+                let commentsResponse = response[1]
+                let fetchedComments = commentsResponse.flattenedComments
+                let moreObjects = commentsResponse.moreComments
+                let rootAfter = commentsResponse.data.after
+
+                threadManager.loadInitialComments(fetchedComments, moreObjects: moreObjects, rootAfter: rootAfter)
+
+                // Prefetch embedded images/GIFs in the just-loaded comments
+                MediaPrefetcher.shared.prefetch(comments: fetchedComments)
+            } else {
+                threadManager.loadInitialComments([], moreObjects: [], rootAfter: nil)
+            }
+
+            isLoadingComments = false
+        } catch {
+            print("Failed to load comments: \(error)")
+            isLoadingComments = false
+        }
+    }
+
     @ViewBuilder
     private var downloadProgressOverlay: some View {
         ZStack {
