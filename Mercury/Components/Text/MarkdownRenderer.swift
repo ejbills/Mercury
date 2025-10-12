@@ -81,7 +81,7 @@ struct MarkdownRenderer: View {
                 }
             }
         }
-        let redditMentionPattern = #"(?<=^|\s)(u|r)/[a-zA-Z0-9_-]+(?=\s|$)"#
+        let redditMentionPattern = #"(?<=^|\s)/?(u|r)/[a-zA-Z0-9_-]+(?=\s|$)"#
         if let mentionRegex = try? NSRegularExpression(pattern: redditMentionPattern, options: []) {
             let range = NSRange(location: 0, length: processedText.utf16.count)
             let mentionMatches = mentionRegex.matches(in: processedText, options: [], range: range)

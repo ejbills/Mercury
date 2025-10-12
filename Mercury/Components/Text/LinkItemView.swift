@@ -2,10 +2,7 @@ import SwiftUI
 
 struct LinkItemView: View {
     let link: String
-    
-    @State private var metadata: ArticleMetadata?
-    @State private var imageStatus: ImageStatus = .loading
-    @Environment(\.colorScheme) private var colorScheme
+
     @Environment(\.navigationPathManager) private var navigationPath
     
     private var url: URL? {
@@ -46,16 +43,6 @@ struct LinkItemView: View {
         return link.matches(redditPostPattern)
     }
     
-    private var isImageDomain: Bool {
-        let lowercaseLink = link.lowercased()
-        return lowercaseLink.contains("i.redd.it") ||
-               lowercaseLink.contains("preview.redd.it") ||
-               lowercaseLink.contains("external-preview.redd.it") ||
-               lowercaseLink.contains("i.imgur.com") ||
-               lowercaseLink.contains("media.giphy.com") ||
-               (lowercaseLink.contains("redd.it") && !lowercaseLink.contains("/r/") && !isRedditPost)
-    }
-    
     var body: some View {
         Group {
             if isRedditSubreddit {
@@ -64,107 +51,26 @@ struct LinkItemView: View {
                 redditUserView
             } else if isRedditPost {
                 redditPostView
-            } else if isValidUrl, let url {
-                Link(destination: url) {
-                    linkCard
-                }
-                .buttonStyle(LinkCardButtonStyle())
+            } else if isValidUrl {
+                articleCardView
             } else {
                 invalidURLView
             }
         }
-        .task(id: url) {
-            if !isRedditSubreddit && !isRedditUser && !isRedditPost && !isImageDomain {
-                await fetchMetadata()
-            }
-        }
     }
     
-    private var linkCard: some View {
-        HStack(spacing: 12) {
-            thumbnailView
-            VStack(alignment: .leading, spacing: 4) {
-                titleView
-                domainView
-                
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(12)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.separator.opacity(0.3), lineWidth: 0.5)
-        )
-    }
-    
-    private var thumbnailView: some View {
-        Group {
-            switch imageStatus {
-            case .loading:
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.quaternary)
-                    .overlay {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.secondary)
-                    }
-                
-            case .finished(let image):
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .clipped()
-                
-            case .failed:
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.quaternary)
-                    .overlay {
-                        Image(systemName: "link")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-            }
-        }
-        .frame(width: 60, height: 60)
-    }
-    
-    private var titleView: some View {
-        Text(metadata?.title ?? url?.host ?? url?.absoluteString ?? "Loading...")
-            .font(.system(.subheadline, design: .default, weight: .medium))
-            .foregroundStyle(.primary)
-            .lineLimit(2)
-            .multilineTextAlignment(.leading)
-            .redacted(reason: metadata == nil ? .placeholder : [])
-            .animation(.easeInOut(duration: 0.3), value: metadata?.title)
-    }
-    
-    private var domainView: some View {
-        Group {
-            if metadata != nil {
-                HStack(spacing: 4) {
-                    Image(systemName: "globe")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    
-                    Text(url?.host ?? "Unknown domain")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+    private var articleCardView: some View {
+        CompactArticleCard(
+            url: link,
+            fallbackThumbnail: nil,
+            fallbackDomain: url?.host,
+            fallbackTitle: nil,
+            onTap: {
+                if let url = url {
+                    UIApplication.shared.open(url)
                 }
-            } else {
-                Text(url?.host ?? "Unknown domain")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
-        }
+        )
     }
     
     private var invalidURLView: some View {
@@ -296,21 +202,6 @@ struct LinkItemView: View {
         }
     }
     
-    private func extractPostIdFromURL(_ url: String) -> String? {
-        // Extract post ID from Reddit URLs
-        if url.contains("/comments/") {
-            let components = url.components(separatedBy: "/comments/")
-            if components.count > 1 {
-                let afterComments = components[1]
-                let idComponents = afterComments.components(separatedBy: "/")
-                return idComponents.first
-            }
-        } else if url.contains("redd.it/") {
-            return url.components(separatedBy: "redd.it/").last
-        }
-        return nil
-    }
-    
     private func extractRedditName(from text: String, prefix: String) -> String {
         // Handle pure format like "r/SwiftUI" or "/r/SwiftUI"
         if text.hasPrefix(prefix) {
@@ -337,92 +228,8 @@ struct LinkItemView: View {
         return text
     }
     
-    private var cardBackground: Color {
-        colorScheme == .dark ? 
-            Color(UIColor.secondarySystemGroupedBackground) : 
-            Color(UIColor.systemBackground)
-    }
-    
-    private var cardBorder: Color {
-        colorScheme == .dark ? 
-            Color(UIColor.separator).opacity(0.3) : 
-            Color(UIColor.separator).opacity(0.2)
-    }
 }
 
-// MARK: - Button Styles
-struct LinkCardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
-    }
-}
-
-struct AppleLinkButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .brightness(configuration.isPressed ? -0.05 : 0.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Private Methods
-extension LinkItemView {
-    private func fetchMetadata() async {
-        guard let url = url else { return }
-        
-        let fetchedMetadata = await MetadataService.shared.fetchMetadata(for: url.absoluteString)
-        
-        await MainActor.run {
-            self.metadata = fetchedMetadata
-        }
-        
-        // Load image if available
-        if let imageURL = fetchedMetadata?.imageURL {
-            await loadImage(from: imageURL)
-        } else {
-            await MainActor.run {
-                self.imageStatus = .failed
-            }
-        }
-    }
-    
-    private func loadImage(from imageURL: String) async {
-        guard let url = URL(string: imageURL) else {
-            await MainActor.run {
-                self.imageStatus = .failed
-            }
-            return
-        }
-        
-        do {
-            let (data, _) = try await NetworkManager.shared.session.data(from: url)
-            if let uiImage = UIImage(data: data) {
-                await MainActor.run {
-                    self.imageStatus = .finished(Image(uiImage: uiImage))
-                }
-            } else {
-                await MainActor.run {
-                    self.imageStatus = .failed
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.imageStatus = .failed
-            }
-        }
-    }
-}
-
-enum ImageStatus {
-    case loading
-    case finished(Image)
-    case failed
-}
 
 #Preview {
     ScrollView {
