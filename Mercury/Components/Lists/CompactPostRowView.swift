@@ -100,6 +100,8 @@ struct CompactPostRowView: View {
             return post.gifURL != nil
         case .video:
             return post.videoURL != nil
+        case .youtube:
+            return post.url != nil
         case .gallery:
             return !post.galleryImages.isEmpty
         case .link:
@@ -124,6 +126,8 @@ struct CompactPostRowView: View {
             return .gif
         case .video:
             return .video
+        case .youtube:
+            return .link
         case .gallery:
             return .gallery
         case .link:
@@ -312,6 +316,24 @@ struct CompactPostRowView: View {
                 .matchedTransitionSource(id: "\(post.id)-video", in: namespace)
             } else {
                 Image(systemName: "play.rectangle")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+        case .youtube:
+            if let previewURL = post.videoThumbnailURL ?? post.imageURL ?? validThumbnailURL, let url = URL(string: previewURL) {
+                LazyImage(url: url) { state in
+                    if let image = state.image {
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Image(systemName: "play.rectangle.on.rectangle")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Image(systemName: "play.rectangle.on.rectangle")
                     .font(.title2)
                     .foregroundStyle(.secondary)
             }
@@ -590,6 +612,10 @@ struct CompactPostRowView: View {
             badgeBackground {
                 Image(systemName: "play.fill").font(.caption2).fontWeight(.bold)
             }
+        case .youtube:
+            badgeBackground {
+                Image(systemName: "play.rectangle.fill").font(.caption2)
+            }
         case .gif:
             badgeBackground {
                 Text("GIF").font(.caption2).fontWeight(.heavy)
@@ -626,7 +652,7 @@ struct CompactPostRowView: View {
         switch postType {
         case .image, .gif, .video, .gallery:
             selectedPost = post
-        case .link:
+        case .link, .youtube:
             showingSafari = true
         case .text:
             if allowsNavigation {

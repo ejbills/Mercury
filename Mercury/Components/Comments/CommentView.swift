@@ -318,16 +318,19 @@ struct CommentView: View {
     }
 
     private var accentColor: Color? {
-        if isOriginalPoster {
-            return .accentColor
-        } else if depth > 0 {
+        if depth > 0 {
             return depthColor
         }
         return nil
     }
 
     private var highlightColor: Color? {
-        comment.stickied ? Color.green.opacity(0.10) : nil
+        if comment.stickied {
+            return Color.green.opacity(0.10)
+        } else if isOriginalPoster {
+            return Color.accentColor.opacity(0.10)
+        }
+        return nil
     }
 
     private var nonCardCornerRadius: CGFloat {

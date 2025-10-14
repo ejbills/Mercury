@@ -522,7 +522,7 @@ struct MediaDetailView: View {
                 }
                 .navigationTransition(.zoom(sourceID: mediaId, in: namespace))
             }
-        case .text, .link:
+        case .text, .link, .youtube:
             // These shouldn't appear in media detail view
             VStack(spacing: 16) {
                 Image(systemName: "doc.text")

@@ -215,6 +215,10 @@ struct RedditPost: Codable, Identifiable, Hashable {
             return .gallery
         }
 
+        if isYouTubeLink {
+            return .youtube
+        }
+
         if isRedGifsLink {
             return .video
         }
@@ -678,6 +682,7 @@ enum PostType {
     case image
     case gif
     case video
+    case youtube
     case gallery
     case link
 
@@ -687,6 +692,7 @@ enum PostType {
         case .image: return "photo"
         case .gif: return "play.rectangle.fill"
         case .video: return "play.rectangle"
+        case .youtube: return "play.rectangle.on.rectangle"
         case .gallery: return "photo.stack"
         case .link: return "link"
         }
@@ -698,6 +704,7 @@ enum PostType {
         case .image: return "Image"
         case .gif: return "GIF"
         case .video: return "Video"
+        case .youtube: return "YouTube"
         case .gallery: return "Gallery"
         case .link: return "Link"
         }

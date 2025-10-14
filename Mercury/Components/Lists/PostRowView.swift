@@ -102,6 +102,8 @@ struct PostRowView: View {
             return post.gifURL != nil
         case .video:
             return post.videoURL != nil
+        case .youtube:
+            return post.url != nil
         case .gallery:
             return !post.galleryImages.isEmpty
         case .link:
@@ -391,6 +393,18 @@ struct PostRowView: View {
                     },
                     resumeFromState: videoHandoffState
                 )
+            }
+        case .youtube:
+            if let youtubeURL = post.url {
+                CompactArticleCard(
+                    url: youtubeURL,
+                    fallbackThumbnail: validThumbnailURL,
+                    fallbackDomain: post.domain,
+                    fallbackTitle: post.title
+                ) {
+                    let normalized = URLNormalizer.normalizeRedditURL(youtubeURL)
+                    if let url = URL(string: normalized) { safariURL = url }
+                }
             }
         case .gallery:
             VStack(alignment: .leading, spacing: 12) {

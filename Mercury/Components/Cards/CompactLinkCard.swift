@@ -81,11 +81,11 @@ struct CompactLinkCard<Thumbnail: View>: View {
                 .clipped()
         }
         .frame(minHeight: CompactLinkCardMetrics.minHeight)
-        .background(Color(UIColor.secondarySystemBackground))
+        .background(Color(UIColor.tertiarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: CompactLinkCardMetrics.cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: CompactLinkCardMetrics.cornerRadius, style: .continuous)
-                .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 0.5)
+                .stroke(Color(UIColor.separator), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
@@ -113,6 +113,26 @@ struct CompactArticleCard: View {
             onTap: onTap
         )
         .frame(height: CompactLinkCardMetrics.minHeight) // Fixed height prevents layout shift
+        .contextMenu {
+            if let url = URL(string: url) {
+                Button(action: { onTap() }) {
+                    Label("Open in Safari", systemImage: "safari")
+                }
+                Button(action: {
+                    UIPasteboard.general.url = url
+                }) {
+                    Label("Copy Link", systemImage: "link")
+                }
+                ShareLink(item: url) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+        } preview: {
+            if let url = URL(string: url) {
+                SafariView(url: url)
+                    .frame(width: 350, height: 500)
+            }
+        }
         .task { await loadMetadata() }
     }
 

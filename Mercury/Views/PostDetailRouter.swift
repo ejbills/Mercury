@@ -14,12 +14,12 @@ struct PostDetailRouter: View {
         switch post.postType {
         case .gallery, .image, .gif, .video:
             MediaDetailView(
-                post: post, 
-                namespace: namespace, 
+                post: post,
+                namespace: namespace,
                 videoHandoffState: videoHandoffState,
                 onVideoHandoffReturn: onVideoHandoffReturn
             )
-        case .text, .link:
+        case .text, .link, .youtube:
             UnsupportedMediaDetailView(onDismiss: onDismiss)
         }
     }

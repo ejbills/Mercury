@@ -128,7 +128,7 @@ struct MarkdownRenderer: View {
     
     private var processedContent: String {
         var processed = content
-        
+
         // Strip custom attachment tokens so they don't show up in Markdown
         let attachmentPattern = #"!\[[^\]]*\]\(attachment://([a-zA-Z0-9_\-]+)\)"#
         processed = processed.replacingOccurrences(of: attachmentPattern, with: "", options: .regularExpression)
@@ -140,6 +140,25 @@ struct MarkdownRenderer: View {
         // Remove any raw giphy tokens from rendered markdown
         let giphyTokenPattern = #"giphy(?:\||%7C)[^\s)\]>]+"#
         processed = processed.replacingOccurrences(of: giphyTokenPattern, with: "", options: .regularExpression)
+
+        // Remove image and GIF URLs that will be embedded
+        if showEmbeddedContent {
+            let urlPattern = #"https?://[^\s)\]>]+"#
+            if let regex = try? NSRegularExpression(pattern: urlPattern, options: []) {
+                let range = NSRange(location: 0, length: processed.utf16.count)
+                let matches = regex.matches(in: processed, options: [], range: range)
+
+                // Process matches in reverse order to maintain string indices
+                for match in matches.reversed() {
+                    if let range = Range(match.range, in: processed) {
+                        let urlString = String(processed[range])
+                        if isImageURL(urlString) || isGifURL(urlString) || isGiphyLink(urlString) {
+                            processed.removeSubrange(range)
+                        }
+                    }
+                }
+            }
+        }
         do {
             let superscriptRegex = try NSRegularExpression(pattern: "\\^(\\w+)", options: [])
             let range = NSRange(location: 0, length: processed.utf16.count)
