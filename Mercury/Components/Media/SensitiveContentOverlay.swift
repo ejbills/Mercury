@@ -5,8 +5,14 @@ struct SensitiveContentOverlay: View {
     let post: RedditPost
     let contentType: ContentType
     @Binding var isBlurred: Bool
+    var size: Size = .regular
     @Default(.blurNSFWContent) private var blurNSFWContent
     @Default(.blurSpoilerContent) private var blurSpoilerContent
+
+    enum Size {
+        case compact
+        case regular
+    }
 
     enum ContentType {
         case image
@@ -57,30 +63,44 @@ struct SensitiveContentOverlay: View {
 
     var body: some View {
         if shouldShow {
-            ZStack {
-                Color.black.opacity(0.7)
-                VStack(spacing: 8) {
-                    Image(systemName: "eye.slash.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                    if !overlayTitle.isEmpty {
-                        Text(overlayTitle)
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
+            if size == .compact {
+                Image(systemName: "eye.slash.fill")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(6)
+                    .background(Color.black.opacity(0.7), in: Circle())
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isBlurred = false
+                        }
                     }
-                    Text("Tap to reveal")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.8))
+                    .transition(.opacity)
+            } else {
+                ZStack {
+                    Color.black.opacity(0.7)
+                    VStack(spacing: 8) {
+                        Image(systemName: "eye.slash.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                        if !overlayTitle.isEmpty {
+                            Text(overlayTitle)
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                        }
+                        Text("Tap to reveal")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
                 }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isBlurred = false
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isBlurred = false
+                    }
                 }
+                .transition(.opacity)
             }
-            .transition(.opacity)
         }
     }
 }
@@ -90,6 +110,7 @@ private struct SensitiveContentBlurModifier: ViewModifier {
     let contentType: SensitiveContentOverlay.ContentType
     @Binding var isBlurred: Bool
     let cornerRadius: CGFloat?
+    let size: SensitiveContentOverlay.Size
     @Default(.blurNSFWContent) private var blurNSFWContent
     @Default(.blurSpoilerContent) private var blurSpoilerContent
 
@@ -101,7 +122,7 @@ private struct SensitiveContentBlurModifier: ViewModifier {
         let blurred = ZStack {
             content
                 .blur(radius: shouldBlur && isBlurred ? 20 : 0)
-            SensitiveContentOverlay(post: post, contentType: contentType, isBlurred: $isBlurred)
+            SensitiveContentOverlay(post: post, contentType: contentType, isBlurred: $isBlurred, size: size)
         }
         .onAppear {
             isBlurred = shouldBlur
@@ -124,7 +145,7 @@ private struct SensitiveContentBlurModifier: ViewModifier {
 }
 
 extension View {
-    func sensitiveContentBlurred(post: RedditPost, contentType: SensitiveContentOverlay.ContentType, isBlurred: Binding<Bool>, cornerRadius: CGFloat? = 12) -> some View {
-        modifier(SensitiveContentBlurModifier(post: post, contentType: contentType, isBlurred: isBlurred, cornerRadius: cornerRadius))
+    func sensitiveContentBlurred(post: RedditPost, contentType: SensitiveContentOverlay.ContentType, isBlurred: Binding<Bool>, cornerRadius: CGFloat? = 12, size: SensitiveContentOverlay.Size = .regular) -> some View {
+        modifier(SensitiveContentBlurModifier(post: post, contentType: contentType, isBlurred: isBlurred, cornerRadius: cornerRadius, size: size))
     }
 }

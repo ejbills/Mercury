@@ -542,7 +542,7 @@ struct CompactPostRowView: View {
                     .frame(width: postThumbSize.dimension, height: postThumbSize.dimension)
                     .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                     .overlay(alignment: .center) { mediaBadge }
-                    .sensitiveContentBlurred(post: post, contentType: compactSensitiveContentType, isBlurred: $compactThumbnailBlurred, cornerRadius: 8)
+                    .sensitiveContentBlurred(post: post, contentType: compactSensitiveContentType, isBlurred: $compactThumbnailBlurred, cornerRadius: 8, size: .compact)
                     .contentShape(RoundedRectangle(cornerRadius: 8))
                     .highPriorityGesture(TapGesture().onEnded { handleThumbnailTap() })
             }
