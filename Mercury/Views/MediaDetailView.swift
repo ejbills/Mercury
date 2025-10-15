@@ -167,7 +167,7 @@ struct MediaDetailView: View {
 
             // Post context
             VStack(alignment: .leading, spacing: 8) {
-                PostHeader(post: post, colorScheme: .dark)
+                PostHeader(post: post, colorScheme: .light)
 
                 Text(post.title)
                     .font(.title3)
