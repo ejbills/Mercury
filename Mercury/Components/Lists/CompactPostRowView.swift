@@ -58,6 +58,7 @@ struct CompactPostRowView: View {
     @Default(.postRightSwipeAction2) private var postRightAction2
     @Default(.postRightSwipeAction3) private var postRightAction3
     @Default(.postRightSwipeAction4) private var postRightAction4
+    @Default(.readPostIds) private var readPostIds
     
     init(post: RedditPost, namespace: Namespace.ID, selectedPost: Binding<RedditPost?>, onRootReplyPosted: ((RedditComment) -> Void)? = nil, allowsNavigation: Bool = true) {
         self.post = post
@@ -171,6 +172,7 @@ struct CompactPostRowView: View {
                 nonCardContainer
             }
         }
+        .opacity(allowsNavigation && readPostIds.contains(post.id) ? 0.5 : 1.0)
         .padding(.horizontal, CGFloat(postHorizontalPadding))
         .customSwipeGesture(
             right1: postRightAction1 != .none ? SwipeAction(
@@ -220,6 +222,12 @@ struct CompactPostRowView: View {
 
     private func navigateToComments() {
         navigationPath.navigate(to: .postComments(post: currentPost))
+        Task {
+            try? await Task.sleep(nanoseconds: 350_000_000) // 0.35 seconds
+            _ = await MainActor.run {
+                readPostIds.insert(post.id)
+            }
+        }
     }
 
     @ViewBuilder

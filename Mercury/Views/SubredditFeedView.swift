@@ -22,6 +22,8 @@ struct SubredditFeedView: View {
     @State private var videoHandoffState: VideoHandoffState?
     @Default(.postLayoutStyle) private var postLayoutStyle
     @Default(.hiddenPostIds) private var hiddenPostIds
+    @Default(.readPostIds) private var readPostIds
+    @Default(.hideReadPosts) private var hideReadPosts
     @State private var showSidebar = false
     @State private var hasSidebar: Bool = false
     @State private var feedSearchText: String = ""
@@ -58,7 +60,7 @@ struct SubredditFeedView: View {
                         .padding(.top, 100)
                 } else {
                     ForEach(base) { post in
-                        if !hiddenPostIds.contains(post.id) {
+                        if !hiddenPostIds.contains(post.id) && (!hideReadPosts || !readPostIds.contains(post.id)) {
                             Group {
                                 if postLayoutStyle == .compact {
                                     CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
@@ -88,8 +90,8 @@ struct SubredditFeedView: View {
                             .onAppear {
                                 // Find the last visible post to handle cases where many posts are hidden
                                 let lastVisiblePost = isSearching
-                                    ? searchResults.last(where: { !hiddenPostIds.contains($0.id) })
-                                    : posts.last(where: { !hiddenPostIds.contains($0.id) })
+                                    ? searchResults.last(where: { !hiddenPostIds.contains($0.id) && (!hideReadPosts || !readPostIds.contains($0.id)) })
+                                    : posts.last(where: { !hiddenPostIds.contains($0.id) && (!hideReadPosts || !readPostIds.contains($0.id)) })
 
                                 if isSearching {
                                     if post.id == lastVisiblePost?.id && searchHasMore && !isSearchLoading {

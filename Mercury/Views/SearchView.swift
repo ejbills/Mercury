@@ -33,7 +33,9 @@ struct SearchView: View {
     @Default(.feedBackgroundStyle) private var feedBackgroundStyle
     @Default(.customFeedBackgroundColor) private var customFeedBackgroundColor
     @Default(.postLayoutStyle) private var postLayoutStyle
-    
+    @Default(.readPostIds) private var readPostIds
+    @Default(.hideReadPosts) private var hideReadPosts
+
     @State private var debounceTask: Task<Void, Never>? = nil
     
     // MARK: - Initializers
@@ -230,25 +232,28 @@ struct SearchView: View {
                 .feedListRowStyle()
         } else {
             ForEach(searchResults) { post in
+                if !hideReadPosts || !readPostIds.contains(post.id) {
                     Group {
                         if postLayoutStyle == .compact {
                             CompactPostRowView(post: post, namespace: mediaNamespace, selectedPost: $selectedPost)
                         } else {
                             PostRowView(
-                                post: post, 
-                                namespace: mediaNamespace, 
+                                post: post,
+                                namespace: mediaNamespace,
                                 selectedPost: $selectedPost
                             )
                         }
                     }
                     .feedListRowStyle()
                     .onAppear {
-                        if post.id == searchResults.last?.id && hasMore && !isLoading {
+                        let lastVisiblePost = searchResults.last(where: { !hideReadPosts || !readPostIds.contains($0.id) })
+                        if post.id == lastVisiblePost?.id && hasMore && !isLoading {
                             Task {
                                 await loadMorePosts()
                             }
                         }
                     }
+                }
             }
             
             if hasMore && !searchResults.isEmpty {

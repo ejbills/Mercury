@@ -102,6 +102,8 @@ extension Defaults.Keys {
     static let commentRightSwipeAction3 = Key<SwipeActionType>("commentRightSwipeAction3", default: .reply)
     static let commentRightSwipeAction4 = Key<SwipeActionType>("commentRightSwipeAction4", default: .save)
     static let hiddenPostIds = Key<Set<String>>("hiddenPostIds", default: [])
+    static let readPostIds = Key<Set<String>>("readPostIds", default: [])
+    static let hideReadPosts = Key<Bool>("hideReadPosts", default: false)
     static let favoriteSubreddits = Key<Set<String>>("favoriteSubreddits", default: Set())
 
     // Cached data

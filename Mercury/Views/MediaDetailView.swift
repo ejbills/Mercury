@@ -69,8 +69,7 @@ struct MediaDetailView: View {
 
     var body: some View {
         ZStack {
-            (colorScheme == .dark ? Color.black : Color.white)
-                .ignoresSafeArea()
+            Color.black.ignoresSafeArea()
 
             Group {
                 if post.postType != .video {

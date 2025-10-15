@@ -9,7 +9,7 @@ struct FilterSettingsView: View {
     @Default(.blockedUsers) private var blockedUsers
     @Default(.blockedSubreddits) private var blockedSubreddits
     @Default(.hiddenPostIds) private var hiddenPostIds
-    
+
     @State private var newKeyword = ""
     @State private var newUser = ""
     @State private var newSubreddit = ""
