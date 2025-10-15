@@ -1,4 +1,5 @@
 import Foundation
+import Defaults
 
 struct RedditComment: Codable, Identifiable, Hashable {
     let id: String
@@ -233,7 +234,7 @@ struct RedditComment: Codable, Identifiable, Hashable {
     }
 }
 
-enum CommentSort: String, CaseIterable {
+enum CommentSort: String, CaseIterable, Codable, Defaults.Serializable {
     case best = "best"
     case top = "top"
     case new = "new"

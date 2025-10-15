@@ -9,8 +9,8 @@ struct SearchView: View {
     private let usesExternalSearchText: Bool
     @State private var searchTextInternal: String = ""
     private var searchText: Binding<String> { usesExternalSearchText ? $searchTextExternal : $searchTextInternal }
-    @State private var selectedTab: SearchTab = .posts
-    @State private var selectedSort: SearchSort = .relevance
+    @Default(.defaultSearchTab) private var selectedTab
+    @Default(.defaultSearchSort) private var selectedSort
     @State private var searchResults: [RedditPost] = []
     @State private var subredditResults: [Subreddit] = []
     @State private var userResults: [UserProfile] = []
@@ -54,7 +54,7 @@ struct SearchView: View {
         self.initialScopeSubreddit = nil
     }
     
-    enum SearchTab: String, CaseIterable, SectionPickerIconProvider {
+    enum SearchTab: String, CaseIterable, Codable, Defaults.Serializable, SectionPickerIconProvider {
         case posts = "Posts"
         case subreddits = "Communities"
         case users = "Users"
@@ -68,7 +68,7 @@ struct SearchView: View {
         }
     }
     
-    enum SearchSort: String, CaseIterable, SectionPickerIconProvider {
+    enum SearchSort: String, CaseIterable, Codable, Defaults.Serializable, SectionPickerIconProvider {
         case relevance = "Relevance"
         case new = "New"
         case hot = "Hot"

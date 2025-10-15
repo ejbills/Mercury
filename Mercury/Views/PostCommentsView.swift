@@ -8,7 +8,7 @@ struct PostCommentsView: View {
     @State private var threadManager = CommentThreadManager()
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var commentSort: CommentSort = .best
+    @Default(.defaultCommentSort) private var commentSort
     // Old confirmation dialog removed; use Menu anchored in toolbar
     @State private var loadingRootMoreIds: Set<String> = []
     @State private var selectedPost: RedditPost?

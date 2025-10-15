@@ -918,9 +918,9 @@ extension Optional where Wrapped == String {
     }
 }
 
-enum PostSort: String, CaseIterable {
+enum PostSort: String, CaseIterable, Codable, Defaults.Serializable {
     case hot = "hot"
-    case new = "new" 
+    case new = "new"
     case top = "top"
     case rising = "rising"
     

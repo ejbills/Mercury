@@ -136,6 +136,12 @@ extension Defaults.Keys {
     static let commentRowVerticalPadding = Key<Double>("commentRowVerticalPadding", default: 3.0)
 
     static let postNormalCardCornerRadius = Key<Double>("postNormalCardCornerRadius", default: 16.0)
+
+    // Sort preferences
+    static let defaultCommentSort = Key<CommentSort>("defaultCommentSort", default: .best)
+    static let defaultPostSort = Key<PostSort>("defaultPostSort", default: .hot)
+    static let defaultSearchTab = Key<SearchView.SearchTab>("defaultSearchTab", default: .posts)
+    static let defaultSearchSort = Key<SearchView.SearchSort>("defaultSearchSort", default: .relevance)
     static let postCompactCardCornerRadius = Key<Double>("postCompactCardCornerRadius", default: 8.0)
     static let commentRootCardCornerRadius = Key<Double>("commentRootCardCornerRadius", default: 16.0)
     static let commentChildCardCornerRadius = Key<Double>("commentChildCardCornerRadius", default: 12.0)

@@ -12,7 +12,7 @@ struct SubredditFeedView: View {
     @State private var errorMessage: String?
     @State private var after: String?
     @State private var hasMore = true
-    @State private var postSort: PostSort = .hot
+    @Default(.defaultPostSort) private var postSort
     @State private var topTimeFrame: TopTimeFrame = .day
     // Old confirmation dialogs replaced by anchored Menus
     @Namespace private var mediaNamespace
@@ -86,11 +86,16 @@ struct SubredditFeedView: View {
                             }
                             .id(post.id)
                             .onAppear {
+                                // Find the last visible post to handle cases where many posts are hidden
+                                let lastVisiblePost = isSearching
+                                    ? searchResults.last(where: { !hiddenPostIds.contains($0.id) })
+                                    : posts.last(where: { !hiddenPostIds.contains($0.id) })
+
                                 if isSearching {
-                                    if post.id == searchResults.last?.id && searchHasMore && !isSearchLoading {
+                                    if post.id == lastVisiblePost?.id && searchHasMore && !isSearchLoading {
                                         Task { await loadMoreSearch() }
                                     }
-                                } else if post.id == posts.last?.id && hasMore && !isLoadingMore {
+                                } else if post.id == lastVisiblePost?.id && hasMore && !isLoadingMore {
                                     Task { await loadMorePosts() }
                                 }
                             }
