@@ -15,73 +15,82 @@ struct SimpleImageView: View {
     let apiDimensions: CGSize? // API-provided dimensions
     let post: RedditPost
     @Binding var selectedPost: RedditPost?
-    
     @State private var isLoaded = false
     @State private var isBlurred = false
+    @State private var loadedDimensions: CGSize? = nil
     
-    private var displayHeight: CGFloat {
-        MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
+    private let fallbackHeight: CGFloat = 300
+    
+    private var effectiveDimensions: CGSize? {
+        loadedDimensions ?? apiDimensions
+    }
+    
+    private var resolvedAspectRatio: CGFloat {
+        guard let dims = effectiveDimensions, dims.width > 0, dims.height > 0 else {
+            // Default to 4:3 when we have no intrinsic size yet
+            return 4.0 / 3.0
+        }
+        let ratio = dims.width / dims.height
+        return ratio > 0 ? ratio : 4.0 / 3.0
     }
     
     var body: some View {
-        Rectangle()
-            .fill(.clear)
-            .frame(maxWidth: .infinity)
-            .frame(height: displayHeight) // FIXED HEIGHT FROM API
-                .overlay(alignment: .center) {
-                    LazyImage(url: URL(string: url)) { state in
-                        if let image = state.image {
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: displayHeight)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .opacity(isLoaded ? 1 : 0)
-                                .onAppear {
-                                    if !isLoaded {
-                                        withAnimation(.easeOut(duration: 0.3)) {
-                                            isLoaded = true
-                                        }
-                                    }
+        let mediaContent = LazyImage(url: URL(string: url)) { state in
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.quaternary.opacity(0.3))
+                
+                if let image = state.image {
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .opacity(isLoaded ? 1 : 0)
+                        .onAppear {
+                            if let container = state.imageContainer, loadedDimensions != container.image.size {
+                                loadedDimensions = container.image.size
+                            }
+                            if !isLoaded {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isLoaded = true
                                 }
-                        } else if state.error != nil {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(.quaternary.opacity(0.3))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: displayHeight)
-                                .overlay(alignment: .center) {
-                                    VStack(spacing: 12) {
-                                        Image(systemName: "photo")
-                                            .font(.system(size: 32))
-                                            .foregroundStyle(.secondary)
-                                        Text("Failed to load image")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                        } else {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(.quaternary.opacity(0.3))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: displayHeight)
-                                .overlay(alignment: .center) {
-                                    ProgressView()
-                                        .scaleEffect(1.2)
-                                }
+                            }
                         }
+                } else if state.error != nil {
+                    VStack(spacing: 12) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.secondary)
+                        Text("Failed to load image")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                                    .processors([.resize(size: CGSize(width: 800, height: 600))]) // Resize for consistent caching
-                .priority(.high) // High priority loading
-                .transition(.opacity) // Smooth transition only
+                } else {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                }
             }
-            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
-            .contentShape(Rectangle())
-            .onTapGesture {
-                selectedPost = post
+        }
+        .processors([.resize(size: CGSize(width: 800, height: 600), contentMode: .aspectFit)]) // Resize for consistent caching
+        .priority(.high) // High priority loading
+        .transition(.opacity) // Smooth transition only
+        
+        Group {
+            if effectiveDimensions == nil {
+                mediaContent
+                    .frame(minHeight: fallbackHeight)
+                    .aspectRatio(resolvedAspectRatio, contentMode: .fit)
+            } else {
+                mediaContent
+                    .aspectRatio(resolvedAspectRatio, contentMode: .fit)
             }
-            .matchedTransitionSource(id: mediaId, in: namespace)
-            .sensitiveContentBlurred(post: post, contentType: .image, isBlurred: $isBlurred)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { selectedPost = post }
+        .matchedTransitionSource(id: mediaId, in: namespace)
+        .sensitiveContentBlurred(post: post, contentType: .image, isBlurred: $isBlurred)
     }
 }
 
