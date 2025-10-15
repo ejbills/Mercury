@@ -15,14 +15,14 @@ struct CompactCommentView: View {
     let isCollapsed: Bool
     let onCollapseToggle: () -> Void
     let onReplyPosted: (RedditComment) -> Void
-    
+
     @State private var voteState: RedditComment.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
-    
+
     @Environment(\.redditAPI) private var redditAPI
     @Environment(\.navigationPathManager) private var navigationPath
-    
+
     @State private var showingReply = false
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
@@ -58,6 +58,11 @@ struct CompactCommentView: View {
                 Card(style: resolvedCardStyle, highlightColor: highlightColor) {
                     commentLayout
                 }
+                .onTap {
+                    withAnimation(.smooth(duration: 0.125)) {
+                        onCollapseToggle()
+                    }
+                }
             } else {
                 VStack(spacing: 0) {
                     Divider()
@@ -74,12 +79,12 @@ struct CompactCommentView: View {
                     }
                     Divider()
                 }
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                onCollapseToggle()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.smooth(duration: 0.125)) {
+                        onCollapseToggle()
+                    }
+                }
             }
         }
         .customSwipeGesture(
@@ -125,7 +130,7 @@ struct CompactCommentView: View {
 
     @ViewBuilder
     private var commentLayout: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: commentUseCardStyle ? 8 : 2) {
             if !isCollapsed && commentShowVoteButtons {
                 VStack(spacing: 2) {
                     VoteButton(
@@ -160,6 +165,7 @@ struct CompactCommentView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, !commentUseCardStyle  ? 4 : 0)
     }
 
     @ViewBuilder
@@ -252,12 +258,16 @@ struct CompactCommentView: View {
                 .italic()
                 .foregroundStyle(.tertiary)
         } else {
-            MarkdownRenderer(content: comment.body, compactMode: false)
-                .appFont(.caption)
-                .foregroundStyle(.primary)
-                .lineSpacing(1)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            MarkdownRenderer(
+                content: comment.body,
+                compactMode: false,
+                allowInteraction: false
+            )
+            .appFont(.caption)
+            .foregroundStyle(.primary)
+            .lineSpacing(1)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

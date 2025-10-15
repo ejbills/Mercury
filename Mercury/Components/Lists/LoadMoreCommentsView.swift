@@ -1,4 +1,5 @@
 import SwiftUI
+import Defaults
 
 struct LoadMoreCommentsView: View {
     let moreComments: MoreComments
@@ -11,6 +12,10 @@ struct LoadMoreCommentsView: View {
     let onError: (() -> Void)?
     let depthColor: Color?
     @Environment(\.redditAPI) private var redditAPI
+
+    @Default(.commentLayoutStyle) private var commentLayoutStyle
+    @Default(.commentCompactUseCardStyle) private var commentCompactUseCardStyle
+    @Default(.commentNormalUseCardStyle) private var commentNormalUseCardStyle
     
     init(
         moreComments: MoreComments,
@@ -34,6 +39,10 @@ struct LoadMoreCommentsView: View {
         self.depthColor = depthColor
     }
     
+    private var useCardStyle: Bool {
+        commentLayoutStyle == .compact ? commentCompactUseCardStyle : commentNormalUseCardStyle
+    }
+
     var body: some View {
         let isRootButton = (moreComments.depth == 0) && (moreComments.parentId == nil) && (moreComments.name == "root_pagination" || moreComments.name == "root_more_children")
         Group {
@@ -61,27 +70,52 @@ struct LoadMoreCommentsView: View {
                 .padding(.vertical, 24)
             } else {
                 HStack {
-                    Pill(action: loadMoreComments, size: .regular) {
-                        HStack(spacing: 8) {
-                            if isLoading {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "plus.bubble")
-                                    .font(.callout)
-                                    .fontWeight(.medium)
+                    if useCardStyle {
+                        Pill(action: loadMoreComments, size: .regular) {
+                            HStack(spacing: 8) {
+                                if isLoading {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: "plus.bubble")
+                                        .font(.callout)
+                                        .fontWeight(.medium)
+                                }
+                                Text(isLoading ? "Loading…" : "Show more replies")
+                                    .appFont(.caption, weight: .medium)
                             }
-                            Text(isLoading ? "Loading…" : "Show more replies")
-                                .appFont(.caption, weight: .medium)
                         }
+                        .disabled(isLoading)
+                        .foregroundStyle(.secondary)
+                    } else {
+                        buttonContent
                     }
-                    .disabled(isLoading)
                     Spacer()
                 }
-                .foregroundStyle(.secondary)
             }
         }
+    }
+
+    @ViewBuilder
+    private var buttonContent: some View {
+        Button(action: loadMoreComments) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "plus.bubble")
+                        .font(.callout)
+                        .fontWeight(.medium)
+                }
+                Text(isLoading ? "Loading…" : "Show more replies")
+                    .appFont(.caption, weight: .medium)
+            }
+            .foregroundStyle(useCardStyle ? .secondary : Color.accentColor)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
     }
     
     

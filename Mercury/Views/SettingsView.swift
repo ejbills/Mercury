@@ -56,7 +56,7 @@ struct SettingsView: View {
                 NavigationLink {
                     MediaSettingsView()
                 } label: {
-                    Label("Behavior", systemImage: "photo.on.rectangle.angled")
+                    Label("Behavior", systemImage: "gear")
                 }
                 
                 NavigationLink {

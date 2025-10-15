@@ -17,15 +17,17 @@ struct MarkdownRenderer: View {
     let compactMode: Bool
     let showEmbeddedContent: Bool
     let attachments: [String: UIImage]?
+    let allowInteraction: Bool
     @Default(.bodyTextScale) private var bodyScale
-    
-    init(content: String, compactMode: Bool = false, showEmbeddedContent: Bool = true, attachments: [String: UIImage]? = nil) {
+
+    init(content: String, compactMode: Bool = false, showEmbeddedContent: Bool = true, attachments: [String: UIImage]? = nil, allowInteraction: Bool = true) {
         self.content = content
         self.compactMode = compactMode
         self.showEmbeddedContent = showEmbeddedContent
         self.attachments = attachments
+        self.allowInteraction = allowInteraction
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             let visible = compactMode ? String("\(processedContent.prefix(150))...") : processedContent
@@ -33,7 +35,10 @@ struct MarkdownRenderer: View {
                 .markdownTextStyle() {
                     FontSize(16 * bodyScale)
                 }
-                .textSelection(.enabled)
+                .if(allowInteraction) { view in
+                    view.textSelection(.enabled)
+                }
+                .allowsHitTesting(allowInteraction)
             if showEmbeddedContent {
                 let embedContent = extractLinks(from: content)
                 ForEach(Array(embedContent.enumerated()), id: \.offset) { index, embed in
