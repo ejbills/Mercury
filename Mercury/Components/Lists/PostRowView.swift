@@ -109,6 +109,8 @@ struct PostRowView: View {
             return !post.galleryImages.isEmpty
         case .link:
             return shouldShowLinkPreview
+        case .externalVideo:
+            return post.externalVideoURL != nil
         }
     }
     
@@ -431,6 +433,21 @@ struct PostRowView: View {
         case .link:
             if shouldShowLinkPreview {
                 linkPostContent
+            }
+        case .externalVideo:
+            if let externalURL = post.externalVideoURL {
+                SimpleExternalVideoView(
+                    externalURL: externalURL,
+                    thumbnailURL: post.externalVideoThumbnailURL,
+                    apiDimensions: post.externalVideoDimensions,
+                    domain: post.domain,
+                    post: post,
+                    onTap: {
+                        if let url = URL(string: externalURL) {
+                            safariURL = url
+                        }
+                    }
+                )
             }
         }
     }

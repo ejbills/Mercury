@@ -394,3 +394,119 @@ struct SimpleVideoView: View {
         reloadToken &+= 1 // wraparound-safe increment
     }
 }
+
+// MARK: - Simple External Video View (Streamable, Twitch, etc.)
+struct SimpleExternalVideoView: View {
+    let externalURL: String
+    let thumbnailURL: String?
+    let apiDimensions: CGSize?
+    let domain: String?
+    let post: RedditPost
+    let onTap: () -> Void
+
+    @State private var isLoaded = false
+    @State private var isBlurred = false
+
+    private var displayHeight: CGFloat {
+        MediaLayout.height(for: apiDimensions, maxHeight: 600, fallback: 300)
+    }
+
+    private var domainLabel: String {
+        guard let domain = domain else { return "External Video" }
+        if domain.contains("streamable") { return "Streamable" }
+        if domain.contains("twitch") { return "Twitch" }
+        if domain.contains("vimeo") { return "Vimeo" }
+        return domain
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            Rectangle()
+                .fill(.clear)
+                .frame(maxWidth: .infinity)
+                .frame(height: displayHeight)
+                .overlay {
+                    thumbnailView
+                }
+                .overlay {
+                    // Play button overlay
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 64, height: 64)
+
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.primary)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    // Domain badge
+                    Pill(size: .small) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption2)
+                            Text(domainLabel)
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                        }
+                    }
+                    .padding(10)
+                    .opacity(isLoaded ? 1 : 0)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .sensitiveContentBlurred(post: post, contentType: .video, isBlurred: $isBlurred)
+    }
+
+    @ViewBuilder
+    private var thumbnailView: some View {
+        if let thumbnailURL = thumbnailURL {
+            LazyImage(url: URL(string: thumbnailURL)) { state in
+                if let image = state.image {
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: displayHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .opacity(isLoaded ? 1 : 0)
+                        .onAppear {
+                            if !isLoaded {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isLoaded = true
+                                }
+                            }
+                        }
+                } else if state.error != nil {
+                    placeholder
+                } else {
+                    placeholder
+                        .overlay {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                        }
+                }
+            }
+            .processors([.resize(size: CGSize(width: 800, height: 600))])
+            .priority(.high)
+        } else {
+            placeholder
+                .onAppear {
+                    if !isLoaded {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            isLoaded = true
+                        }
+                    }
+                }
+        }
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(.quaternary.opacity(0.3))
+            .frame(maxWidth: .infinity)
+            .frame(height: displayHeight)
+    }
+}

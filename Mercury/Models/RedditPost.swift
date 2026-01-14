@@ -223,6 +223,12 @@ struct RedditPost: Codable, Identifiable, Hashable {
             return .video
         }
 
+        // Check for external video embeds (Streamable, Twitch, etc.) BEFORE checking isVideo
+        // These have post_hint "rich:video" but can't be played natively
+        if isExternalVideoEmbed {
+            return .externalVideo
+        }
+
         if isVideo || hasVideoURL {
             return .video
         } else if let hint = postHint {
@@ -244,7 +250,8 @@ struct RedditPost: Codable, Identifiable, Hashable {
             case "hosted:video":
                 return .video
             case "rich:video":
-                return .video
+                // rich:video that isn't handled above is likely an external embed we can't play
+                return .externalVideo
             default:
                 return .text
             }
@@ -280,6 +287,53 @@ struct RedditPost: Codable, Identifiable, Hashable {
     var isRedGifsLink: Bool {
         guard let url = url else { return false }
         return url.contains("redgifs.com") || url.contains("v3.redgifs.com")
+    }
+
+    /// External video embeds that can't be played natively (Streamable, Twitch clips, etc.)
+    var isExternalVideoEmbed: Bool {
+        guard let domain = domain else { return false }
+        let externalVideoDomains = ["streamable.com", "twitch.tv", "clips.twitch.tv", "vimeo.com"]
+        return externalVideoDomains.contains { domain.lowercased().contains($0) }
+    }
+
+    /// URL for external video embeds (for opening in Safari/WebView)
+    var externalVideoURL: String? {
+        guard isExternalVideoEmbed, let url = url else { return nil }
+        return url
+    }
+
+    /// Thumbnail URL for external video embeds
+    var externalVideoThumbnailURL: String? {
+        // Try oembed thumbnail first
+        if let media = media ?? secureMedia,
+           let oembed = media.oembed,
+           let thumbnailUrl = oembed.thumbnailUrl {
+            return thumbnailUrl.replacingOccurrences(of: "&amp;", with: "&")
+        }
+        // Fall back to preview image
+        if let preview = preview,
+           let firstImage = preview.images.first {
+            let allSources = [firstImage.source] + firstImage.resolutions
+            let goodSource = allSources.first { $0.width >= 640 && $0.width <= 1080 } ??
+                           allSources.last ?? firstImage.source
+            return goodSource.url.replacingOccurrences(of: "&amp;", with: "&")
+        }
+        return nil
+    }
+
+    /// Dimensions for external video embeds
+    var externalVideoDimensions: CGSize? {
+        if let media = media ?? secureMedia,
+           let oembed = media.oembed,
+           let width = oembed.width,
+           let height = oembed.height {
+            return CGSize(width: width, height: height)
+        }
+        if let preview = preview,
+           let firstImage = preview.images.first {
+            return CGSize(width: firstImage.source.width, height: firstImage.source.height)
+        }
+        return nil
     }
     
     var imageURL: String? {
@@ -685,6 +739,7 @@ enum PostType {
     case youtube
     case gallery
     case link
+    case externalVideo // Streamable, Twitch clips, etc. - requires WebView/Safari
 
     var iconName: String {
         switch self {
@@ -695,6 +750,7 @@ enum PostType {
         case .youtube: return "play.rectangle.on.rectangle"
         case .gallery: return "photo.stack"
         case .link: return "link"
+        case .externalVideo: return "play.rectangle.on.rectangle.fill"
         }
     }
 
@@ -707,6 +763,7 @@ enum PostType {
         case .youtube: return "YouTube"
         case .gallery: return "Gallery"
         case .link: return "Link"
+        case .externalVideo: return "External Video"
         }
     }
 }

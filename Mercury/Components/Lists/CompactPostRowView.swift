@@ -107,6 +107,8 @@ struct CompactPostRowView: View {
             return !post.galleryImages.isEmpty
         case .link:
             return shouldShowLinkPreview
+        case .externalVideo:
+            return post.externalVideoURL != nil
         }
     }
     
@@ -133,6 +135,8 @@ struct CompactPostRowView: View {
             return .gallery
         case .link:
             return .link
+        case .externalVideo:
+            return .video
         }
     }
 
@@ -379,6 +383,24 @@ struct CompactPostRowView: View {
                 }
             } else {
                 Image(systemName: "link")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+        case .externalVideo:
+            if let thumbnailURL = post.externalVideoThumbnailURL, let url = URL(string: thumbnailURL) {
+                LazyImage(url: url) { state in
+                    if let image = state.image {
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Image(systemName: "play.rectangle.on.rectangle")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Image(systemName: "play.rectangle.on.rectangle")
                     .font(.title2)
                     .foregroundStyle(.secondary)
             }
@@ -639,6 +661,10 @@ struct CompactPostRowView: View {
             badgeBackground {
                 Image(systemName: "link").font(.caption2)
             }
+        case .externalVideo:
+            badgeBackground {
+                Image(systemName: "arrow.up.right.square").font(.caption2)
+            }
         default:
             EmptyView()
         }
@@ -660,7 +686,7 @@ struct CompactPostRowView: View {
         switch postType {
         case .image, .gif, .video, .gallery:
             selectedPost = post
-        case .link, .youtube:
+        case .link, .youtube, .externalVideo:
             showingSafari = true
         case .text:
             if allowsNavigation {

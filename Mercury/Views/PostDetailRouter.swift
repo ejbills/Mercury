@@ -19,7 +19,7 @@ struct PostDetailRouter: View {
                 videoHandoffState: videoHandoffState,
                 onVideoHandoffReturn: onVideoHandoffReturn
             )
-        case .text, .link, .youtube:
+        case .text, .link, .youtube, .externalVideo:
             UnsupportedMediaDetailView(onDismiss: onDismiss)
         }
     }

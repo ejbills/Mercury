@@ -47,6 +47,10 @@ final class MediaPrefetcher {
                     if let thumb = post.thumbnail, let u = URL(string: thumb), self.isValidThumbnail(thumb) {
                         requests.append(ImageRequest(url: u))
                     }
+                case .externalVideo:
+                    if let thumb = post.externalVideoThumbnailURL, let u = URL(string: thumb) {
+                        requests.append(ImageRequest(url: u))
+                    }
                 default:
                     break
                 }
