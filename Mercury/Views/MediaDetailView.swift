@@ -11,6 +11,8 @@ import NukeUI
 import UIKit
 import Zoomable
 
+let detent: CGFloat = 130
+
 struct MediaDetailView: View {
     @State var post: RedditPost
     let namespace: Namespace.ID
@@ -22,7 +24,7 @@ struct MediaDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var player: AVPlayer?
     @State private var hasAppeared = false
-    @State private var isContentVisible = true
+    @State private var isContentVisible = false
     @State private var voteState: RedditPost.VoteState
     @State private var displayScore: Int
     @State private var isVoting = false
@@ -39,16 +41,11 @@ struct MediaDetailView: View {
     @State private var isScrubbingGestureActive: Bool = false
 
     // Comments sheet
-    @State private var showCommentsSheet: Bool = false
     @State private var threadManager = CommentThreadManager()
     @State private var isLoadingComments = false
     @State private var commentSort: CommentSort = .best
+    @State private var currentDetent: PresentationDetent = .height(detent)
 
-    // Drag gesture for comments
-    @State private var dragOffset: CGFloat = 0
-    @State private var isDragging: Bool = false
-    @State private var hasTriggeredCommentsDrag: Bool = false
-    private let dragThreshold: CGFloat = 80
 
     init(post: RedditPost, namespace: Namespace.ID, videoHandoffState: VideoHandoffState? = nil, onVideoHandoffReturn: ((VideoHandoffState) -> Void)? = nil) {
         self.post = post
@@ -76,7 +73,7 @@ struct MediaDetailView: View {
                     mediaContent
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.25)) {
+                            withAnimation(.smooth(duration: 0.25)) {
                                 isContentVisible.toggle()
                             }
                         }
@@ -91,9 +88,12 @@ struct MediaDetailView: View {
                     }
                 }
         }
-        .overlay(bottomOverlay, alignment: .bottom)
         .navigationBarHidden(true)
         .statusBarHidden(!isContentVisible)
+        .task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+            isContentVisible = true
+        }
         .onAppear { hasAppeared = true }
         .onDisappear {
             // Force mute to avoid audio bleeding when navigating away
@@ -129,211 +129,155 @@ struct MediaDetailView: View {
                 }
             )
         }
-        .sheet(isPresented: $showCommentsSheet) {
+        .sheet(isPresented: $isContentVisible) {
             commentsSheetView
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.height(detent), .medium, .large], selection: $currentDetent)
                 .presentationDragIndicator(.visible)
-        }
-    }
-
-    private var bottomOverlay: some View {
-        Group {
-            if isContentVisible, post.postType != .video {
-                bottomContentOverlay
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.25), value: isContentVisible)
-            }
-        }
-    }
-    
-    
-    private var bottomContentOverlay: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Gallery counter (only for gallery posts)
-            if post.postType == .gallery && !post.galleryImages.isEmpty {
-                HStack {
-                    Spacer()
-                    Text("\(currentGalleryIndex + 1) of \(post.galleryImages.count)")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.4))
-                        .clipShape(Capsule())
-                    Spacer()
-                }
-            }
-
-            // Post context
-            VStack(alignment: .leading, spacing: 8) {
-                PostHeader(post: post, colorScheme: .light)
-
-                Text(post.title)
-                    .font(.title3)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(3)
-            }
-
-            // Action bar
-            PostActionToolbar(
-                post: currentPost,
-                voteState: $voteState,
-                displayScore: $displayScore,
-                isVoting: $isVoting,
-                savedState: $savedState,
-                onVote: handleVote,
-                onReply: { showingPostReply = true },
-                onShare: handleShare,
-                onSave: handleSave,
-                onCopyLink: nil,
-                onOpenOriginal: nil,
-                onDownload: handleDownload,
-                colorScheme: .dark,
-                size: .compact,
-                showScore: true,
-                showCommentCount: true,
-                showVoting: true
-            )
-
-            // Drag handle for comments
-            HStack {
-                Spacer()
-                RoundedRectangle(cornerRadius: 2.5)
-                    .fill(Color.white.opacity(0.5 + min(dragOffset / dragThreshold, 1) * 0.3))
-                    .frame(width: 40, height: 5)
-                    .scaleEffect(x: 1 + min(dragOffset / dragThreshold, 1) * 0.5, y: 1, anchor: .center)
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 20)
-        .offset(y: -dragOffset)
-        .scaleEffect(1 + min(dragOffset / dragThreshold, 1) * 0.05, anchor: .bottom)
-        .background(
-            GeometryReader { geometry in
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.8)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 250 + dragOffset * 0.5)
-                .offset(y: geometry.safeAreaInsets.bottom - dragOffset)
-            }
-            .ignoresSafeArea(edges: .bottom)
-        )
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    if showCommentsSheet && hasTriggeredCommentsDrag { return }
-                    isDragging = true
-                    // Only allow upward drag (negative translation)
-                    let offset = max(0, -value.translation.height)
-                    dragOffset = min(offset, dragThreshold * 1.2)
-                    if !hasTriggeredCommentsDrag && offset >= dragThreshold && !showCommentsSheet {
-                        hasTriggeredCommentsDrag = true
-                        showCommentsSheet = true
-                        loadCommentsIfNeeded()
-                    }
-                }
-                .onEnded { value in
-                    isDragging = false
-                    hasTriggeredCommentsDrag = false
-                    // Reset drag offset
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        dragOffset = 0
-                    }
-                }
-        )
-        .onChange(of: showCommentsSheet) { _, isPresented in
-            if isPresented {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    dragOffset = 0
-                }
-            } else {
-                hasTriggeredCommentsDrag = false
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    dragOffset = 0
-                }
-            }
+                .presentationBackgroundInteraction(.enabled(upThrough: .large))
+                .interactiveDismissDisabled()
         }
     }
 
     private var commentsSheetView: some View {
-        NavigationStack {
-            Group {
-                if isLoadingComments && threadManager.commentThreads.isEmpty {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.2)
-
-                        Text("Loading comments...")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 60)
-                } else if threadManager.commentThreads.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "bubble.left")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.secondary)
-
-                        Text("No comments yet")
-                            .font(.headline)
+        VStack(spacing: 0) {
+            // Post details header
+            VStack(alignment: .leading, spacing: 16) {
+                // Gallery counter (only for gallery posts)
+                if post.postType == .gallery && !post.galleryImages.isEmpty {
+                    HStack {
+                        Spacer()
+                        Text("\(currentGalleryIndex + 1) of \(post.galleryImages.count)")
+                            .font(.caption)
                             .fontWeight(.medium)
-
-                        Text("Be the first to comment on this post")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 60)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            let allComments = threadManager.commentThreads.map { $0.parentComment }
-
-                            CommentThreadView(
-                                comments: allComments,
-                                post: post,
-                                sort: commentSort,
-                                scrollTarget: .constant(nil)
-                            )
-                            .padding(.horizontal, 16)
-                        }
-                        .padding(.top, 8)
-                        .padding(.bottom, 20)
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.secondary.opacity(0.2))
+                            .clipShape(Capsule())
+                        Spacer()
                     }
                 }
+
+                // Post context
+                VStack(alignment: .leading, spacing: 8) {
+                    PostHeader(post: post, colorScheme: colorScheme == .dark ? .dark : .light)
+
+                    Text(post.title)
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(3)
+                }
+
+                // Action bar
+                PostActionToolbar(
+                    post: currentPost,
+                    voteState: $voteState,
+                    displayScore: $displayScore,
+                    isVoting: $isVoting,
+                    savedState: $savedState,
+                    onVote: handleVote,
+                    onReply: { showingPostReply = true },
+                    onShare: handleShare,
+                    onSave: handleSave,
+                    onCopyLink: nil,
+                    onOpenOriginal: nil,
+                    onDownload: handleDownload,
+                    colorScheme: colorScheme == .dark ? .dark : .light,
+                    size: .large,
+                    showScore: true,
+                    showCommentCount: true,
+                    showVoting: true
+                )
             }
-            .navigationTitle("Comments")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        ForEach(CommentSort.allCases, id: \.self) { sort in
-                            Button(action: {
-                                commentSort = sort
-                                Task { await loadComments() }
-                            }) {
-                                HStack {
-                                    if commentSort == sort { Image(systemName: "checkmark") }
-                                    Image(systemName: sort.iconName)
-                                    Text(sort.displayName)
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+
+            // Comments section with scroll
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Comments header
+                        HStack {
+                            Text("Comments")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Spacer()
+
+                            Menu {
+                                ForEach(CommentSort.allCases, id: \.self) { sort in
+                                    Button(action: {
+                                        commentSort = sort
+                                        Task { await loadComments() }
+                                    }) {
+                                        HStack {
+                                            if commentSort == sort { Image(systemName: "checkmark") }
+                                            Image(systemName: sort.iconName)
+                                            Text(sort.displayName)
+                                        }
+                                    }
                                 }
+                            } label: {
+                                Image(systemName: commentSort.iconName)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                    } label: {
-                        Image(systemName: commentSort.iconName)
-                            .font(.callout)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+
+                        // Comments section
+                        if threadManager.commentThreads.isEmpty {
+                            VStack(spacing: 24) {
+                                Image(systemName: "bubble.left")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.secondary)
+
+                                PrimaryButton(
+                                    "Load Comments",
+                                    icon: "arrow.down.circle.fill",
+                                    isLoading: isLoadingComments,
+                                    action: {
+                                        loadCommentsIfNeeded()
+                                    }
+                                )
+                                .padding(.horizontal, 40)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 40)
+                        } else {
+                            LazyVStack(spacing: 0) {
+                                let allComments = threadManager.commentThreads.map { $0.parentComment }
+
+                                CommentThreadView(
+                                    comments: allComments,
+                                    post: post,
+                                    sort: commentSort,
+                                    scrollTarget: .constant(nil)
+                                )
+                            }
+                        }
                     }
                 }
-            }
+                .mask(alignment: .top) {
+                    VStack(spacing: 0) {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 20)
+
+                        Rectangle()
+                    }
+                }
+                .opacity(currentDetent != .height(detent) ? 1 : 0)
+
         }
     }
 
@@ -666,7 +610,7 @@ struct MediaDetailView: View {
 
     private func loadCommentsIfNeeded() {
         guard threadManager.commentThreads.isEmpty && !isLoadingComments else { return }
-        Task {
+        Task(priority: .userInitiated) {
             await loadComments()
         }
     }
