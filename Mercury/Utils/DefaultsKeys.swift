@@ -147,6 +147,9 @@ extension Defaults.Keys {
     static let postCompactCardCornerRadius = Key<Double>("postCompactCardCornerRadius", default: 8.0)
     static let commentRootCardCornerRadius = Key<Double>("commentRootCardCornerRadius", default: 16.0)
     static let commentChildCardCornerRadius = Key<Double>("commentChildCardCornerRadius", default: 12.0)
+
+    // One-time notices
+    static let hasShownAPIDiscontinuationNotice = Key<Bool>("hasShownAPIDiscontinuationNotice", default: false)
 }
 
 enum PostLayoutStyle: String, CaseIterable, Codable, Defaults.Serializable {
