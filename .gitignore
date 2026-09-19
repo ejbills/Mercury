@@ -7,3 +7,4 @@ Mercury/Generated/Secrets.swift
 Mercury.xcodeproj/xcuserdata/
 *.moved-aside
 DerivedData/
+.claude/
